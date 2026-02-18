@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const { migrate } = require('./scripts/migrate');
+const { seed } = require('./scripts/seed');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -60,6 +61,9 @@ async function start() {
     // Run migrations on startup
     await migrate();
     console.log('Database ready.');
+
+    // Seed initial data (safe to run repeatedly - skips existing records)
+    await seed();
 
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);

@@ -6,10 +6,10 @@ async function seed() {
   console.log('Seeding database...');
 
   // 1. Create platform admin
-  const adminPassword = await bcrypt.hash('admin123', 10);
   const existingAdmin = await getOne('SELECT id FROM platform_admins WHERE email = $1', ['admin@bookingplatform.com']);
 
   if (!existingAdmin) {
+    const adminPassword = await bcrypt.hash('admin123', 10);
     await run(
       'INSERT INTO platform_admins (email, password, name, role) VALUES ($1, $2, $3, $4)',
       ['admin@bookingplatform.com', adminPassword, 'Platform Admin', 'admin']
@@ -110,13 +110,18 @@ async function seed() {
   console.log('Seeding complete.');
 }
 
-seed()
-  .then(() => {
-    pool.end();
-    process.exit(0);
-  })
-  .catch((err) => {
-    console.error('Seeding failed:', err);
-    pool.end();
-    process.exit(1);
-  });
+// Run standalone or export for server.js
+if (require.main === module) {
+  seed()
+    .then(() => {
+      pool.end();
+      process.exit(0);
+    })
+    .catch((err) => {
+      console.error('Seeding failed:', err);
+      pool.end();
+      process.exit(1);
+    });
+}
+
+module.exports = { seed };
