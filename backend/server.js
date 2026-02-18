@@ -9,7 +9,9 @@ const PORT = process.env.PORT || 5000;
 
 // Middleware
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin: process.env.NODE_ENV === 'production'
+    ? process.env.FRONTEND_URL
+    : ['http://localhost:3000', 'http://localhost:5173'],
   credentials: true
 }));
 app.use(express.json());
@@ -26,13 +28,16 @@ app.get('/api/health', (req, res) => {
 });
 
 // --- Platform admin routes ---
-// app.use('/api/platform', platformRoutes);
+const platformRoutes = require('./routes/platform');
+app.use('/api/platform', platformRoutes);
 
 // --- Tenant admin routes (authenticated, tenant scoped) ---
-// app.use('/api/admin', tenantAdminRoutes);
+const tenantAdminRoutes = require('./routes/admin');
+app.use('/api/admin', tenantAdminRoutes);
 
 // --- Public tenant routes (resolved by slug) ---
-// app.use('/api/t/:tenant', publicTenantRoutes);
+const publicTenantRoutes = require('./routes/public');
+app.use('/api/t/:tenant', publicTenantRoutes);
 
 // Serve frontend for all non-API routes in production
 if (process.env.NODE_ENV === 'production') {
@@ -42,6 +47,12 @@ if (process.env.NODE_ENV === 'production') {
     }
   });
 }
+
+// Global error handler
+app.use((err, req, res, next) => {
+  console.error('Unhandled error:', err);
+  res.status(500).json({ error: 'Internal server error' });
+});
 
 // Start server
 async function start() {

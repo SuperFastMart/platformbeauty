@@ -192,6 +192,17 @@ const migrations = [
   },
 
   // ============================================
+  // INDEXES
+  // ============================================
+  {
+    name: '012_add_timeslot_unique_index',
+    sql: `
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_timeslots_unique
+      ON time_slots (tenant_id, date, start_time)
+    `
+  },
+
+  // ============================================
   // MIGRATION TRACKING
   // ============================================
   {
