@@ -40,6 +40,10 @@ app.use('/api/admin', tenantAdminRoutes);
 const publicTenantRoutes = require('./routes/public');
 app.use('/api/t/:tenant', publicTenantRoutes);
 
+// --- Customer auth routes (tenant-scoped, public + authenticated) ---
+const customerAuthRoutes = require('./routes/customerAuth');
+app.use('/api/t/:tenant/auth', customerAuthRoutes);
+
 // Serve frontend for all non-API routes in production
 if (process.env.NODE_ENV === 'production') {
   app.get('*', (req, res) => {
@@ -64,6 +68,10 @@ async function start() {
 
     // Seed initial data (safe to run repeatedly - skips existing records)
     await seed();
+
+    // Init scheduled jobs
+    const { initReminderJob } = require('./jobs/reminderJob');
+    initReminderJob();
 
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);

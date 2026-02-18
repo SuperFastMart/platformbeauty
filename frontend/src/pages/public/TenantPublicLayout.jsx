@@ -1,6 +1,7 @@
 import { useState, useEffect, createContext, useContext } from 'react';
-import { Outlet, useParams } from 'react-router-dom';
-import { Box, Typography, AppBar, Toolbar, CircularProgress, createTheme, ThemeProvider } from '@mui/material';
+import { Outlet, useParams, useNavigate } from 'react-router-dom';
+import { Box, Typography, AppBar, Toolbar, CircularProgress, createTheme, ThemeProvider, Button } from '@mui/material';
+import { Person } from '@mui/icons-material';
 import api from '../../api/client';
 
 const TenantContext = createContext(null);
@@ -8,6 +9,7 @@ export const useTenant = () => useContext(TenantContext);
 
 export default function TenantPublicLayout() {
   const { slug } = useParams();
+  const navigate = useNavigate();
   const [tenant, setTenant] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -70,9 +72,18 @@ export default function TenantPublicLayout() {
                 <Box component="img" src={tenant.logo_url} alt={tenant.name}
                   sx={{ height: 36, mr: 2, borderRadius: 1 }} />
               )}
-              <Typography variant="h6" fontWeight={600}>
+              <Typography variant="h6" fontWeight={600} sx={{ flexGrow: 1 }}>
                 {tenant.name}
               </Typography>
+              <Button
+                color="inherit" size="small" startIcon={<Person />}
+                onClick={() => {
+                  const token = localStorage.getItem('customer_token');
+                  navigate(token ? `/t/${slug}/portal` : `/t/${slug}/portal/login`);
+                }}
+              >
+                My Bookings
+              </Button>
             </Toolbar>
           </AppBar>
 

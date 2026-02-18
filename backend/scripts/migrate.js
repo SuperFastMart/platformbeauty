@@ -203,6 +203,107 @@ const migrations = [
   },
 
   // ============================================
+  // SPRINT 1: Customer Portal + Email + Booking Requests
+  // ============================================
+  {
+    name: '013_alter_customers_auth',
+    sql: `
+      ALTER TABLE customers ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255);
+      ALTER TABLE customers ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE;
+      ALTER TABLE customers ADD COLUMN IF NOT EXISTS magic_link_token VARCHAR(255);
+      ALTER TABLE customers ADD COLUMN IF NOT EXISTS magic_link_expires TIMESTAMP;
+      ALTER TABLE customers ADD COLUMN IF NOT EXISTS reset_token VARCHAR(255);
+      ALTER TABLE customers ADD COLUMN IF NOT EXISTS reset_token_expires TIMESTAMP;
+      ALTER TABLE customers ADD COLUMN IF NOT EXISTS admin_notes TEXT;
+      ALTER TABLE customers ADD COLUMN IF NOT EXISTS last_visit_date DATE;
+      ALTER TABLE customers ADD COLUMN IF NOT EXISTS total_visits INTEGER DEFAULT 0;
+    `
+  },
+  {
+    name: '014_alter_bookings_tracking',
+    sql: `
+      ALTER TABLE bookings ADD COLUMN IF NOT EXISTS customer_id INTEGER REFERENCES customers(id);
+      ALTER TABLE bookings ADD COLUMN IF NOT EXISTS created_by VARCHAR(20) DEFAULT 'customer';
+      ALTER TABLE bookings ADD COLUMN IF NOT EXISTS reminder_24h_sent BOOLEAN DEFAULT FALSE;
+      ALTER TABLE bookings ADD COLUMN IF NOT EXISTS sms_24h_sent BOOLEAN DEFAULT FALSE;
+      ALTER TABLE bookings ADD COLUMN IF NOT EXISTS marked_noshow BOOLEAN DEFAULT FALSE;
+    `
+  },
+  {
+    name: '015_create_payments',
+    sql: `
+      CREATE TABLE IF NOT EXISTS payments (
+        id SERIAL PRIMARY KEY,
+        tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+        booking_id INTEGER NOT NULL REFERENCES bookings(id),
+        amount DECIMAL(10,2),
+        payment_method VARCHAR(20) DEFAULT 'pay_at_salon',
+        payment_status VARCHAR(20) DEFAULT 'pending',
+        stripe_payment_id TEXT,
+        stripe_payment_method_id TEXT,
+        noshow_charge_id TEXT,
+        paid_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `
+  },
+  {
+    name: '016_create_booking_requests',
+    sql: `
+      CREATE TABLE IF NOT EXISTS booking_requests (
+        id SERIAL PRIMARY KEY,
+        tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+        booking_id INTEGER NOT NULL REFERENCES bookings(id),
+        customer_id INTEGER NOT NULL REFERENCES customers(id),
+        request_type VARCHAR(20) NOT NULL,
+        reason TEXT,
+        requested_date DATE,
+        requested_time TIME,
+        hours_notice DECIMAL(5,1),
+        status VARCHAR(20) DEFAULT 'pending',
+        admin_response TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        resolved_at TIMESTAMP
+      )
+    `
+  },
+  {
+    name: '017_create_email_logs',
+    sql: `
+      CREATE TABLE IF NOT EXISTS email_logs (
+        id SERIAL PRIMARY KEY,
+        tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+        recipient_email VARCHAR(255) NOT NULL,
+        recipient_name VARCHAR(255),
+        email_type VARCHAR(50),
+        subject VARCHAR(500),
+        booking_id INTEGER,
+        customer_id INTEGER,
+        status VARCHAR(20) DEFAULT 'pending',
+        provider_message_id TEXT,
+        error_message TEXT,
+        sent_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `
+  },
+  {
+    name: '018_alter_slot_templates_break',
+    sql: `
+      ALTER TABLE slot_templates ADD COLUMN IF NOT EXISTS break_start TIME;
+      ALTER TABLE slot_templates ADD COLUMN IF NOT EXISTS break_end TIME;
+    `
+  },
+  {
+    name: '019_alter_slot_exceptions_custom_hours',
+    sql: `
+      ALTER TABLE slot_exceptions ADD COLUMN IF NOT EXISTS is_closed BOOLEAN DEFAULT TRUE;
+      ALTER TABLE slot_exceptions ADD COLUMN IF NOT EXISTS custom_start_time TIME;
+      ALTER TABLE slot_exceptions ADD COLUMN IF NOT EXISTS custom_end_time TIME;
+    `
+  },
+
+  // ============================================
   // MIGRATION TRACKING
   // ============================================
   {

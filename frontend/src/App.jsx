@@ -15,11 +15,16 @@ import Dashboard from './pages/admin/Dashboard';
 import Services from './pages/admin/Services';
 import Bookings from './pages/admin/Bookings';
 import SlotTemplates from './pages/admin/SlotTemplates';
+import Customers from './pages/admin/Customers';
+import CustomerDetail from './pages/admin/CustomerDetail';
 
 // Public booking
 import TenantPublicLayout from './pages/public/TenantPublicLayout';
 import TenantLanding from './pages/public/TenantLanding';
 import BookingFlow from './pages/public/BookingFlow';
+import CustomerLogin from './pages/public/CustomerLogin';
+import VerifyMagicLink from './pages/public/VerifyMagicLink';
+import CustomerPortal from './pages/public/CustomerPortal';
 
 export default function App() {
   return (
@@ -55,12 +60,17 @@ export default function App() {
         <Route path="services" element={<Services />} />
         <Route path="bookings" element={<Bookings />} />
         <Route path="slot-templates" element={<SlotTemplates />} />
+        <Route path="customers" element={<Customers />} />
+        <Route path="customers/:id" element={<CustomerDetail />} />
       </Route>
 
       {/* Public booking */}
       <Route path="/t/:slug" element={<TenantPublicLayout />}>
         <Route index element={<TenantLanding />} />
         <Route path="book" element={<BookingFlow />} />
+        <Route path="portal/login" element={<CustomerLogin />} />
+        <Route path="portal/verify" element={<VerifyMagicLink />} />
+        <Route path="portal" element={<CustomerPortal />} />
       </Route>
 
       {/* Default redirect */}

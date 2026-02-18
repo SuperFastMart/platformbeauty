@@ -3,6 +3,10 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { getOne, getAll, run } = require('../config/database');
 const { tenantAuth } = require('../middleware/auth');
+const {
+  sendBookingApprovedNotification, sendBookingRejectedNotification,
+  sendRequestApprovedNotification, sendRequestRejectedNotification,
+} = require('../utils/emailService');
 
 const asyncHandler = (fn) => (req, res, next) =>
   Promise.resolve(fn(req, res, next)).catch(next);
@@ -160,7 +164,7 @@ router.get('/bookings', asyncHandler(async (req, res) => {
 
 // PUT /api/admin/bookings/:id/status
 router.put('/bookings/:id/status', asyncHandler(async (req, res) => {
-  const { status } = req.body;
+  const { status, reason, alternative } = req.body;
 
   if (!['confirmed', 'rejected', 'cancelled'].includes(status)) {
     return res.status(400).json({ error: 'Status must be confirmed, rejected, or cancelled' });
@@ -182,6 +186,16 @@ router.put('/bookings/:id/status', asyncHandler(async (req, res) => {
        WHERE tenant_id = $1 AND date = $2 AND start_time >= $3 AND end_time <= $4`,
       [req.tenantId, booking.date, booking.start_time, booking.end_time]
     );
+  }
+
+  // Send email notifications
+  const tenant = await getOne('SELECT * FROM tenants WHERE id = $1', [req.tenantId]);
+  if (tenant) {
+    if (status === 'confirmed') {
+      sendBookingApprovedNotification(booking, tenant).catch(err => console.error('Email error:', err));
+    } else if (status === 'rejected') {
+      sendBookingRejectedNotification(booking, tenant, reason, alternative).catch(err => console.error('Email error:', err));
+    }
   }
 
   res.json(booking);
@@ -407,6 +421,228 @@ router.get('/dashboard', asyncHandler(async (req, res) => {
     weekRevenue: parseFloat(weekRevenue.total),
     totalCustomers: parseInt(totalCustomers.count),
   });
+}));
+
+// ============================================
+// BOOKING REQUESTS (cancel/amend from customers)
+// ============================================
+
+// GET /api/admin/bookings/requests
+router.get('/bookings/requests', asyncHandler(async (req, res) => {
+  const { status } = req.query;
+  let sql = `
+    SELECT br.*, b.service_names, b.date as booking_date, b.start_time as booking_time,
+           b.end_time as booking_end_time, b.total_price, b.customer_name, b.customer_email,
+           c.name as customer_name_full, c.phone as customer_phone
+    FROM booking_requests br
+    JOIN bookings b ON b.id = br.booking_id
+    LEFT JOIN customers c ON c.id = br.customer_id
+    WHERE br.tenant_id = $1`;
+  const params = [req.tenantId];
+
+  if (status && status !== 'all') {
+    params.push(status);
+    sql += ` AND br.status = $${params.length}`;
+  }
+
+  sql += ' ORDER BY br.created_at DESC';
+  const requests = await getAll(sql, params);
+  res.json(requests);
+}));
+
+// POST /api/admin/bookings/requests/:id/approve
+router.post('/bookings/requests/:id/approve', asyncHandler(async (req, res) => {
+  const { adminResponse } = req.body;
+
+  const request = await getOne(
+    `UPDATE booking_requests SET status = 'approved', admin_response = $1, resolved_at = NOW()
+     WHERE id = $2 AND tenant_id = $3 AND status = 'pending' RETURNING *`,
+    [adminResponse || null, req.params.id, req.tenantId]
+  );
+
+  if (!request) {
+    return res.status(404).json({ error: 'Request not found or already processed' });
+  }
+
+  const booking = await getOne('SELECT * FROM bookings WHERE id = $1', [request.booking_id]);
+
+  if (request.request_type === 'cancel') {
+    // Cancel the booking
+    await run(`UPDATE bookings SET status = 'cancelled' WHERE id = $1`, [request.booking_id]);
+    // Free up slots
+    await run(
+      `UPDATE time_slots SET is_available = TRUE
+       WHERE tenant_id = $1 AND date = $2 AND start_time >= $3 AND start_time < $4`,
+      [req.tenantId, booking.date, booking.start_time, booking.end_time]
+    );
+  } else if (request.request_type === 'amend' && request.requested_date) {
+    // Update booking date/time
+    await run(
+      `UPDATE bookings SET date = $1, start_time = $2 WHERE id = $3`,
+      [request.requested_date, request.requested_time, request.booking_id]
+    );
+  }
+
+  // Email the customer
+  const tenant = await getOne('SELECT * FROM tenants WHERE id = $1', [req.tenantId]);
+  if (tenant && booking) {
+    sendRequestApprovedNotification(request, booking, tenant).catch(err => console.error('Email error:', err));
+  }
+
+  res.json(request);
+}));
+
+// POST /api/admin/bookings/requests/:id/reject
+router.post('/bookings/requests/:id/reject', asyncHandler(async (req, res) => {
+  const { adminResponse } = req.body;
+
+  const request = await getOne(
+    `UPDATE booking_requests SET status = 'rejected', admin_response = $1, resolved_at = NOW()
+     WHERE id = $2 AND tenant_id = $3 AND status = 'pending' RETURNING *`,
+    [adminResponse || null, req.params.id, req.tenantId]
+  );
+
+  if (!request) {
+    return res.status(404).json({ error: 'Request not found or already processed' });
+  }
+
+  const booking = await getOne('SELECT * FROM bookings WHERE id = $1', [request.booking_id]);
+  const tenant = await getOne('SELECT * FROM tenants WHERE id = $1', [req.tenantId]);
+  if (tenant && booking) {
+    sendRequestRejectedNotification(request, booking, tenant).catch(err => console.error('Email error:', err));
+  }
+
+  res.json(request);
+}));
+
+// ============================================
+// CUSTOMERS
+// ============================================
+
+// GET /api/admin/customers
+router.get('/customers', asyncHandler(async (req, res) => {
+  const customers = await getAll(
+    `SELECT c.*,
+       COUNT(DISTINCT b.id) as booking_count,
+       COALESCE(SUM(CASE WHEN b.status IN ('confirmed','completed') THEN b.total_price ELSE 0 END), 0) as total_spent,
+       MAX(b.date) as last_booking_date
+     FROM customers c
+     LEFT JOIN bookings b ON b.customer_email = c.email AND b.tenant_id = c.tenant_id
+     WHERE c.tenant_id = $1
+     GROUP BY c.id
+     ORDER BY c.created_at DESC`,
+    [req.tenantId]
+  );
+  res.json(customers);
+}));
+
+// GET /api/admin/customers/search
+router.get('/customers/search', asyncHandler(async (req, res) => {
+  const { q } = req.query;
+  if (!q) return res.json([]);
+
+  const search = `%${q}%`;
+  const customers = await getAll(
+    `SELECT * FROM customers
+     WHERE tenant_id = $1 AND (name ILIKE $2 OR email ILIKE $2 OR phone ILIKE $2)
+     ORDER BY name LIMIT 20`,
+    [req.tenantId, search]
+  );
+  res.json(customers);
+}));
+
+// GET /api/admin/customers/:id
+router.get('/customers/:id', asyncHandler(async (req, res) => {
+  const customer = await getOne(
+    'SELECT * FROM customers WHERE id = $1 AND tenant_id = $2',
+    [req.params.id, req.tenantId]
+  );
+
+  if (!customer) {
+    return res.status(404).json({ error: 'Customer not found' });
+  }
+
+  // Get booking history with stats
+  const bookings = await getAll(
+    `SELECT * FROM bookings
+     WHERE tenant_id = $1 AND customer_email = $2
+     ORDER BY date DESC, start_time DESC`,
+    [req.tenantId, customer.email]
+  );
+
+  const stats = {
+    total: bookings.length,
+    completed: bookings.filter(b => b.status === 'confirmed' || b.status === 'completed').length,
+    cancelled: bookings.filter(b => b.status === 'cancelled').length,
+    noShows: bookings.filter(b => b.marked_noshow).length,
+    totalSpent: bookings
+      .filter(b => b.status === 'confirmed' || b.status === 'completed')
+      .reduce((sum, b) => sum + parseFloat(b.total_price || 0), 0),
+  };
+
+  // Find favourite service
+  const serviceCounts = {};
+  bookings.forEach(b => {
+    if (b.service_names) {
+      b.service_names.split(',').forEach(s => {
+        const name = s.trim();
+        serviceCounts[name] = (serviceCounts[name] || 0) + 1;
+      });
+    }
+  });
+  const entries = Object.entries(serviceCounts);
+  stats.favouriteService = entries.length > 0
+    ? entries.sort((a, b) => b[1] - a[1])[0][0]
+    : null;
+
+  res.json({ customer, bookings, stats });
+}));
+
+// PUT /api/admin/customers/:id/notes
+router.put('/customers/:id/notes', asyncHandler(async (req, res) => {
+  const { notes } = req.body;
+  const customer = await getOne(
+    'UPDATE customers SET admin_notes = $1 WHERE id = $2 AND tenant_id = $3 RETURNING *',
+    [notes || null, req.params.id, req.tenantId]
+  );
+
+  if (!customer) {
+    return res.status(404).json({ error: 'Customer not found' });
+  }
+
+  res.json(customer);
+}));
+
+// DELETE /api/admin/customers/:id (GDPR delete)
+router.delete('/customers/:id', asyncHandler(async (req, res) => {
+  const customer = await getOne(
+    'SELECT id, email FROM customers WHERE id = $1 AND tenant_id = $2',
+    [req.params.id, req.tenantId]
+  );
+
+  if (!customer) {
+    return res.status(404).json({ error: 'Customer not found' });
+  }
+
+  // Cascading delete: booking_requests, email_logs, payments, bookings, customer
+  await run('DELETE FROM booking_requests WHERE customer_id = $1 AND tenant_id = $2', [customer.id, req.tenantId]);
+  await run('DELETE FROM email_logs WHERE customer_id = $1 AND tenant_id = $2', [customer.id, req.tenantId]);
+
+  // Get booking IDs for this customer to delete payments
+  const bookings = await getAll(
+    'SELECT id FROM bookings WHERE customer_email = $1 AND tenant_id = $2',
+    [customer.email, req.tenantId]
+  );
+  if (bookings.length > 0) {
+    const bookingIds = bookings.map(b => b.id);
+    const placeholders = bookingIds.map((_, i) => `$${i + 1}`).join(',');
+    await run(`DELETE FROM payments WHERE booking_id IN (${placeholders})`, bookingIds);
+  }
+
+  await run('DELETE FROM bookings WHERE customer_email = $1 AND tenant_id = $2', [customer.email, req.tenantId]);
+  await run('DELETE FROM customers WHERE id = $1 AND tenant_id = $2', [customer.id, req.tenantId]);
+
+  res.json({ message: 'Customer and all associated data deleted' });
 }));
 
 module.exports = router;

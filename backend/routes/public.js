@@ -1,6 +1,9 @@
 const router = require('express').Router({ mergeParams: true });
 const { getOne, getAll, run } = require('../config/database');
 const { resolveTenant } = require('../middleware/auth');
+const {
+  sendBookingPendingNotification, sendAdminNewBookingNotification,
+} = require('../utils/emailService');
 
 const asyncHandler = (fn) => (req, res, next) =>
   Promise.resolve(fn(req, res, next)).catch(next);
@@ -148,15 +151,26 @@ router.post('/bookings', asyncHandler(async (req, res) => {
     );
   }
 
-  // Upsert customer
-  await run(
+  // Upsert customer and get customer_id
+  const customer = await getOne(
     `INSERT INTO customers (tenant_id, name, email, phone)
      VALUES ($1, $2, $3, $4)
      ON CONFLICT (tenant_id, email) DO UPDATE SET
        name = EXCLUDED.name,
-       phone = COALESCE(EXCLUDED.phone, customers.phone)`,
+       phone = COALESCE(EXCLUDED.phone, customers.phone)
+     RETURNING id`,
     [req.tenantId, customerName, customerEmail, customerPhone || null]
   );
+
+  // Link booking to customer
+  if (customer) {
+    await run('UPDATE bookings SET customer_id = $1 WHERE id = $2', [customer.id, booking.id]);
+  }
+
+  // Send email notifications (fire and forget)
+  const tenant = req.tenant;
+  sendBookingPendingNotification(booking, tenant).catch(err => console.error('Email error:', err));
+  sendAdminNewBookingNotification(booking, tenant).catch(err => console.error('Email error:', err));
 
   res.status(201).json(booking);
 }));

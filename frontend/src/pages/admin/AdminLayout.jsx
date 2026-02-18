@@ -5,7 +5,7 @@ import {
 } from '@mui/material';
 import {
   Dashboard as DashboardIcon, ContentCut, CalendarMonth,
-  Schedule, Logout
+  Schedule, Logout, People
 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -16,6 +16,7 @@ const navItems = [
   { label: 'Services', path: '/admin/services', icon: <ContentCut /> },
   { label: 'Bookings', path: '/admin/bookings', icon: <CalendarMonth /> },
   { label: 'Availability', path: '/admin/slot-templates', icon: <Schedule /> },
+  { label: 'Customers', path: '/admin/customers', icon: <People /> },
 ];
 
 export default function AdminLayout() {
@@ -63,7 +64,7 @@ export default function AdminLayout() {
           {navItems.map((item) => (
             <ListItemButton
               key={item.path}
-              selected={location.pathname === item.path}
+              selected={location.pathname === item.path || location.pathname.startsWith(item.path + '/')}
               onClick={() => navigate(item.path)}
             >
               <ListItemIcon>{item.icon}</ListItemIcon>
