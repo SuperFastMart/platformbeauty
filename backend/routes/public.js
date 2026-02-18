@@ -4,6 +4,7 @@ const { resolveTenant } = require('../middleware/auth');
 const {
   sendBookingPendingNotification, sendAdminNewBookingNotification,
 } = require('../utils/emailService');
+const { createSetupIntent } = require('../utils/stripeService');
 
 const asyncHandler = (fn) => (req, res, next) =>
   Promise.resolve(fn(req, res, next)).catch(next);
@@ -173,6 +174,102 @@ router.post('/bookings', asyncHandler(async (req, res) => {
   sendAdminNewBookingNotification(booking, tenant).catch(err => console.error('Email error:', err));
 
   res.status(201).json(booking);
+}));
+
+// POST /api/t/:tenant/bookings/:id/setup-intent - get Stripe SetupIntent for card-on-file
+router.post('/bookings/:id/setup-intent', asyncHandler(async (req, res) => {
+  const booking = await getOne(
+    'SELECT * FROM bookings WHERE id = $1 AND tenant_id = $2',
+    [req.params.id, req.tenantId]
+  );
+
+  if (!booking) {
+    return res.status(404).json({ error: 'Booking not found' });
+  }
+
+  const result = await createSetupIntent(req.tenant, booking.customer_email);
+  if (!result) {
+    return res.json({ available: false });
+  }
+
+  res.json({
+    available: true,
+    clientSecret: result.clientSecret,
+    stripePublishableKey: req.tenant.stripe_publishable_key || null,
+  });
+}));
+
+// POST /api/t/:tenant/bookings/:id/save-card - save payment method after SetupIntent completes
+router.post('/bookings/:id/save-card', asyncHandler(async (req, res) => {
+  const { paymentMethodId } = req.body;
+  const booking = await getOne(
+    'SELECT * FROM bookings WHERE id = $1 AND tenant_id = $2',
+    [req.params.id, req.tenantId]
+  );
+
+  if (!booking) {
+    return res.status(404).json({ error: 'Booking not found' });
+  }
+
+  // Save the payment method to the customer record
+  const customer = await getOne(
+    'SELECT id, stripe_customer_id FROM customers WHERE tenant_id = $1 AND email = $2',
+    [req.tenantId, booking.customer_email]
+  );
+
+  if (customer) {
+    await run(
+      'UPDATE customers SET stripe_payment_method_id = $1 WHERE id = $2',
+      [paymentMethodId, customer.id]
+    );
+  }
+
+  // Record payment entry
+  await run(
+    `INSERT INTO payments (tenant_id, booking_id, amount, payment_method, payment_status, stripe_payment_method_id)
+     VALUES ($1, $2, $3, 'card_on_file', 'card_saved', $4)`,
+    [req.tenantId, booking.id, booking.total_price, paymentMethodId]
+  );
+
+  res.json({ success: true });
+}));
+
+// POST /api/t/:tenant/bookings/:id/payment - process card payment
+router.post('/bookings/:id/payment', asyncHandler(async (req, res) => {
+  const { createPaymentIntent } = require('../utils/stripeService');
+
+  const booking = await getOne(
+    'SELECT * FROM bookings WHERE id = $1 AND tenant_id = $2',
+    [req.params.id, req.tenantId]
+  );
+
+  if (!booking) {
+    return res.status(404).json({ error: 'Booking not found' });
+  }
+
+  const result = await createPaymentIntent(
+    req.tenant,
+    parseFloat(booking.total_price),
+    booking.customer_email,
+    { booking_id: booking.id.toString() }
+  );
+
+  if (!result) {
+    return res.json({ available: false });
+  }
+
+  // Record payment
+  await run(
+    `INSERT INTO payments (tenant_id, booking_id, amount, payment_method, payment_status, stripe_payment_id)
+     VALUES ($1, $2, $3, 'card', 'pending', $4)`,
+    [req.tenantId, booking.id, booking.total_price, result.paymentIntentId]
+  );
+
+  res.json({
+    available: true,
+    clientSecret: result.clientSecret,
+    stripePublishableKey: req.tenant.stripe_publishable_key || null,
+  });
 }));
 
 module.exports = router;

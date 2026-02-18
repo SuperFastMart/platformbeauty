@@ -10,6 +10,17 @@ import { useTenant } from './TenantPublicLayout';
 
 const steps = ['Services', 'Date', 'Time', 'Details', 'Confirm'];
 
+// Lazy-load Stripe only when needed
+let stripePromise = null;
+function getStripePromise(publishableKey) {
+  if (!stripePromise && publishableKey) {
+    import('@stripe/stripe-js').then(({ loadStripe }) => {
+      stripePromise = loadStripe(publishableKey);
+    });
+  }
+  return stripePromise;
+}
+
 export default function BookingFlow() {
   const { slug } = useParams();
   const location = useLocation();
@@ -28,6 +39,9 @@ export default function BookingFlow() {
   const [submitting, setSubmitting] = useState(false);
   const [bookingResult, setBookingResult] = useState(null);
   const [error, setError] = useState('');
+  const [cardSetup, setCardSetup] = useState(null); // { clientSecret, stripePublishableKey }
+  const [cardSaved, setCardSaved] = useState(false);
+  const [cardLoading, setCardLoading] = useState(false);
 
   // Load services
   useEffect(() => {
@@ -75,6 +89,16 @@ export default function BookingFlow() {
       });
       setBookingResult(data);
       setActiveStep(5); // Success step
+
+      // Check if card setup is available for this tenant
+      try {
+        const { data: setupData } = await api.post(`/t/${slug}/bookings/${data.id}/setup-intent`);
+        if (setupData.available && setupData.clientSecret) {
+          setCardSetup(setupData);
+        }
+      } catch {
+        // Card setup not available, that's fine
+      }
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to create booking. Please try again.');
     } finally {
@@ -119,6 +143,31 @@ export default function BookingFlow() {
             </Typography>
           </CardContent>
         </Card>
+
+        {cardSetup && !cardSaved && (
+          <Card sx={{ mt: 3, textAlign: 'left' }}>
+            <CardContent>
+              <Typography fontWeight={600} gutterBottom>Save a Card on File</Typography>
+              <Typography variant="body2" color="text.secondary" mb={2}>
+                Save your card details for a smoother experience next time. You won't be charged now.
+              </Typography>
+              <Alert severity="info" sx={{ mb: 2 }}>
+                Card setup requires Stripe to be loaded. If you see this message,
+                the business has card-on-file enabled.
+              </Alert>
+              <Button
+                variant="outlined" size="small"
+                onClick={() => setCardSaved(true)}
+              >
+                Skip for Now
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {cardSaved && (
+          <Alert severity="success" sx={{ mt: 2 }}>Card setup skipped. You can add a card later.</Alert>
+        )}
 
         <Button variant="outlined" sx={{ mt: 3 }} onClick={() => navigate(`/t/${slug}`)}>
           Back to {tenant?.name}

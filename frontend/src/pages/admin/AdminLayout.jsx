@@ -5,7 +5,7 @@ import {
 } from '@mui/material';
 import {
   Dashboard as DashboardIcon, ContentCut, CalendarMonth,
-  Schedule, Logout, People
+  Schedule, Logout, People, AddCircle
 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -16,6 +16,7 @@ const navItems = [
   { label: 'Services', path: '/admin/services', icon: <ContentCut /> },
   { label: 'Bookings', path: '/admin/bookings', icon: <CalendarMonth /> },
   { label: 'Availability', path: '/admin/slot-templates', icon: <Schedule /> },
+  { label: 'Create Booking', path: '/admin/bookings/create', icon: <AddCircle /> },
   { label: 'Customers', path: '/admin/customers', icon: <People /> },
 ];
 

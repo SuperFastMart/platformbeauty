@@ -7,6 +7,7 @@ const {
   sendBookingApprovedNotification, sendBookingRejectedNotification,
   sendRequestApprovedNotification, sendRequestRejectedNotification,
 } = require('../utils/emailService');
+const { chargeNoShow, getCustomerPaymentMethods } = require('../utils/stripeService');
 
 const asyncHandler = (fn) => (req, res, next) =>
   Promise.resolve(fn(req, res, next)).catch(next);
@@ -643,6 +644,257 @@ router.delete('/customers/:id', asyncHandler(async (req, res) => {
   await run('DELETE FROM customers WHERE id = $1 AND tenant_id = $2', [customer.id, req.tenantId]);
 
   res.json({ message: 'Customer and all associated data deleted' });
+}));
+
+// ============================================
+// ADMIN SLOTS (for admin booking creation)
+// ============================================
+
+// GET /api/admin/slots?date=YYYY-MM-DD
+router.get('/slots', asyncHandler(async (req, res) => {
+  const { date } = req.query;
+  if (!date) return res.status(400).json({ error: 'date is required' });
+
+  const slots = await getAll(
+    `SELECT id, date, start_time, end_time
+     FROM time_slots
+     WHERE tenant_id = $1 AND date = $2 AND is_available = TRUE
+     ORDER BY start_time`,
+    [req.tenantId, date]
+  );
+  res.json(slots);
+}));
+
+// ============================================
+// ADMIN BOOKING CREATION
+// ============================================
+
+// POST /api/admin/bookings/admin-create
+router.post('/bookings/admin-create', asyncHandler(async (req, res) => {
+  const { customerId, customerName, customerEmail, customerPhone, serviceIds, date, startTime, notes } = req.body;
+
+  if (!serviceIds?.length || !date || !startTime) {
+    return res.status(400).json({ error: 'serviceIds, date, and startTime are required' });
+  }
+
+  if (!customerId && (!customerName || !customerEmail)) {
+    return res.status(400).json({ error: 'Either customerId or customerName + customerEmail required' });
+  }
+
+  // Resolve customer
+  let customer;
+  if (customerId) {
+    customer = await getOne('SELECT * FROM customers WHERE id = $1 AND tenant_id = $2', [customerId, req.tenantId]);
+    if (!customer) return res.status(404).json({ error: 'Customer not found' });
+  } else {
+    // Upsert customer
+    customer = await getOne(
+      `INSERT INTO customers (tenant_id, name, email, phone)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (tenant_id, email) DO UPDATE SET
+         name = EXCLUDED.name, phone = COALESCE(EXCLUDED.phone, customers.phone)
+       RETURNING *`,
+      [req.tenantId, customerName, customerEmail, customerPhone || null]
+    );
+  }
+
+  // Fetch services
+  const placeholders = serviceIds.map((_, i) => `$${i + 2}`).join(',');
+  const services = await getAll(
+    `SELECT * FROM services WHERE id IN (${placeholders}) AND tenant_id = $1 AND active = TRUE`,
+    [req.tenantId, ...serviceIds]
+  );
+
+  if (services.length !== serviceIds.length) {
+    return res.status(400).json({ error: 'One or more services are invalid' });
+  }
+
+  const totalPrice = services.reduce((sum, s) => sum + parseFloat(s.price), 0);
+  const totalDuration = services.reduce((sum, s) => sum + s.duration, 0);
+  const serviceNames = services.map(s => s.name).join(', ');
+
+  const [hours, minutes] = startTime.split(':').map(Number);
+  const endMinutes = hours * 60 + minutes + totalDuration;
+  const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
+
+  // Create booking (auto-confirmed when admin creates)
+  const booking = await getOne(
+    `INSERT INTO bookings (tenant_id, customer_id, customer_name, customer_email, customer_phone,
+       service_ids, service_names, date, start_time, end_time,
+       total_price, total_duration, status, notes, created_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'confirmed', $13, 'admin')
+     RETURNING *`,
+    [req.tenantId, customer.id, customer.name, customer.email, customer.phone || null,
+     serviceIds.join(','), serviceNames, date, startTime, endTime,
+     totalPrice, totalDuration, notes || null]
+  );
+
+  // Mark time slots as unavailable
+  await run(
+    `UPDATE time_slots SET is_available = FALSE
+     WHERE tenant_id = $1 AND date = $2 AND start_time >= $3 AND start_time < $4`,
+    [req.tenantId, date, startTime, endTime]
+  );
+
+  res.status(201).json(booking);
+}));
+
+// POST /api/admin/bookings/admin-create-recurring
+router.post('/bookings/admin-create-recurring', asyncHandler(async (req, res) => {
+  const { customerId, customerName, customerEmail, customerPhone, serviceIds, dates, notes } = req.body;
+
+  if (!serviceIds?.length || !dates?.length) {
+    return res.status(400).json({ error: 'serviceIds and dates are required' });
+  }
+
+  let customer;
+  if (customerId) {
+    customer = await getOne('SELECT * FROM customers WHERE id = $1 AND tenant_id = $2', [customerId, req.tenantId]);
+    if (!customer) return res.status(404).json({ error: 'Customer not found' });
+  } else if (customerName && customerEmail) {
+    customer = await getOne(
+      `INSERT INTO customers (tenant_id, name, email, phone)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (tenant_id, email) DO UPDATE SET
+         name = EXCLUDED.name, phone = COALESCE(EXCLUDED.phone, customers.phone)
+       RETURNING *`,
+      [req.tenantId, customerName, customerEmail, customerPhone || null]
+    );
+  } else {
+    return res.status(400).json({ error: 'Either customerId or customerName + customerEmail required' });
+  }
+
+  const placeholders = serviceIds.map((_, i) => `$${i + 2}`).join(',');
+  const services = await getAll(
+    `SELECT * FROM services WHERE id IN (${placeholders}) AND tenant_id = $1 AND active = TRUE`,
+    [req.tenantId, ...serviceIds]
+  );
+
+  const totalPrice = services.reduce((sum, s) => sum + parseFloat(s.price), 0);
+  const totalDuration = services.reduce((sum, s) => sum + s.duration, 0);
+  const serviceNames = services.map(s => s.name).join(', ');
+
+  const created = [];
+  for (const entry of dates) {
+    const entryDate = entry.date || entry;
+    const entryTime = entry.startTime || dates[0]?.startTime || '09:00';
+    const [hours, minutes] = entryTime.split(':').map(Number);
+    const endMinutes = hours * 60 + minutes + totalDuration;
+    const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
+
+    const booking = await getOne(
+      `INSERT INTO bookings (tenant_id, customer_id, customer_name, customer_email, customer_phone,
+         service_ids, service_names, date, start_time, end_time,
+         total_price, total_duration, status, notes, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'confirmed', $13, 'admin')
+       RETURNING *`,
+      [req.tenantId, customer.id, customer.name, customer.email, customer.phone || null,
+       serviceIds.join(','), serviceNames, entryDate, entryTime, endTime,
+       totalPrice, totalDuration, notes || null]
+    );
+
+    await run(
+      `UPDATE time_slots SET is_available = FALSE
+       WHERE tenant_id = $1 AND date = $2 AND start_time >= $3 AND start_time < $4`,
+      [req.tenantId, entryDate, entryTime, endTime]
+    );
+
+    created.push(booking);
+  }
+
+  res.status(201).json({ bookings: created, count: created.length });
+}));
+
+// ============================================
+// PAYMENTS
+// ============================================
+
+// POST /api/admin/bookings/:id/cash-payment
+router.post('/bookings/:id/cash-payment', asyncHandler(async (req, res) => {
+  const booking = await getOne(
+    'SELECT * FROM bookings WHERE id = $1 AND tenant_id = $2',
+    [req.params.id, req.tenantId]
+  );
+
+  if (!booking) return res.status(404).json({ error: 'Booking not found' });
+
+  // Record payment
+  await getOne(
+    `INSERT INTO payments (tenant_id, booking_id, amount, payment_method, payment_status, paid_at)
+     VALUES ($1, $2, $3, 'cash', 'completed', NOW()) RETURNING *`,
+    [req.tenantId, booking.id, booking.total_price]
+  );
+
+  // Update booking status
+  await run(
+    `UPDATE bookings SET status = 'completed', payment_status = 'paid' WHERE id = $1`,
+    [booking.id]
+  );
+
+  // Update customer visit tracking
+  if (booking.customer_email) {
+    await run(
+      `UPDATE customers SET total_visits = total_visits + 1, last_visit_date = $1
+       WHERE tenant_id = $2 AND email = $3`,
+      [booking.date, req.tenantId, booking.customer_email]
+    );
+  }
+
+  res.json({ message: 'Cash payment recorded', booking_id: booking.id });
+}));
+
+// POST /api/admin/bookings/:id/charge-noshow
+router.post('/bookings/:id/charge-noshow', asyncHandler(async (req, res) => {
+  const { amount, paymentMethodId } = req.body;
+
+  if (!amount || !paymentMethodId) {
+    return res.status(400).json({ error: 'amount and paymentMethodId are required' });
+  }
+
+  const booking = await getOne(
+    'SELECT * FROM bookings WHERE id = $1 AND tenant_id = $2',
+    [req.params.id, req.tenantId]
+  );
+
+  if (!booking) return res.status(404).json({ error: 'Booking not found' });
+
+  const tenant = await getOne('SELECT * FROM tenants WHERE id = $1', [req.tenantId]);
+
+  try {
+    const paymentIntent = await chargeNoShow(tenant, booking.customer_email, paymentMethodId, amount, booking.id);
+
+    // Record payment
+    await getOne(
+      `INSERT INTO payments (tenant_id, booking_id, amount, payment_method, payment_status, stripe_payment_id, noshow_charge_id, paid_at)
+       VALUES ($1, $2, $3, 'card', 'completed', $4, $4, NOW()) RETURNING *`,
+      [req.tenantId, booking.id, amount, paymentIntent.id]
+    );
+
+    // Mark booking
+    await run(
+      `UPDATE bookings SET marked_noshow = TRUE, payment_status = 'paid' WHERE id = $1`,
+      [booking.id]
+    );
+
+    res.json({ message: 'No-show charge processed', payment_intent_id: paymentIntent.id });
+  } catch (err) {
+    res.status(400).json({ error: `Charge failed: ${err.message}` });
+  }
+}));
+
+// GET /api/admin/bookings/:id/payment-methods
+router.get('/bookings/:id/payment-methods', asyncHandler(async (req, res) => {
+  const booking = await getOne(
+    'SELECT * FROM bookings WHERE id = $1 AND tenant_id = $2',
+    [req.params.id, req.tenantId]
+  );
+
+  if (!booking) return res.status(404).json({ error: 'Booking not found' });
+
+  const tenant = await getOne('SELECT * FROM tenants WHERE id = $1', [req.tenantId]);
+  const methods = await getCustomerPaymentMethods(tenant, booking.customer_email);
+
+  res.json(methods);
 }));
 
 module.exports = router;

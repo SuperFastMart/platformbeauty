@@ -217,6 +217,7 @@ const migrations = [
       ALTER TABLE customers ADD COLUMN IF NOT EXISTS admin_notes TEXT;
       ALTER TABLE customers ADD COLUMN IF NOT EXISTS last_visit_date DATE;
       ALTER TABLE customers ADD COLUMN IF NOT EXISTS total_visits INTEGER DEFAULT 0;
+      ALTER TABLE customers ADD COLUMN IF NOT EXISTS stripe_payment_method_id TEXT;
     `
   },
   {

@@ -4,24 +4,31 @@ import {
   ToggleButton, ToggleButtonGroup, Snackbar, Alert, Grid,
   Dialog, DialogTitle, DialogContent, DialogActions, Divider
 } from '@mui/material';
-import { Check, Close, SwapHoriz } from '@mui/icons-material';
+import { Check, Close, SwapHoriz, AttachMoney, CreditCardOff, Add } from '@mui/icons-material';
 import dayjs from 'dayjs';
+import { useNavigate } from 'react-router-dom';
 import api from '../../api/client';
+import NoShowChargeModal from '../../components/NoShowChargeModal';
 
 const statusColors = {
   pending: 'warning',
   confirmed: 'success',
+  completed: 'success',
   rejected: 'error',
   cancelled: 'default',
 };
 
 export default function Bookings() {
+  const navigate = useNavigate();
   const [bookings, setBookings] = useState([]);
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [date, setDate] = useState(dayjs().format('YYYY-MM-DD'));
+  const [date, setDate] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+
+  // No-show modal
+  const [noshowBooking, setNoshowBooking] = useState(null);
 
   // Reject dialog
   const [rejectDialog, setRejectDialog] = useState(false);
@@ -76,6 +83,16 @@ export default function Bookings() {
     setRejectDialog(false);
   };
 
+  const handleCashPayment = async (id) => {
+    try {
+      await api.post(`/admin/bookings/${id}/cash-payment`);
+      setSnackbar({ open: true, message: 'Cash payment recorded', severity: 'success' });
+      fetchBookings();
+    } catch (err) {
+      setSnackbar({ open: true, message: err.response?.data?.error || 'Error', severity: 'error' });
+    }
+  };
+
   const handleRequestAction = async (action) => {
     try {
       await api.post(`/admin/bookings/requests/${currentRequest.id}/${action}`, {
@@ -91,7 +108,12 @@ export default function Bookings() {
 
   return (
     <Box>
-      <Typography variant="h5" fontWeight={600} mb={3}>Bookings</Typography>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+        <Typography variant="h5" fontWeight={600}>Bookings</Typography>
+        <Button variant="contained" startIcon={<Add />} onClick={() => navigate('/admin/bookings/create')}>
+          Create Booking
+        </Button>
+      </Box>
 
       {/* Pending Booking Requests */}
       {requests.length > 0 && (
@@ -218,6 +240,29 @@ export default function Bookings() {
                       </Button>
                     </Box>
                   )}
+
+                  {b.status === 'confirmed' && (
+                    <Box display="flex" gap={1} mt={2}>
+                      <Button
+                        size="small" variant="contained"
+                        startIcon={<AttachMoney />}
+                        onClick={() => handleCashPayment(b.id)}
+                      >
+                        Cash Paid
+                      </Button>
+                      <Button
+                        size="small" variant="outlined" color="error"
+                        startIcon={<CreditCardOff />}
+                        onClick={() => setNoshowBooking(b)}
+                      >
+                        No-Show
+                      </Button>
+                    </Box>
+                  )}
+
+                  {b.marked_noshow && (
+                    <Chip label="No-Show" size="small" color="error" variant="outlined" sx={{ mt: 1 }} />
+                  )}
                 </CardContent>
               </Card>
             </Grid>
@@ -280,6 +325,17 @@ export default function Bookings() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* No-Show Charge Modal */}
+      <NoShowChargeModal
+        open={!!noshowBooking}
+        onClose={() => setNoshowBooking(null)}
+        booking={noshowBooking}
+        onSuccess={() => {
+          setSnackbar({ open: true, message: 'No-show charge processed', severity: 'success' });
+          fetchBookings();
+        }}
+      />
 
       <Snackbar open={snackbar.open} autoHideDuration={3000} onClose={() => setSnackbar(s => ({ ...s, open: false }))}>
         <Alert severity={snackbar.severity} variant="filled">{snackbar.message}</Alert>
