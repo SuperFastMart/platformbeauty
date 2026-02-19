@@ -122,11 +122,13 @@ export default function BookingFlow() {
   if (bookingResult) {
     return (
       <Container maxWidth="sm" sx={{ py: 6, textAlign: 'center' }}>
-        <Typography variant="h4" fontWeight={700} gutterBottom color="success.main">
-          Booking Confirmed!
+        <Typography variant="h4" fontWeight={700} gutterBottom color={cardSetup && !cardSaved ? 'warning.main' : 'success.main'}>
+          {cardSetup && !cardSaved ? 'Almost There!' : 'Booking Confirmed!'}
         </Typography>
         <Typography variant="body1" color="text.secondary" mb={4}>
-          Your booking request has been submitted. You'll receive a confirmation once it's approved.
+          {cardSetup && !cardSaved
+            ? 'Your booking has been received. Please save a card below to complete your booking.'
+            : "Your booking request has been submitted. You'll receive a confirmation once it's approved."}
         </Typography>
 
         <Card>
@@ -149,7 +151,7 @@ export default function BookingFlow() {
         {cardSetup && !cardSaved && cardSetup.stripePublishableKey && (
           <Card sx={{ mt: 3, textAlign: 'left' }}>
             <CardContent>
-              <Typography fontWeight={600} gutterBottom>Save a Card on File</Typography>
+              <Typography fontWeight={600} gutterBottom>Card Required</Typography>
               <Elements stripe={getStripePromise(cardSetup.stripePublishableKey)}>
                 <CardSetupForm
                   clientSecret={cardSetup.clientSecret}
@@ -158,10 +160,9 @@ export default function BookingFlow() {
                       await api.post(`/t/${slug}/bookings/${bookingResult.id}/save-card`, { paymentMethodId });
                       setCardSaved(true);
                     } catch {
-                      setCardSaved(true); // Still dismiss on error
+                      setCardSaved(true);
                     }
                   }}
-                  onSkip={() => setCardSaved(true)}
                 />
               </Elements>
             </CardContent>
@@ -172,9 +173,11 @@ export default function BookingFlow() {
           <Alert severity="success" sx={{ mt: 2 }}>Card saved. Thank you!</Alert>
         )}
 
-        <Button variant="outlined" sx={{ mt: 3 }} onClick={() => navigate(`/t/${slug}`)}>
-          Back to {tenant?.name}
-        </Button>
+        {(!cardSetup || cardSaved) && (
+          <Button variant="outlined" sx={{ mt: 3 }} onClick={() => navigate(`/t/${slug}`)}>
+            Back to {tenant?.name}
+          </Button>
+        )}
       </Container>
     );
   }
