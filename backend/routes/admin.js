@@ -882,6 +882,55 @@ router.post('/bookings/:id/charge-noshow', asyncHandler(async (req, res) => {
   }
 }));
 
+// POST /api/admin/bookings/:id/charge-complete — charge card and mark service completed
+router.post('/bookings/:id/charge-complete', asyncHandler(async (req, res) => {
+  const { paymentMethodId } = req.body;
+
+  if (!paymentMethodId) {
+    return res.status(400).json({ error: 'paymentMethodId is required' });
+  }
+
+  const booking = await getOne(
+    'SELECT * FROM bookings WHERE id = $1 AND tenant_id = $2',
+    [req.params.id, req.tenantId]
+  );
+
+  if (!booking) return res.status(404).json({ error: 'Booking not found' });
+
+  const tenant = await getOne('SELECT * FROM tenants WHERE id = $1', [req.tenantId]);
+  const amount = parseFloat(booking.total_price);
+
+  try {
+    const paymentIntent = await chargeNoShow(tenant, booking.customer_email, paymentMethodId, amount, booking.id);
+
+    // Record payment
+    await getOne(
+      `INSERT INTO payments (tenant_id, booking_id, amount, payment_method, payment_status, stripe_payment_id, paid_at)
+       VALUES ($1, $2, $3, 'card', 'completed', $4, NOW()) RETURNING *`,
+      [req.tenantId, booking.id, amount, paymentIntent.id]
+    );
+
+    // Mark booking completed
+    await run(
+      `UPDATE bookings SET status = 'completed', payment_status = 'paid' WHERE id = $1`,
+      [booking.id]
+    );
+
+    // Update customer visit tracking
+    if (booking.customer_email) {
+      await run(
+        `UPDATE customers SET total_visits = total_visits + 1, last_visit_date = $1
+         WHERE tenant_id = $2 AND email = $3`,
+        [booking.date, req.tenantId, booking.customer_email]
+      );
+    }
+
+    res.json({ message: 'Card charged and service completed', payment_intent_id: paymentIntent.id });
+  } catch (err) {
+    res.status(400).json({ error: `Charge failed: ${err.message}` });
+  }
+}));
+
 // GET /api/admin/bookings/:id/payment-methods
 router.get('/bookings/:id/payment-methods', asyncHandler(async (req, res) => {
   const booking = await getOne(

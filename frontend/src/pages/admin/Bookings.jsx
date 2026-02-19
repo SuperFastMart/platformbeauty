@@ -4,7 +4,7 @@ import {
   ToggleButton, ToggleButtonGroup, Snackbar, Alert, Grid,
   Dialog, DialogTitle, DialogContent, DialogActions, Divider
 } from '@mui/material';
-import { Check, Close, SwapHoriz, AttachMoney, CreditCardOff, Add } from '@mui/icons-material';
+import { Check, Close, SwapHoriz, CurrencyPound, CreditCardOff, CreditCard, Add } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api/client';
@@ -29,6 +29,11 @@ export default function Bookings() {
 
   // No-show modal
   const [noshowBooking, setNoshowBooking] = useState(null);
+
+  // Complete service dialog
+  const [completeDialog, setCompleteDialog] = useState(false);
+  const [completeBooking, setCompleteBooking] = useState(null);
+  const [completeLoading, setCompleteLoading] = useState(false);
 
   // Reject dialog
   const [rejectDialog, setRejectDialog] = useState(false);
@@ -90,6 +95,31 @@ export default function Bookings() {
       fetchBookings();
     } catch (err) {
       setSnackbar({ open: true, message: err.response?.data?.error || 'Error', severity: 'error' });
+    }
+  };
+
+  const handleChargeComplete = async () => {
+    if (!completeBooking) return;
+    setCompleteLoading(true);
+    try {
+      // Get payment methods
+      const { data: methods } = await api.get(`/admin/bookings/${completeBooking.id}/payment-methods`);
+      if (!methods.length) {
+        setSnackbar({ open: true, message: 'No saved card found for this customer', severity: 'error' });
+        setCompleteDialog(false);
+        setCompleteLoading(false);
+        return;
+      }
+      await api.post(`/admin/bookings/${completeBooking.id}/charge-complete`, {
+        paymentMethodId: methods[0].id,
+      });
+      setSnackbar({ open: true, message: 'Card charged — service completed', severity: 'success' });
+      setCompleteDialog(false);
+      fetchBookings();
+    } catch (err) {
+      setSnackbar({ open: true, message: err.response?.data?.error || 'Charge failed', severity: 'error' });
+    } finally {
+      setCompleteLoading(false);
     }
   };
 
@@ -242,10 +272,17 @@ export default function Bookings() {
                   )}
 
                   {b.status === 'confirmed' && (
-                    <Box display="flex" gap={1} mt={2}>
+                    <Box display="flex" gap={1} mt={2} flexWrap="wrap">
+                      <Button
+                        size="small" variant="contained" color="success"
+                        startIcon={<CreditCard />}
+                        onClick={() => { setCompleteBooking(b); setCompleteDialog(true); }}
+                      >
+                        Complete
+                      </Button>
                       <Button
                         size="small" variant="contained"
-                        startIcon={<AttachMoney />}
+                        startIcon={<CurrencyPound />}
                         onClick={() => handleCashPayment(b.id)}
                       >
                         Cash Paid
@@ -322,6 +359,35 @@ export default function Bookings() {
           </Button>
           <Button variant="contained" color="success" onClick={() => handleRequestAction('approve')}>
             Approve
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Complete Service Dialog */}
+      <Dialog open={completeDialog} onClose={() => !completeLoading && setCompleteDialog(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Complete Service</DialogTitle>
+        <DialogContent>
+          {completeBooking && (
+            <Box>
+              <Typography variant="body2" mb={1}>
+                <strong>{completeBooking.customer_name}</strong> — {completeBooking.service_names}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" mb={2}>
+                {dayjs(completeBooking.date).format('D MMM YYYY')} at {completeBooking.start_time?.slice(0, 5)}
+              </Typography>
+              <Typography variant="h6" fontWeight={600}>
+                Charge: £{parseFloat(completeBooking.total_price).toFixed(2)}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                The customer's saved card will be charged the full amount.
+              </Typography>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCompleteDialog(false)} disabled={completeLoading}>Cancel</Button>
+          <Button variant="contained" color="success" onClick={handleChargeComplete} disabled={completeLoading}>
+            {completeLoading ? 'Charging...' : 'Charge Card'}
           </Button>
         </DialogActions>
       </Dialog>
