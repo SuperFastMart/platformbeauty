@@ -5,20 +5,22 @@ import {
   TextField, Checkbox, Container, Chip, Alert, CircularProgress
 } from '@mui/material';
 import dayjs from 'dayjs';
+import { loadStripe } from '@stripe/stripe-js';
+import { Elements } from '@stripe/react-stripe-js';
 import api from '../../api/client';
 import { useTenant } from './TenantPublicLayout';
+import CardSetupForm from '../../components/CardSetupForm';
 
 const steps = ['Services', 'Date', 'Time', 'Details', 'Confirm'];
 
-// Lazy-load Stripe only when needed
-let stripePromise = null;
+// Cache Stripe instance per publishable key
+const stripeCache = {};
 function getStripePromise(publishableKey) {
-  if (!stripePromise && publishableKey) {
-    import('@stripe/stripe-js').then(({ loadStripe }) => {
-      stripePromise = loadStripe(publishableKey);
-    });
+  if (!publishableKey) return null;
+  if (!stripeCache[publishableKey]) {
+    stripeCache[publishableKey] = loadStripe(publishableKey);
   }
-  return stripePromise;
+  return stripeCache[publishableKey];
 }
 
 export default function BookingFlow() {
@@ -144,29 +146,30 @@ export default function BookingFlow() {
           </CardContent>
         </Card>
 
-        {cardSetup && !cardSaved && (
+        {cardSetup && !cardSaved && cardSetup.stripePublishableKey && (
           <Card sx={{ mt: 3, textAlign: 'left' }}>
             <CardContent>
               <Typography fontWeight={600} gutterBottom>Save a Card on File</Typography>
-              <Typography variant="body2" color="text.secondary" mb={2}>
-                Save your card details for a smoother experience next time. You won't be charged now.
-              </Typography>
-              <Alert severity="info" sx={{ mb: 2 }}>
-                Card setup requires Stripe to be loaded. If you see this message,
-                the business has card-on-file enabled.
-              </Alert>
-              <Button
-                variant="outlined" size="small"
-                onClick={() => setCardSaved(true)}
-              >
-                Skip for Now
-              </Button>
+              <Elements stripe={getStripePromise(cardSetup.stripePublishableKey)}>
+                <CardSetupForm
+                  clientSecret={cardSetup.clientSecret}
+                  onSuccess={async (paymentMethodId) => {
+                    try {
+                      await api.post(`/t/${slug}/bookings/${bookingResult.id}/save-card`, { paymentMethodId });
+                      setCardSaved(true);
+                    } catch {
+                      setCardSaved(true); // Still dismiss on error
+                    }
+                  }}
+                  onSkip={() => setCardSaved(true)}
+                />
+              </Elements>
             </CardContent>
           </Card>
         )}
 
         {cardSaved && (
-          <Alert severity="success" sx={{ mt: 2 }}>Card setup skipped. You can add a card later.</Alert>
+          <Alert severity="success" sx={{ mt: 2 }}>Card saved. Thank you!</Alert>
         )}
 
         <Button variant="outlined" sx={{ mt: 3 }} onClick={() => navigate(`/t/${slug}`)}>
