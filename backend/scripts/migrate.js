@@ -305,6 +305,134 @@ const migrations = [
   },
 
   // ============================================
+  // SPRINT 3: Loyalty + Discount Codes + Reviews + Reports
+  // ============================================
+  {
+    name: '020_create_loyalty_config',
+    sql: `
+      CREATE TABLE IF NOT EXISTS loyalty_config (
+        id SERIAL PRIMARY KEY,
+        tenant_id INTEGER NOT NULL REFERENCES tenants(id) UNIQUE,
+        stamps_needed INTEGER DEFAULT 6,
+        discount_percent INTEGER DEFAULT 50,
+        active BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `
+  },
+  {
+    name: '021_create_customer_category_stamps',
+    sql: `
+      CREATE TABLE IF NOT EXISTS customer_category_stamps (
+        id SERIAL PRIMARY KEY,
+        tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+        customer_id INTEGER NOT NULL REFERENCES customers(id),
+        category VARCHAR(100) NOT NULL,
+        stamps INTEGER DEFAULT 0,
+        lifetime_stamps INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(tenant_id, customer_id, category)
+      )
+    `
+  },
+  {
+    name: '022_create_loyalty_rewards',
+    sql: `
+      CREATE TABLE IF NOT EXISTS loyalty_rewards (
+        id SERIAL PRIMARY KEY,
+        tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+        name VARCHAR(255),
+        points_cost INTEGER,
+        reward_type VARCHAR(50) DEFAULT 'percentage_discount',
+        reward_value INTEGER,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `
+  },
+  {
+    name: '023_create_redeemed_rewards',
+    sql: `
+      CREATE TABLE IF NOT EXISTS redeemed_rewards (
+        id SERIAL PRIMARY KEY,
+        tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+        customer_id INTEGER NOT NULL REFERENCES customers(id),
+        reward_id INTEGER REFERENCES loyalty_rewards(id),
+        code VARCHAR(50) UNIQUE NOT NULL,
+        status VARCHAR(20) DEFAULT 'active',
+        used_at TIMESTAMP,
+        booking_id INTEGER,
+        expires_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `
+  },
+  {
+    name: '024_create_loyalty_transactions',
+    sql: `
+      CREATE TABLE IF NOT EXISTS loyalty_transactions (
+        id SERIAL PRIMARY KEY,
+        tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+        customer_id INTEGER NOT NULL REFERENCES customers(id),
+        booking_id INTEGER,
+        points_change INTEGER,
+        transaction_type VARCHAR(20),
+        description TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `
+  },
+  {
+    name: '025_create_discount_codes',
+    sql: `
+      CREATE TABLE IF NOT EXISTS discount_codes (
+        id SERIAL PRIMARY KEY,
+        tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+        code VARCHAR(50) NOT NULL,
+        description TEXT,
+        discount_type VARCHAR(20) NOT NULL,
+        discount_value DECIMAL(10,2) NOT NULL,
+        max_uses INTEGER,
+        uses_count INTEGER DEFAULT 0,
+        min_spend DECIMAL(10,2) DEFAULT 0,
+        category VARCHAR(100),
+        active BOOLEAN DEFAULT TRUE,
+        expires_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(tenant_id, code)
+      )
+    `
+  },
+  {
+    name: '026_create_discount_code_uses',
+    sql: `
+      CREATE TABLE IF NOT EXISTS discount_code_uses (
+        id SERIAL PRIMARY KEY,
+        tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+        discount_code_id INTEGER REFERENCES discount_codes(id),
+        booking_id INTEGER,
+        customer_id INTEGER,
+        discount_amount DECIMAL(10,2),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `
+  },
+  {
+    name: '027_alter_bookings_discount',
+    sql: `
+      ALTER TABLE bookings ADD COLUMN IF NOT EXISTS discount_code_id INTEGER;
+      ALTER TABLE bookings ADD COLUMN IF NOT EXISTS discount_amount DECIMAL(10,2) DEFAULT 0;
+    `
+  },
+  {
+    name: '028_alter_reviews_extra',
+    sql: `
+      ALTER TABLE reviews ADD COLUMN IF NOT EXISTS customer_id INTEGER;
+      ALTER TABLE reviews ADD COLUMN IF NOT EXISTS booking_id INTEGER;
+      ALTER TABLE reviews ADD COLUMN IF NOT EXISTS service_category VARCHAR(100);
+    `
+  },
+
+  // ============================================
   // MIGRATION TRACKING
   // ============================================
   {

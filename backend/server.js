@@ -44,6 +44,18 @@ app.use('/api/t/:tenant', publicTenantRoutes);
 const customerAuthRoutes = require('./routes/customerAuth');
 app.use('/api/t/:tenant/auth', customerAuthRoutes);
 
+// --- Sprint 3: Loyalty, Discount Codes, Reports ---
+const { adminRouter: loyaltyAdminRoutes, publicRouter: loyaltyPublicRoutes } = require('./routes/loyalty');
+app.use('/api/admin/loyalty', loyaltyAdminRoutes);
+app.use('/api/t/:tenant/loyalty', loyaltyPublicRoutes);
+
+const { adminRouter: discountCodeAdminRoutes, publicRouter: discountCodePublicRoutes } = require('./routes/discountCodes');
+app.use('/api/admin/discount-codes', discountCodeAdminRoutes);
+app.use('/api/t/:tenant/discount', discountCodePublicRoutes);
+
+const reportsRoutes = require('./routes/reports');
+app.use('/api/admin/reports', reportsRoutes);
+
 // Serve frontend for all non-API routes in production
 if (process.env.NODE_ENV === 'production') {
   app.get('*', (req, res) => {

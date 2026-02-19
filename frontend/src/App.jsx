@@ -19,6 +19,9 @@ import Customers from './pages/admin/Customers';
 import CustomerDetail from './pages/admin/CustomerDetail';
 import AdminBookingCreate from './pages/admin/AdminBookingCreate';
 import Settings from './pages/admin/Settings';
+import Loyalty from './pages/admin/Loyalty';
+import DiscountCodes from './pages/admin/DiscountCodes';
+import Reports from './pages/admin/Reports';
 
 // Public booking
 import TenantPublicLayout from './pages/public/TenantPublicLayout';
@@ -66,6 +69,9 @@ export default function App() {
         <Route path="customers" element={<Customers />} />
         <Route path="customers/:id" element={<CustomerDetail />} />
         <Route path="settings" element={<Settings />} />
+        <Route path="loyalty" element={<Loyalty />} />
+        <Route path="discount-codes" element={<DiscountCodes />} />
+        <Route path="reports" element={<Reports />} />
       </Route>
 
       {/* Public booking */}

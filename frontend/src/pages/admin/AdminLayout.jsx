@@ -5,7 +5,8 @@ import {
 } from '@mui/material';
 import {
   Dashboard as DashboardIcon, ContentCut, CalendarMonth,
-  Schedule, Logout, People, AddCircle, Settings as SettingsIcon
+  Schedule, Logout, People, AddCircle, Settings as SettingsIcon,
+  Loyalty as LoyaltyIcon, LocalOffer, Assessment
 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -18,6 +19,9 @@ const navItems = [
   { label: 'Availability', path: '/admin/slot-templates', icon: <Schedule /> },
   { label: 'Create Booking', path: '/admin/bookings/create', icon: <AddCircle /> },
   { label: 'Customers', path: '/admin/customers', icon: <People /> },
+  { label: 'Loyalty', path: '/admin/loyalty', icon: <LoyaltyIcon /> },
+  { label: 'Discount Codes', path: '/admin/discount-codes', icon: <LocalOffer /> },
+  { label: 'Reports', path: '/admin/reports', icon: <Assessment /> },
   { label: 'Settings', path: '/admin/settings', icon: <SettingsIcon /> },
 ];
 
