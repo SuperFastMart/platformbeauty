@@ -18,6 +18,7 @@ import SlotTemplates from './pages/admin/SlotTemplates';
 import Customers from './pages/admin/Customers';
 import CustomerDetail from './pages/admin/CustomerDetail';
 import AdminBookingCreate from './pages/admin/AdminBookingCreate';
+import Settings from './pages/admin/Settings';
 
 // Public booking
 import TenantPublicLayout from './pages/public/TenantPublicLayout';
@@ -64,6 +65,7 @@ export default function App() {
         <Route path="slot-templates" element={<SlotTemplates />} />
         <Route path="customers" element={<Customers />} />
         <Route path="customers/:id" element={<CustomerDetail />} />
+        <Route path="settings" element={<Settings />} />
       </Route>
 
       {/* Public booking */}

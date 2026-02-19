@@ -897,4 +897,84 @@ router.get('/bookings/:id/payment-methods', asyncHandler(async (req, res) => {
   res.json(methods);
 }));
 
+// ============================================
+// SETTINGS (tenant self-service)
+// ============================================
+
+// GET /api/admin/settings
+router.get('/settings', asyncHandler(async (req, res) => {
+  const tenant = await getOne('SELECT * FROM tenants WHERE id = $1', [req.tenantId]);
+  if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
+
+  // Return settings (mask secret key for display)
+  res.json({
+    name: tenant.name,
+    slug: tenant.slug,
+    owner_email: tenant.owner_email,
+    owner_name: tenant.owner_name,
+    business_phone: tenant.business_phone,
+    business_address: tenant.business_address,
+    logo_url: tenant.logo_url,
+    primary_color: tenant.primary_color,
+    stripe_publishable_key: tenant.stripe_publishable_key || '',
+    stripe_secret_key_set: !!tenant.stripe_secret_key,
+    stripe_secret_key_masked: tenant.stripe_secret_key
+      ? `sk_...${tenant.stripe_secret_key.slice(-8)}`
+      : '',
+    brevo_enabled: tenant.brevo_enabled,
+    sms_enabled: tenant.sms_enabled,
+    subscription_tier: tenant.subscription_tier,
+    subscription_status: tenant.subscription_status,
+  });
+}));
+
+// PUT /api/admin/settings
+router.put('/settings', asyncHandler(async (req, res) => {
+  const {
+    name, business_phone, business_address, logo_url, primary_color,
+    stripe_publishable_key, stripe_secret_key,
+  } = req.body;
+
+  // Build dynamic update
+  const updates = [];
+  const params = [];
+  let paramIndex = 1;
+
+  const addField = (field, value) => {
+    if (value !== undefined) {
+      updates.push(`${field} = $${paramIndex++}`);
+      params.push(value);
+    }
+  };
+
+  addField('name', name);
+  addField('business_phone', business_phone);
+  addField('business_address', business_address);
+  addField('logo_url', logo_url);
+  addField('primary_color', primary_color);
+  addField('stripe_publishable_key', stripe_publishable_key);
+
+  // Only update secret key if a new one is provided (not the masked value)
+  if (stripe_secret_key && !stripe_secret_key.startsWith('sk_...')) {
+    addField('stripe_secret_key', stripe_secret_key);
+  }
+
+  if (updates.length === 0) {
+    return res.status(400).json({ error: 'No fields to update' });
+  }
+
+  updates.push(`updated_at = NOW()`);
+  params.push(req.tenantId);
+
+  const tenant = await getOne(
+    `UPDATE tenants SET ${updates.join(', ')} WHERE id = $${paramIndex} RETURNING
+      id, name, slug, owner_email, owner_name, business_phone, business_address,
+      logo_url, primary_color, stripe_publishable_key,
+      brevo_enabled, sms_enabled, subscription_tier, subscription_status`,
+    params
+  );
+
+  res.json(tenant);
+}));
+
 module.exports = router;

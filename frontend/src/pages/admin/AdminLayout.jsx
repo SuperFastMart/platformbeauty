@@ -5,7 +5,7 @@ import {
 } from '@mui/material';
 import {
   Dashboard as DashboardIcon, ContentCut, CalendarMonth,
-  Schedule, Logout, People, AddCircle
+  Schedule, Logout, People, AddCircle, Settings as SettingsIcon
 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -18,6 +18,7 @@ const navItems = [
   { label: 'Availability', path: '/admin/slot-templates', icon: <Schedule /> },
   { label: 'Create Booking', path: '/admin/bookings/create', icon: <AddCircle /> },
   { label: 'Customers', path: '/admin/customers', icon: <People /> },
+  { label: 'Settings', path: '/admin/settings', icon: <SettingsIcon /> },
 ];
 
 export default function AdminLayout() {
