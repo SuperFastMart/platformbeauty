@@ -141,7 +141,7 @@ router.get('/bookings-stats', asyncHandler(async (req, res) => {
   );
 
   const noshows = await getOne(
-    `SELECT COUNT(*) as count FROM bookings WHERE tenant_id = $1 AND marked_noshow = TRUE${dateFilter}`,
+    `SELECT COUNT(*) as count FROM bookings b WHERE b.tenant_id = $1 AND b.marked_noshow = TRUE${dateFilter}`,
     params
   );
 
