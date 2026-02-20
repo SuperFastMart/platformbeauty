@@ -80,6 +80,15 @@ const { adminRouter: supportAdminRoutes, platformRouter: supportPlatformRoutes }
 app.use('/api/admin/support', tenantAuth, supportAdminRoutes);
 app.use('/api/platform/support', platformAuth, supportPlatformRoutes);
 
+// --- Subscriptions ---
+const { adminRouter: subscriptionAdminRoutes, publicRouter: subscriptionPublicRoutes, platformRouter: subscriptionPlatformRoutes, handleStripeWebhook } = require('./routes/subscriptions');
+app.use('/api/admin/subscription', subscriptionAdminRoutes);
+app.use('/api/subscriptions', subscriptionPublicRoutes);
+app.use('/api/platform/subscriptions', subscriptionPlatformRoutes);
+
+// Stripe webhook needs raw body
+app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), handleStripeWebhook);
+
 // Serve frontend for all non-API routes in production
 if (process.env.NODE_ENV === 'production') {
   app.get('*', (req, res) => {

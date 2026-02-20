@@ -38,6 +38,14 @@ export default function LandingPage() {
   const [slugChecking, setSlugChecking] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [plans, setPlans] = useState([]);
+
+  // Fetch subscription plans
+  useEffect(() => {
+    api.get('/subscriptions/plans')
+      .then(r => setPlans(r.data))
+      .catch(() => {});
+  }, []);
 
   // Auto-generate slug from business name
   const handleNameChange = (e) => {
@@ -103,6 +111,13 @@ export default function LandingPage() {
                 onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })}
               >
                 How It Works
+              </Button>
+              <Button
+                color="inherit"
+                sx={{ color: 'text.secondary', fontWeight: 500 }}
+                onClick={() => document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' })}
+              >
+                Pricing
               </Button>
               <Button
                 variant="outlined"
@@ -404,6 +419,78 @@ export default function LandingPage() {
           </Grid>
         </Container>
       </Box>
+
+      {/* Pricing */}
+      {plans.length > 0 && (
+        <Box id="pricing" sx={{ py: { xs: 6, md: 10 }, bgcolor: 'white' }}>
+          <Container maxWidth="lg">
+            <Box textAlign="center" mb={6}>
+              <Chip label="PRICING" size="small" sx={{ bgcolor: `${GOLD}25`, color: '#8a7020', fontWeight: 700, mb: 2 }} />
+              <Typography variant="h3" fontWeight={800} sx={{ fontSize: { xs: '1.8rem', md: '2.5rem' }, mb: 1.5 }}>
+                Simple, transparent pricing
+              </Typography>
+              <Typography variant="h6" color="text.secondary" fontWeight={400} maxWidth={500} mx="auto">
+                Start free, upgrade when you're ready. No hidden fees, no commission on bookings.
+              </Typography>
+            </Box>
+            <Grid container spacing={3} justifyContent="center">
+              {plans.map((plan, i) => {
+                const planFeatures = typeof plan.features === 'string' ? JSON.parse(plan.features) : (plan.features || []);
+                const isPopular = plan.tier === 'professional';
+                return (
+                  <Grid item xs={12} sm={6} md={3} key={plan.tier}>
+                    <Card sx={{
+                      height: '100%', display: 'flex', flexDirection: 'column', borderRadius: 3,
+                      border: isPopular ? `2px solid ${PRIMARY}` : '1px solid #eee',
+                      position: 'relative', overflow: 'visible',
+                      transition: 'all 0.3s ease', boxShadow: isPopular ? '0 8px 30px rgba(139,38,53,0.15)' : '0 2px 12px rgba(0,0,0,0.04)',
+                      '&:hover': { transform: 'translateY(-4px)', boxShadow: '0 12px 40px rgba(0,0,0,0.1)' },
+                    }}>
+                      {isPopular && (
+                        <Chip label="Most Popular" size="small"
+                          sx={{ position: 'absolute', top: -12, left: '50%', transform: 'translateX(-50%)', bgcolor: PRIMARY, color: 'white', fontWeight: 700 }} />
+                      )}
+                      <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: 3 }}>
+                        <Typography variant="h6" fontWeight={700} mb={0.5}>{plan.name}</Typography>
+                        <Box display="flex" alignItems="baseline" gap={0.5} mb={2}>
+                          <Typography variant="h3" fontWeight={800} sx={{ color: PRIMARY }}>
+                            {plan.price_monthly > 0 ? `£${parseFloat(plan.price_monthly).toFixed(0)}` : 'Free'}
+                          </Typography>
+                          {plan.price_monthly > 0 && (
+                            <Typography variant="body1" color="text.secondary">/month</Typography>
+                          )}
+                        </Box>
+                        <Divider sx={{ mb: 2 }} />
+                        <Box flex={1}>
+                          {planFeatures.map((f, fi) => (
+                            <Box key={fi} display="flex" alignItems="flex-start" gap={1} mb={1}>
+                              <CheckCircle sx={{ fontSize: 16, color: '#2e7d32', mt: 0.3, flexShrink: 0 }} />
+                              <Typography variant="body2">{f}</Typography>
+                            </Box>
+                          ))}
+                        </Box>
+                        <Button
+                          fullWidth variant={isPopular ? 'contained' : 'outlined'} size="large"
+                          sx={{
+                            mt: 2, borderRadius: 2, py: 1.2, fontWeight: 700,
+                            ...(isPopular ? { bgcolor: PRIMARY, '&:hover': { bgcolor: '#6d1f2b' } } : { borderColor: PRIMARY, color: PRIMARY }),
+                          }}
+                          onClick={() => {
+                            setShowSignup(true);
+                            setTimeout(() => document.getElementById('signup')?.scrollIntoView({ behavior: 'smooth' }), 100);
+                          }}
+                        >
+                          {plan.price_monthly === 0 ? 'Start Free' : 'Get Started'}
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                );
+              })}
+            </Grid>
+          </Container>
+        </Box>
+      )}
 
       {/* CTA / Signup Section */}
       <Box id="signup" sx={{

@@ -1,17 +1,225 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Box, Typography, Card, CardContent, TextField, Button, Tabs, Tab,
   Snackbar, Alert, CircularProgress, InputAdornment, Chip, Switch, FormControlLabel, Grid, MenuItem
 } from '@mui/material';
-import { Save, CreditCard, Store, Palette, Info, Schedule, Code, ContentCopy, Share, Delete, Add, DragIndicator, Gavel } from '@mui/icons-material';
+import { Save, CreditCard, Store, Palette, Info, Schedule, Code, ContentCopy, Share, Delete, Add, DragIndicator, Gavel, Subscriptions, OpenInNew, CheckCircle } from '@mui/icons-material';
 import api from '../../api/client';
 
 function TabPanel({ children, value, index }) {
   return value === index ? <Box mt={3}>{children}</Box> : null;
 }
 
+function SubscriptionTab({ snackbar, setSnackbar }) {
+  const [subData, setSubData] = useState(null);
+  const [subLoading, setSubLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
+
+  useEffect(() => {
+    api.get('/admin/subscription')
+      .then(r => setSubData(r.data))
+      .catch(console.error)
+      .finally(() => setSubLoading(false));
+  }, []);
+
+  const handleCheckout = async (tier) => {
+    setActionLoading(true);
+    try {
+      const res = await api.post('/admin/subscription/checkout', { tier });
+      window.location.href = res.data.url;
+    } catch (err) {
+      setSnackbar({ open: true, message: err.response?.data?.error || 'Failed to start checkout', severity: 'error' });
+      setActionLoading(false);
+    }
+  };
+
+  const handlePortal = async () => {
+    setActionLoading(true);
+    try {
+      const res = await api.post('/admin/subscription/portal');
+      window.location.href = res.data.url;
+    } catch (err) {
+      setSnackbar({ open: true, message: err.response?.data?.error || 'Failed to open billing portal', severity: 'error' });
+      setActionLoading(false);
+    }
+  };
+
+  const handleCancel = async () => {
+    if (!window.confirm('Cancel your subscription? You\'ll keep access until the end of the billing period.')) return;
+    setActionLoading(true);
+    try {
+      await api.post('/admin/subscription/cancel');
+      setSnackbar({ open: true, message: 'Subscription will cancel at end of billing period', severity: 'info' });
+      // Refresh
+      const r = await api.get('/admin/subscription');
+      setSubData(r.data);
+    } catch (err) {
+      setSnackbar({ open: true, message: err.response?.data?.error || 'Failed to cancel', severity: 'error' });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleReactivate = async () => {
+    setActionLoading(true);
+    try {
+      await api.post('/admin/subscription/reactivate');
+      setSnackbar({ open: true, message: 'Subscription reactivated!', severity: 'success' });
+      const r = await api.get('/admin/subscription');
+      setSubData(r.data);
+    } catch (err) {
+      setSnackbar({ open: true, message: err.response?.data?.error || 'Failed to reactivate', severity: 'error' });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  if (subLoading) return <Box display="flex" justifyContent="center" py={4}><CircularProgress /></Box>;
+  if (!subData) return <Alert severity="error">Failed to load subscription data</Alert>;
+
+  const statusColors = {
+    trial: 'info', active: 'success', cancelling: 'warning',
+    cancelled: 'error', past_due: 'error', trial_expired: 'warning',
+  };
+
+  const isCurrentPlan = (tier) => tier === subData.current_tier;
+  const hasActiveSubscription = subData.stripe_subscription_id && ['active', 'cancelling'].includes(subData.status);
+
+  return (
+    <Box>
+      {/* Current Plan Status */}
+      <Card sx={{ mb: 3, borderTop: '3px solid #8B2635' }}>
+        <CardContent>
+          <Box display="flex" justifyContent="space-between" alignItems="flex-start" flexWrap="wrap" gap={2}>
+            <Box>
+              <Typography variant="h6" fontWeight={700} mb={0.5}>Current Plan</Typography>
+              <Box display="flex" alignItems="center" gap={1.5} mb={1}>
+                <Typography variant="h4" fontWeight={800} color="primary.main" sx={{ textTransform: 'capitalize' }}>
+                  {subData.current_plan?.name || subData.current_tier}
+                </Typography>
+                <Chip
+                  label={subData.status?.replace('_', ' ')}
+                  color={statusColors[subData.status] || 'default'}
+                  size="small"
+                  sx={{ textTransform: 'capitalize' }}
+                />
+              </Box>
+              {subData.status === 'trial' && subData.trial_ends_at && (
+                <Typography variant="body2" color="text.secondary">
+                  Trial ends: {new Date(subData.trial_ends_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
+                </Typography>
+              )}
+              {subData.status === 'trial_expired' && (
+                <Alert severity="warning" sx={{ mt: 1 }}>
+                  Your trial has expired. Upgrade to a paid plan to continue using all features.
+                </Alert>
+              )}
+              {subData.current_period_end && subData.status !== 'trial' && (
+                <Typography variant="body2" color="text.secondary">
+                  {subData.status === 'cancelling' ? 'Access until' : 'Next billing date'}:{' '}
+                  {new Date(subData.current_period_end).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
+                </Typography>
+              )}
+              {subData.current_plan?.price_monthly > 0 && subData.status === 'active' && (
+                <Typography variant="body2" color="text.secondary" mt={0.5}>
+                  £{parseFloat(subData.current_plan.price_monthly).toFixed(2)}/month
+                </Typography>
+              )}
+            </Box>
+            <Box display="flex" gap={1} flexWrap="wrap">
+              {hasActiveSubscription && subData.status === 'active' && (
+                <>
+                  <Button variant="outlined" size="small" startIcon={<OpenInNew />} onClick={handlePortal} disabled={actionLoading}>
+                    Manage Billing
+                  </Button>
+                  <Button variant="outlined" size="small" color="error" onClick={handleCancel} disabled={actionLoading}>
+                    Cancel Plan
+                  </Button>
+                </>
+              )}
+              {subData.status === 'cancelling' && (
+                <Button variant="contained" size="small" onClick={handleReactivate} disabled={actionLoading}>
+                  Reactivate
+                </Button>
+              )}
+            </Box>
+          </Box>
+        </CardContent>
+      </Card>
+
+      {/* Plan Cards */}
+      <Typography variant="h6" fontWeight={600} mb={2}>
+        {hasActiveSubscription ? 'Change Plan' : 'Choose a Plan'}
+      </Typography>
+      <Grid container spacing={2}>
+        {(subData.plans || []).map(plan => {
+          const isCurrent = isCurrentPlan(plan.tier);
+          const features = typeof plan.features === 'string' ? JSON.parse(plan.features) : (plan.features || []);
+          return (
+            <Grid item xs={12} sm={6} md={3} key={plan.tier}>
+              <Card sx={{
+                height: '100%', display: 'flex', flexDirection: 'column',
+                border: isCurrent ? '2px solid #8B2635' : '1px solid #eee',
+                position: 'relative', overflow: 'visible',
+              }}>
+                {isCurrent && (
+                  <Chip label="Current" size="small" color="primary"
+                    sx={{ position: 'absolute', top: -10, right: 12, fontWeight: 700 }} />
+                )}
+                <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                  <Typography variant="h6" fontWeight={700}>{plan.name}</Typography>
+                  <Box display="flex" alignItems="baseline" gap={0.5} mb={2}>
+                    <Typography variant="h4" fontWeight={800}>
+                      {plan.price_monthly > 0 ? `£${parseFloat(plan.price_monthly).toFixed(2)}` : 'Free'}
+                    </Typography>
+                    {plan.price_monthly > 0 && (
+                      <Typography variant="body2" color="text.secondary">/month</Typography>
+                    )}
+                  </Box>
+                  <Box flex={1}>
+                    {features.map((f, i) => (
+                      <Box key={i} display="flex" alignItems="flex-start" gap={1} mb={0.8}>
+                        <CheckCircle sx={{ fontSize: 16, color: 'success.main', mt: 0.3 }} />
+                        <Typography variant="body2">{f}</Typography>
+                      </Box>
+                    ))}
+                  </Box>
+                  <Box mt={2}>
+                    {isCurrent ? (
+                      <Button fullWidth variant="outlined" disabled>Current Plan</Button>
+                    ) : plan.price_monthly === 0 ? (
+                      <Button fullWidth variant="outlined" disabled>Free Tier</Button>
+                    ) : (
+                      <Button
+                        fullWidth variant="contained"
+                        onClick={() => handleCheckout(plan.tier)}
+                        disabled={actionLoading}
+                        sx={{ bgcolor: '#8B2635', '&:hover': { bgcolor: '#6d1f2b' } }}
+                      >
+                        {hasActiveSubscription ? 'Switch to ' : 'Subscribe — '}
+                        {plan.name}
+                      </Button>
+                    )}
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+          );
+        })}
+      </Grid>
+    </Box>
+  );
+}
+
 export default function Settings() {
-  const [tab, setTab] = useState(0);
+  const [searchParams] = useSearchParams();
+  const initialTab = useMemo(() => {
+    const tabParam = searchParams.get('tab');
+    if (tabParam === 'subscription') return 8;
+    return 0;
+  }, []);
+  const [tab, setTab] = useState(initialTab);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
@@ -120,6 +328,7 @@ export default function Settings() {
         <Tab icon={<Share />} label="Social" iconPosition="start" />
         <Tab icon={<Gavel />} label="Policies" iconPosition="start" />
         <Tab icon={<Code />} label="Widget" iconPosition="start" />
+        <Tab icon={<Subscriptions />} label="Subscription" iconPosition="start" />
       </Tabs>
 
       {/* Business Info */}
@@ -690,6 +899,11 @@ window.addEventListener('message', function(e) {
             </Typography>
           </CardContent>
         </Card>
+      </TabPanel>
+
+      {/* Subscription */}
+      <TabPanel value={tab} index={8}>
+        <SubscriptionTab snackbar={snackbar} setSnackbar={setSnackbar} />
       </TabPanel>
 
       <Snackbar open={snackbar.open} autoHideDuration={3000} onClose={() => setSnackbar(s => ({ ...s, open: false }))}>

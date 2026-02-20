@@ -568,6 +568,47 @@ const migrations = [
     `
   },
 
+  {
+    name: '037_alter_tenants_stripe_subscription',
+    sql: `
+      ALTER TABLE tenants ADD COLUMN IF NOT EXISTS platform_stripe_customer_id TEXT;
+      ALTER TABLE tenants ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT;
+      ALTER TABLE tenants ADD COLUMN IF NOT EXISTS subscription_price_id TEXT;
+      ALTER TABLE tenants ADD COLUMN IF NOT EXISTS subscription_current_period_end TIMESTAMP;
+    `
+  },
+
+  {
+    name: '038_create_subscription_plans',
+    sql: `
+      CREATE TABLE IF NOT EXISTS subscription_plans (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        tier VARCHAR(50) NOT NULL UNIQUE,
+        stripe_product_id TEXT,
+        stripe_price_id TEXT,
+        price_monthly DECIMAL(10,2) NOT NULL DEFAULT 0,
+        features JSONB DEFAULT '[]',
+        max_services INTEGER,
+        max_bookings_per_month INTEGER,
+        sms_enabled BOOLEAN DEFAULT FALSE,
+        is_active BOOLEAN DEFAULT TRUE,
+        display_order INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- Seed default plans
+      INSERT INTO subscription_plans (name, tier, price_monthly, display_order, features, max_services, max_bookings_per_month, sms_enabled)
+      VALUES
+        ('Free', 'free', 0, 0, '["Up to 3 services", "Up to 20 bookings/month", "Basic booking page", "Email notifications"]', 3, 20, FALSE),
+        ('Starter', 'starter', 14.99, 1, '["Up to 10 services", "Up to 100 bookings/month", "Custom branding", "Email notifications", "Customer management", "Basic reports"]', 10, 100, FALSE),
+        ('Professional', 'professional', 29.99, 2, '["Unlimited services", "Unlimited bookings", "Custom branding & fonts", "Email + SMS notifications", "Loyalty programme", "Discount codes", "Full reports & analytics", "Review collection"]', NULL, NULL, TRUE),
+        ('Enterprise', 'enterprise', 49.99, 3, '["Everything in Professional", "Priority support", "Custom domain support", "API access", "Multiple staff members", "Advanced analytics"]', NULL, NULL, TRUE)
+      ON CONFLICT (tier) DO NOTHING;
+    `
+  },
+
   // ============================================
   // MIGRATION TRACKING
   // ============================================

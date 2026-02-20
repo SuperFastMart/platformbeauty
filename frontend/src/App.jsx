@@ -19,6 +19,7 @@ const PlatformDashboard = lazy(() => import('./pages/platform/PlatformDashboard'
 const PlatformTenantDetail = lazy(() => import('./pages/platform/PlatformTenantDetail'));
 const PlatformSupport = lazy(() => import('./pages/platform/PlatformSupport'));
 const PlatformTicketDetail = lazy(() => import('./pages/platform/PlatformTicketDetail'));
+const PlatformSubscriptions = lazy(() => import('./pages/platform/PlatformSubscriptions'));
 
 // Tenant admin
 const AdminLogin = lazy(() => import('./pages/admin/AdminLogin'));
@@ -70,6 +71,7 @@ export default function App() {
           <Route path="tenants/:id" element={<PlatformTenantDetail />} />
           <Route path="support" element={<PlatformSupport />} />
           <Route path="support/:id" element={<PlatformTicketDetail />} />
+          <Route path="subscriptions" element={<PlatformSubscriptions />} />
         </Route>
 
         {/* Tenant admin */}
