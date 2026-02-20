@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import {
   Box, Typography, Card, CardContent, Chip, Button, TextField,
   ToggleButton, ToggleButtonGroup, Snackbar, Alert, Grid,
-  Dialog, DialogTitle, DialogContent, DialogActions, Divider
+  Dialog, DialogTitle, DialogContent, DialogActions, Divider,
+  useMediaQuery, useTheme
 } from '@mui/material';
 import { Check, Close, SwapHoriz, CurrencyPound, CreditCardOff, CreditCard, Add } from '@mui/icons-material';
 import dayjs from 'dayjs';
@@ -20,6 +21,8 @@ const statusColors = {
 
 export default function Bookings() {
   const navigate = useNavigate();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [bookings, setBookings] = useState([]);
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -138,10 +141,10 @@ export default function Bookings() {
 
   return (
     <Box>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3} flexWrap="wrap" gap={1}>
         <Typography variant="h5" fontWeight={600}>Bookings</Typography>
-        <Button variant="contained" startIcon={<Add />} onClick={() => navigate('/admin/bookings/create')}>
-          Create Booking
+        <Button variant="contained" startIcon={<Add />} onClick={() => navigate('/admin/bookings/create')} sx={{ minHeight: 44 }}>
+          {isMobile ? 'New' : 'Create Booking'}
         </Button>
       </Box>
 

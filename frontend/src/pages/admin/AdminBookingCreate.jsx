@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import {
   Box, Typography, Stepper, Step, StepLabel, Button, Card, CardContent,
   TextField, Chip, Alert, CircularProgress, Autocomplete, Checkbox,
-  FormControlLabel
+  FormControlLabel, ToggleButton, ToggleButtonGroup, Divider
 } from '@mui/material';
 import { ArrowBack } from '@mui/icons-material';
 import dayjs from 'dayjs';
@@ -10,6 +10,13 @@ import { useNavigate } from 'react-router-dom';
 import api from '../../api/client';
 
 const steps = ['Customer', 'Service', 'Date & Time', 'Confirm'];
+
+const FREQUENCY_OPTIONS = [
+  { value: 'specific', label: 'Specific Days' },
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'fortnightly', label: 'Fortnightly' },
+  { value: '4weekly', label: '4 Weekly' },
+];
 
 export default function AdminBookingCreate() {
   const navigate = useNavigate();
@@ -40,7 +47,9 @@ export default function AdminBookingCreate() {
 
   // Recurring
   const [isRecurring, setIsRecurring] = useState(false);
-  const [recurringDates, setRecurringDates] = useState([]);
+  const [recurringFrequency, setRecurringFrequency] = useState('weekly');
+  const [recurringCount, setRecurringCount] = useState(4);
+  const [recurringDates, setRecurringDates] = useState([]); // For 'specific' mode
 
   // Load services
   useEffect(() => {
@@ -59,13 +68,9 @@ export default function AdminBookingCreate() {
   useEffect(() => {
     if (!selectedDate) return;
     setSlotsLoading(true);
-    // Use admin's tenant slug from the services endpoint context
     api.get(`/admin/slots?date=${selectedDate}`)
       .then(({ data }) => setSlots(data))
-      .catch(() => {
-        // Fallback: try fetching from the admin endpoint
-        setSlots([]);
-      })
+      .catch(() => setSlots([]))
       .finally(() => setSlotsLoading(false));
   }, [selectedDate]);
 
@@ -88,11 +93,32 @@ export default function AdminBookingCreate() {
     );
   };
 
+  // Generate dates from frequency
+  const getFrequencyDates = () => {
+    if (!selectedDate || recurringFrequency === 'specific') return recurringDates;
+
+    const intervalWeeks = recurringFrequency === 'weekly' ? 1
+      : recurringFrequency === 'fortnightly' ? 2
+      : 4; // 4weekly
+
+    const dates = [];
+    for (let i = 0; i < recurringCount; i++) {
+      dates.push(dayjs(selectedDate).add(i * intervalWeeks, 'week').format('YYYY-MM-DD'));
+    }
+    return dates;
+  };
+
+  const allRecurringDates = isRecurring ? getFrequencyDates() : [];
+
   const canProceed = () => {
     switch (activeStep) {
       case 0: return isNewCustomer ? (newCustomer.name && newCustomer.email) : !!selectedCustomer;
       case 1: return selectedServiceIds.length > 0;
-      case 2: return isRecurring ? recurringDates.length > 0 : (!!selectedDate && !!selectedSlot);
+      case 2: {
+        if (!isRecurring) return !!selectedDate && !!selectedSlot;
+        if (recurringFrequency === 'specific') return recurringDates.length > 0 && !!selectedSlot;
+        return !!selectedDate && !!selectedSlot && recurringCount > 0;
+      }
       default: return true;
     }
   };
@@ -110,10 +136,10 @@ export default function AdminBookingCreate() {
         notes,
       };
 
-      if (isRecurring && recurringDates.length > 0) {
+      if (isRecurring && allRecurringDates.length > 0) {
         await api.post('/admin/bookings/admin-create-recurring', {
           ...basePayload,
-          dates: recurringDates.map(d => ({ date: d, startTime: selectedSlot })),
+          dates: allRecurringDates.map(d => ({ date: d, startTime: selectedSlot })),
         });
       } else {
         await api.post('/admin/bookings/admin-create', {
@@ -237,10 +263,59 @@ export default function AdminBookingCreate() {
             />
           </Box>
 
-          {isRecurring ? (
+          {isRecurring && (
+            <Box mb={3}>
+              <Typography variant="subtitle2" mb={1}>Frequency</Typography>
+              <ToggleButtonGroup
+                value={recurringFrequency}
+                exclusive
+                onChange={(e, v) => { if (v) setRecurringFrequency(v); }}
+                size="small"
+                sx={{ mb: 2, flexWrap: 'wrap' }}
+              >
+                {FREQUENCY_OPTIONS.map(opt => (
+                  <ToggleButton key={opt.value} value={opt.value} sx={{ minHeight: 40 }}>
+                    {opt.label}
+                  </ToggleButton>
+                ))}
+              </ToggleButtonGroup>
+
+              {recurringFrequency !== 'specific' && (
+                <Box mb={2}>
+                  <Typography variant="body2" color="text.secondary" mb={1}>
+                    How many sessions? (starting from the date you pick below)
+                  </Typography>
+                  <Box display="flex" gap={1} alignItems="center">
+                    {[4, 6, 8, 12].map(n => (
+                      <Chip
+                        key={n}
+                        label={`${n} sessions`}
+                        onClick={() => setRecurringCount(n)}
+                        variant={recurringCount === n ? 'filled' : 'outlined'}
+                        color={recurringCount === n ? 'primary' : 'default'}
+                      />
+                    ))}
+                    <TextField
+                      size="small"
+                      type="number"
+                      value={recurringCount}
+                      onChange={e => setRecurringCount(Math.max(1, Math.min(52, parseInt(e.target.value) || 1)))}
+                      sx={{ width: 80 }}
+                      inputProps={{ min: 1, max: 52 }}
+                    />
+                  </Box>
+                </Box>
+              )}
+
+              <Divider sx={{ my: 2 }} />
+            </Box>
+          )}
+
+          {/* Date picker */}
+          {isRecurring && recurringFrequency === 'specific' ? (
             <Box>
               <Typography variant="body2" color="text.secondary" mb={1}>
-                Select multiple dates (same time slot will be used for all):
+                Select multiple specific dates (same time slot will be used for all):
               </Typography>
               <Box display="flex" flexWrap="wrap" gap={1} mb={2}>
                 {dateOptions.map(d => {
@@ -264,6 +339,11 @@ export default function AdminBookingCreate() {
             </Box>
           ) : (
             <Box mb={3}>
+              <Typography variant="body2" color="text.secondary" mb={1}>
+                {isRecurring && recurringFrequency !== 'specific'
+                  ? 'Pick the first date — subsequent dates will be calculated automatically:'
+                  : 'Pick a date:'}
+              </Typography>
               <Box display="flex" flexWrap="wrap" gap={1} mb={2}>
                 {dateOptions.map(d => {
                   const dateStr = d.format('YYYY-MM-DD');
@@ -280,6 +360,20 @@ export default function AdminBookingCreate() {
                   );
                 })}
               </Box>
+
+              {/* Show computed recurring dates preview */}
+              {isRecurring && recurringFrequency !== 'specific' && selectedDate && (
+                <Box p={2} bgcolor="grey.50" borderRadius={2} mb={2}>
+                  <Typography variant="subtitle2" mb={1}>
+                    {allRecurringDates.length} scheduled dates:
+                  </Typography>
+                  <Box display="flex" flexWrap="wrap" gap={0.5}>
+                    {allRecurringDates.map(d => (
+                      <Chip key={d} label={dayjs(d).format('ddd D MMM')} size="small" variant="outlined" />
+                    ))}
+                  </Box>
+                </Box>
+              )}
             </Box>
           )}
 
@@ -339,16 +433,24 @@ export default function AdminBookingCreate() {
                 </Box>
               ))}
               <Box display="flex" justifyContent="space-between" pt={1} mt={1} borderTop={1} borderColor="divider">
-                <Typography fontWeight={600}>Total</Typography>
+                <Typography fontWeight={600}>Total per session</Typography>
                 <Typography fontWeight={600}>£{totalPrice.toFixed(2)} — {totalDuration} min</Typography>
               </Box>
 
               <Typography variant="subtitle2" color="text.secondary" mt={2}>Date & Time</Typography>
               {isRecurring ? (
                 <Box>
-                  {recurringDates.sort().map(d => (
-                    <Chip key={d} label={`${dayjs(d).format('ddd D MMM')} at ${selectedSlot}`} size="small" sx={{ mr: 0.5, mb: 0.5 }} />
-                  ))}
+                  {recurringFrequency !== 'specific' && (
+                    <Typography variant="body2" color="text.secondary" mb={1}>
+                      {recurringFrequency === 'weekly' ? 'Weekly' : recurringFrequency === 'fortnightly' ? 'Fortnightly' : '4-weekly'}
+                      {' '} — {allRecurringDates.length} sessions — £{(totalPrice * allRecurringDates.length).toFixed(2)} total
+                    </Typography>
+                  )}
+                  <Box display="flex" flexWrap="wrap" gap={0.5}>
+                    {(recurringFrequency === 'specific' ? recurringDates.sort() : allRecurringDates).map(d => (
+                      <Chip key={d} label={`${dayjs(d).format('ddd D MMM')} at ${selectedSlot}`} size="small" sx={{ mb: 0.5 }} />
+                    ))}
+                  </Box>
                 </Box>
               ) : (
                 <Typography>{dayjs(selectedDate).format('dddd D MMMM YYYY')} at {selectedSlot}</Typography>
@@ -358,7 +460,9 @@ export default function AdminBookingCreate() {
                 value={notes} onChange={e => setNotes(e.target.value)} />
 
               <Alert severity="info" sx={{ mt: 1 }}>
-                This booking will be auto-confirmed (created by admin).
+                {isRecurring
+                  ? `${allRecurringDates.length} bookings will be created, all auto-confirmed.`
+                  : 'This booking will be auto-confirmed (created by admin).'}
               </Alert>
             </CardContent>
           </Card>
@@ -367,16 +471,16 @@ export default function AdminBookingCreate() {
 
       {/* Navigation */}
       <Box display="flex" justifyContent="space-between" mt={4}>
-        <Button variant="outlined" disabled={activeStep === 0} onClick={() => setActiveStep(s => s - 1)}>
+        <Button variant="outlined" disabled={activeStep === 0} onClick={() => setActiveStep(s => s - 1)} sx={{ minHeight: 44 }}>
           Back
         </Button>
         {activeStep < 3 ? (
-          <Button variant="contained" disabled={!canProceed()} onClick={() => setActiveStep(s => s + 1)}>
+          <Button variant="contained" disabled={!canProceed()} onClick={() => setActiveStep(s => s + 1)} sx={{ minHeight: 44 }}>
             Continue
           </Button>
         ) : (
-          <Button variant="contained" onClick={handleSubmit} disabled={submitting}>
-            {submitting ? 'Creating...' : isRecurring ? `Create ${recurringDates.length} Bookings` : 'Create Booking'}
+          <Button variant="contained" onClick={handleSubmit} disabled={submitting} sx={{ minHeight: 44 }}>
+            {submitting ? 'Creating...' : isRecurring ? `Create ${allRecurringDates.length} Bookings` : 'Create Booking'}
           </Button>
         )}
       </Box>

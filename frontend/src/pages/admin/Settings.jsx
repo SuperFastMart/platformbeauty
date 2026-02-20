@@ -3,7 +3,7 @@ import {
   Box, Typography, Card, CardContent, TextField, Button, Tabs, Tab,
   Snackbar, Alert, CircularProgress, InputAdornment, Chip, Switch, FormControlLabel, Grid
 } from '@mui/material';
-import { Save, CreditCard, Store, Palette, Info, Schedule } from '@mui/icons-material';
+import { Save, CreditCard, Store, Palette, Info, Schedule, Code, ContentCopy } from '@mui/icons-material';
 import api from '../../api/client';
 
 function TabPanel({ children, value, index }) {
@@ -117,6 +117,7 @@ export default function Settings() {
         <Tab icon={<Schedule />} label="Hours" iconPosition="start" />
         <Tab icon={<Palette />} label="Branding" iconPosition="start" />
         <Tab icon={<CreditCard />} label="Payments" iconPosition="start" />
+        <Tab icon={<Code />} label="Widget" iconPosition="start" />
       </Tabs>
 
       {/* Business Info */}
@@ -150,6 +151,45 @@ export default function Settings() {
               value={siteSettings.about_text || ''}
               onChange={e => setSiteSettings(s => ({ ...s, about_text: e.target.value }))}
               placeholder="Tell your customers about your business..." />
+
+            <Typography variant="subtitle1" fontWeight={600} mt={4} mb={1}>Profile Image</Typography>
+            <Typography variant="body2" color="text.secondary" mb={2}>
+              Add a profile photo to create a personal "Meet Me" section on your booking page.
+            </Typography>
+            <TextField fullWidth label="Profile Image URL" margin="normal"
+              value={siteSettings.about_profile_image_url || ''}
+              onChange={e => setSiteSettings(s => ({ ...s, about_profile_image_url: e.target.value }))}
+              placeholder="https://example.com/your-photo.jpg"
+              helperText="Direct link to a square profile photo (PNG, JPG)" />
+            {siteSettings.about_profile_image_url && (
+              <Box mt={1} mb={2}>
+                <Box
+                  component="img"
+                  src={siteSettings.about_profile_image_url}
+                  alt="Profile preview"
+                  sx={{ width: 80, height: 80, borderRadius: '50%', objectFit: 'cover', border: '2px solid', borderColor: 'primary.main' }}
+                  onError={(e) => { e.target.style.display = 'none'; }}
+                />
+              </Box>
+            )}
+
+            <Typography variant="subtitle1" fontWeight={600} mt={4} mb={1}>Map & Directions</Typography>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={!!siteSettings.about_show_map}
+                  onChange={e => setSiteSettings(s => ({ ...s, about_show_map: e.target.checked }))}
+                />
+              }
+              label="Show map on booking page"
+            />
+            {siteSettings.about_show_map && (
+              <TextField fullWidth label="Google Maps Embed URL" margin="normal"
+                value={siteSettings.about_map_embed_url || ''}
+                onChange={e => setSiteSettings(s => ({ ...s, about_map_embed_url: e.target.value }))}
+                placeholder="https://www.google.com/maps/embed?pb=..."
+                helperText='Go to Google Maps → Share → Embed a map → copy the src URL from the iframe code' />
+            )}
           </CardContent>
         </Card>
       </TabPanel>
@@ -316,6 +356,69 @@ export default function Settings() {
             </Box>
             <Typography variant="body2" color="text.secondary" mt={1}>
               Your subscription is managed by the platform. Contact support to upgrade.
+            </Typography>
+          </CardContent>
+        </Card>
+      </TabPanel>
+
+      {/* Widget */}
+      <TabPanel value={tab} index={5}>
+        <Card>
+          <CardContent>
+            <Typography variant="subtitle1" fontWeight={600} mb={1}>Embeddable Booking Widget</Typography>
+            <Typography variant="body2" color="text.secondary" mb={3}>
+              Add a booking widget to your own website. Copy the embed code below and paste it into your site's HTML.
+            </Typography>
+
+            <Alert severity="info" sx={{ mb: 3 }}>
+              The widget is a self-contained booking form that works in an iframe. It automatically adapts
+              to your branding colours and shows all your services.
+            </Alert>
+
+            <Typography variant="subtitle2" fontWeight={600} mb={1}>Embed Code</Typography>
+            <Box sx={{ position: 'relative' }}>
+              <TextField
+                fullWidth multiline rows={3}
+                value={`<iframe src="${window.location.origin}/t/${settings.slug || '[your-slug]'}/widget" width="100%" height="600" frameborder="0" style="border: none; border-radius: 12px;"></iframe>`}
+                InputProps={{ readOnly: true, sx: { fontFamily: 'monospace', fontSize: 13 } }}
+              />
+              <Button
+                size="small" variant="outlined"
+                startIcon={<ContentCopy />}
+                sx={{ position: 'absolute', top: 8, right: 8 }}
+                onClick={() => {
+                  navigator.clipboard.writeText(
+                    `<iframe src="${window.location.origin}/t/${settings.slug || '[your-slug]'}/widget" width="100%" height="600" frameborder="0" style="border: none; border-radius: 12px;"></iframe>`
+                  );
+                  setSnackbar({ open: true, message: 'Embed code copied!', severity: 'success' });
+                }}
+              >
+                Copy
+              </Button>
+            </Box>
+
+            <Typography variant="subtitle2" fontWeight={600} mt={4} mb={1}>Auto-Height (Optional)</Typography>
+            <Typography variant="body2" color="text.secondary" mb={2}>
+              Add this script after the iframe to automatically resize it to fit the content:
+            </Typography>
+            <TextField
+              fullWidth multiline rows={4}
+              value={`<script>
+window.addEventListener('message', function(e) {
+  if (e.data?.type === 'booking-widget-height') {
+    document.querySelector('iframe').style.height = e.data.height + 'px';
+  }
+});
+</script>`}
+              InputProps={{ readOnly: true, sx: { fontFamily: 'monospace', fontSize: 13 } }}
+            />
+
+            <Typography variant="subtitle2" fontWeight={600} mt={4} mb={1}>Preview</Typography>
+            <Typography variant="body2" color="text.secondary" mb={2}>
+              Your widget is live at:{' '}
+              <a href={`${window.location.origin}/t/${settings.slug || ''}/widget`} target="_blank" rel="noopener noreferrer">
+                {window.location.origin}/t/{settings.slug || '[your-slug]'}/widget
+              </a>
             </Typography>
           </CardContent>
         </Card>

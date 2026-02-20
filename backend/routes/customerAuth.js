@@ -220,7 +220,7 @@ router.use(customerAuth);
 // GET /api/t/:tenant/auth/me
 router.get('/me', asyncHandler(async (req, res) => {
   const customer = await getOne(
-    'SELECT id, name, email, phone, total_visits, last_visit_date, created_at FROM customers WHERE id = $1',
+    'SELECT id, name, email, phone, total_visits, last_visit_date, allow_admin_impersonation, created_at FROM customers WHERE id = $1',
     [req.customer.id]
   );
 
@@ -246,12 +246,22 @@ router.get('/me', asyncHandler(async (req, res) => {
 
 // PUT /api/t/:tenant/auth/profile
 router.put('/profile', asyncHandler(async (req, res) => {
-  const { name, phone } = req.body;
+  const { name, phone, allow_admin_impersonation } = req.body;
 
+  const updates = [];
+  const params = [];
+  let idx = 1;
+
+  if (name !== undefined) { updates.push(`name = $${idx++}`); params.push(name); }
+  if (phone !== undefined) { updates.push(`phone = $${idx++}`); params.push(phone); }
+  if (allow_admin_impersonation !== undefined) { updates.push(`allow_admin_impersonation = $${idx++}`); params.push(!!allow_admin_impersonation); }
+
+  if (updates.length === 0) return res.status(400).json({ error: 'No fields to update' });
+
+  params.push(req.customer.id);
   const customer = await getOne(
-    `UPDATE customers SET name = COALESCE($1, name), phone = COALESCE($2, phone)
-     WHERE id = $3 RETURNING id, name, email, phone`,
-    [name || null, phone || null, req.customer.id]
+    `UPDATE customers SET ${updates.join(', ')} WHERE id = $${idx} RETURNING id, name, email, phone, allow_admin_impersonation`,
+    params
   );
 
   res.json(customer);

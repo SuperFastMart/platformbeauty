@@ -86,6 +86,13 @@ router.post('/tenants', platformAuth, asyncHandler(async (req, res) => {
       [tenant.id, admin_username, owner_email, hashedPassword]
     );
 
+    // Create platform notification for new tenant
+    await client.query(
+      `INSERT INTO platform_notifications (type, title, body, metadata, tenant_id)
+       VALUES ('tenant_signup', $1, $2, $3, $4)`,
+      [`New tenant: ${name}`, `${owner_name} (${owner_email})`, JSON.stringify({ slug }), tenant.id]
+    ).catch(() => {});
+
     await client.query('COMMIT');
 
     res.status(201).json({
@@ -156,6 +163,262 @@ router.put('/tenants/:id', platformAuth, asyncHandler(async (req, res) => {
   }
 
   res.json(tenant);
+}));
+
+// ============================================
+// ANALYTICS
+// ============================================
+
+// GET /api/platform/analytics
+router.get('/analytics', platformAuth, asyncHandler(async (req, res) => {
+  const totalTenants = await getOne('SELECT COUNT(*)::int as count FROM tenants WHERE active = TRUE');
+  const activeTenants = await getOne(
+    `SELECT COUNT(DISTINCT tu.tenant_id)::int as count FROM tenant_users tu
+     WHERE tu.last_login_at > NOW() - INTERVAL '30 days'`
+  );
+  const totalBookings = await getOne('SELECT COUNT(*)::int as count FROM bookings');
+  const totalRevenue = await getOne(
+    "SELECT COALESCE(SUM(amount), 0)::bigint as total FROM payments WHERE payment_status = 'succeeded'"
+  );
+  const newThisMonth = await getOne(
+    "SELECT COUNT(*)::int as count FROM tenants WHERE created_at > DATE_TRUNC('month', NOW())"
+  );
+  const planDistribution = await getAll(
+    "SELECT COALESCE(subscription_tier, 'free') as tier, COUNT(*)::int as count FROM tenants WHERE active = TRUE GROUP BY subscription_tier ORDER BY count DESC"
+  );
+
+  res.json({
+    total_tenants: totalTenants?.count || 0,
+    active_tenants: activeTenants?.count || 0,
+    total_bookings: totalBookings?.count || 0,
+    total_revenue: totalRevenue?.total || 0,
+    new_this_month: newThisMonth?.count || 0,
+    plan_distribution: planDistribution || [],
+  });
+}));
+
+// GET /api/platform/analytics/trends?days=30
+router.get('/analytics/trends', platformAuth, asyncHandler(async (req, res) => {
+  const days = parseInt(req.query.days) || 30;
+  const trends = await getAll(
+    `SELECT d::date as date,
+       COALESCE(b.booking_count, 0)::int as bookings,
+       COALESCE(p.revenue, 0)::bigint as revenue
+     FROM generate_series(NOW() - $1::int * INTERVAL '1 day', NOW(), '1 day') d
+     LEFT JOIN (
+       SELECT DATE(created_at) as dt, COUNT(*) as booking_count
+       FROM bookings
+       WHERE created_at > NOW() - $1::int * INTERVAL '1 day'
+       GROUP BY DATE(created_at)
+     ) b ON b.dt = d::date
+     LEFT JOIN (
+       SELECT DATE(created_at) as dt, SUM(amount) as revenue
+       FROM payments
+       WHERE payment_status = 'succeeded' AND created_at > NOW() - $1::int * INTERVAL '1 day'
+       GROUP BY DATE(created_at)
+     ) p ON p.dt = d::date
+     ORDER BY d`,
+    [days]
+  );
+  res.json(trends);
+}));
+
+// ============================================
+// TENANT DETAIL (ENHANCED)
+// ============================================
+
+// GET /api/platform/tenants/:id/detail
+router.get('/tenants/:id/detail', platformAuth, asyncHandler(async (req, res) => {
+  const tenant = await getOne(
+    `SELECT id, name, slug, owner_email, owner_name, business_phone, business_address,
+            logo_url, primary_color, subscription_tier, subscription_status, trial_ends_at,
+            active, created_at, updated_at
+     FROM tenants WHERE id = $1`,
+    [req.params.id]
+  );
+  if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
+
+  const users = await getAll(
+    'SELECT id, username, email, role, last_login_at, created_at FROM tenant_users WHERE tenant_id = $1',
+    [req.params.id]
+  );
+
+  const bookingCount = await getOne(
+    "SELECT COUNT(*)::int as count FROM bookings WHERE tenant_id = $1 AND created_at > NOW() - INTERVAL '30 days'",
+    [req.params.id]
+  );
+
+  const revenue = await getOne(
+    "SELECT COALESCE(SUM(amount), 0)::bigint as total FROM payments WHERE tenant_id = $1 AND payment_status = 'succeeded' AND created_at > NOW() - INTERVAL '30 days'",
+    [req.params.id]
+  );
+
+  const customerCount = await getOne(
+    'SELECT COUNT(*)::int as count FROM customers WHERE tenant_id = $1',
+    [req.params.id]
+  );
+
+  const serviceCount = await getOne(
+    'SELECT COUNT(*)::int as count FROM services WHERE tenant_id = $1',
+    [req.params.id]
+  );
+
+  res.json({
+    ...tenant,
+    users,
+    booking_count: bookingCount?.count || 0,
+    revenue: revenue?.total || 0,
+    customer_count: customerCount?.count || 0,
+    service_count: serviceCount?.count || 0,
+  });
+}));
+
+// PUT /api/platform/tenants/:id/suspend
+router.put('/tenants/:id/suspend', platformAuth, asyncHandler(async (req, res) => {
+  const tenant = await getOne(
+    'UPDATE tenants SET active = FALSE, updated_at = NOW() WHERE id = $1 RETURNING id, name, active',
+    [req.params.id]
+  );
+  if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
+
+  // Log activity
+  const { logActivity } = require('../utils/activityLog');
+  logActivity(parseInt(req.params.id), 'platform_admin', req.user.id, req.user.email, 'tenant_suspended', { tenant_name: tenant.name });
+
+  res.json({ success: true, active: false });
+}));
+
+// PUT /api/platform/tenants/:id/unsuspend
+router.put('/tenants/:id/unsuspend', platformAuth, asyncHandler(async (req, res) => {
+  const tenant = await getOne(
+    'UPDATE tenants SET active = TRUE, updated_at = NOW() WHERE id = $1 RETURNING id, name, active',
+    [req.params.id]
+  );
+  if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
+
+  const { logActivity } = require('../utils/activityLog');
+  logActivity(parseInt(req.params.id), 'platform_admin', req.user.id, req.user.email, 'tenant_unsuspended', { tenant_name: tenant.name });
+
+  res.json({ success: true, active: true });
+}));
+
+// DELETE /api/platform/tenants/:id?confirm=true
+router.delete('/tenants/:id', platformAuth, asyncHandler(async (req, res) => {
+  if (req.query.confirm !== 'true') {
+    return res.status(400).json({ error: 'Must confirm deletion with ?confirm=true' });
+  }
+
+  const tenant = await getOne('SELECT id, name FROM tenants WHERE id = $1', [req.params.id]);
+  if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // Cascading deletes via foreign key constraints, but be explicit for safety
+    await client.query('DELETE FROM ticket_messages WHERE ticket_id IN (SELECT id FROM support_tickets WHERE tenant_id = $1)', [req.params.id]);
+    await client.query('DELETE FROM support_tickets WHERE tenant_id = $1', [req.params.id]);
+    await client.query('DELETE FROM platform_notifications WHERE tenant_id = $1', [req.params.id]);
+    await client.query('DELETE FROM activity_log WHERE tenant_id = $1', [req.params.id]);
+    await client.query('DELETE FROM payments WHERE tenant_id = $1', [req.params.id]);
+    await client.query('DELETE FROM bookings WHERE tenant_id = $1', [req.params.id]);
+    await client.query('DELETE FROM time_slots WHERE tenant_id = $1', [req.params.id]);
+    await client.query('DELETE FROM slot_templates WHERE tenant_id = $1', [req.params.id]);
+    await client.query('DELETE FROM customers WHERE tenant_id = $1', [req.params.id]);
+    await client.query('DELETE FROM services WHERE tenant_id = $1', [req.params.id]);
+    await client.query('DELETE FROM tenant_settings WHERE tenant_id = $1', [req.params.id]);
+    await client.query('DELETE FROM tenant_users WHERE tenant_id = $1', [req.params.id]);
+    await client.query('DELETE FROM tenants WHERE id = $1', [req.params.id]);
+    await client.query('COMMIT');
+    res.json({ success: true, deleted: tenant.name });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}));
+
+// ============================================
+// IMPERSONATION: Platform → Tenant
+// ============================================
+
+// POST /api/platform/impersonate/:tenantId
+router.post('/impersonate/:tenantId', platformAuth, asyncHandler(async (req, res) => {
+  const tenant = await getOne('SELECT id, name, slug FROM tenants WHERE id = $1', [req.params.tenantId]);
+  if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
+
+  // Get the tenant's admin user
+  const adminUser = await getOne(
+    "SELECT id, username, email, role FROM tenant_users WHERE tenant_id = $1 AND role = 'admin' ORDER BY id LIMIT 1",
+    [tenant.id]
+  );
+  if (!adminUser) return res.status(404).json({ error: 'No admin user found for this tenant' });
+
+  // Generate a tenant admin JWT (1 hour expiry)
+  const token = jwt.sign(
+    {
+      id: adminUser.id,
+      tenantId: tenant.id,
+      username: adminUser.username,
+      role: adminUser.role,
+      impersonatedBy: { id: req.user.id, email: req.user.email, type: 'platform_admin' },
+    },
+    process.env.JWT_SECRET,
+    { expiresIn: '1h' }
+  );
+
+  // Log impersonation session
+  await run(
+    `INSERT INTO impersonation_sessions (impersonator_type, impersonator_id, target_type, target_tenant_id)
+     VALUES ('platform_admin', $1, 'tenant', $2)`,
+    [req.user.id, tenant.id]
+  ).catch(() => {});
+
+  const { logActivity } = require('../utils/activityLog');
+  logActivity(tenant.id, 'platform_admin', req.user.id, req.user.email, 'impersonation_started', { tenant_name: tenant.name });
+
+  res.json({
+    token,
+    user: {
+      id: adminUser.id,
+      username: adminUser.username,
+      email: adminUser.email,
+      role: 'admin',
+      tenantId: tenant.id,
+      tenantName: tenant.name,
+      tenantSlug: tenant.slug,
+      impersonating: true,
+      impersonatedBy: req.user.email,
+    },
+  });
+}));
+
+// ============================================
+// NOTIFICATIONS
+// ============================================
+
+// GET /api/platform/notifications
+router.get('/notifications', platformAuth, asyncHandler(async (req, res) => {
+  const notifications = await getAll(
+    `SELECT * FROM platform_notifications
+     ORDER BY created_at DESC LIMIT 50`
+  );
+  const unreadCount = await getOne(
+    'SELECT COUNT(*)::int as count FROM platform_notifications WHERE read_at IS NULL'
+  );
+  res.json({ notifications, unread_count: unreadCount?.count || 0 });
+}));
+
+// PUT /api/platform/notifications/:id/read
+router.put('/notifications/:id/read', platformAuth, asyncHandler(async (req, res) => {
+  await run('UPDATE platform_notifications SET read_at = NOW() WHERE id = $1', [req.params.id]);
+  res.json({ success: true });
+}));
+
+// PUT /api/platform/notifications/read-all
+router.put('/notifications/read-all', platformAuth, asyncHandler(async (req, res) => {
+  await run('UPDATE platform_notifications SET read_at = NOW() WHERE read_at IS NULL');
+  res.json({ success: true });
 }));
 
 module.exports = router;

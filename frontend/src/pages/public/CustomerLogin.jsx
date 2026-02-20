@@ -98,11 +98,12 @@ export default function CustomerLogin() {
     }
     setLoading(true);
     try {
-      const { data } = await api.post(`/t/${slug}/auth/reset-password`, {
+      await api.post(`/t/${slug}/auth/reset-password`, {
         token: resetToken, password: resetPassword,
       });
-      setSuccess(data.message);
-      setTab(0);
+      setSuccess('Password reset successfully! You can now sign in.');
+      // Remove reset token from URL so the sign-in tab renders
+      navigate(`/t/${slug}/portal/login`, { replace: true });
     } catch (err) {
       setError(err.response?.data?.error || 'Reset failed');
     } finally { setLoading(false); }

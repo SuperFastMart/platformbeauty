@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box, Typography, TextField, Table, TableBody, TableCell, TableContainer,
-  TableHead, TableRow, Paper, IconButton, Chip, InputAdornment
+  TableHead, TableRow, Paper, IconButton, Chip, InputAdornment,
+  Card, CardContent, CardActionArea, Grid, useMediaQuery, useTheme
 } from '@mui/material';
 import { Search, ChevronRight } from '@mui/icons-material';
 import dayjs from 'dayjs';
@@ -13,6 +14,8 @@ export default function Customers() {
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   useEffect(() => {
     api.get('/admin/customers')
@@ -38,7 +41,7 @@ export default function Customers() {
 
       <TextField
         placeholder="Search by name, email, or phone..."
-        size="small" sx={{ mb: 3, maxWidth: 400 }}
+        size="small" sx={{ mb: 3, maxWidth: isMobile ? '100%' : 400 }}
         fullWidth
         value={search}
         onChange={e => setSearch(e.target.value)}
@@ -53,7 +56,39 @@ export default function Customers() {
         <Typography color="text.secondary">
           {search ? 'No customers match your search' : 'No customers yet'}
         </Typography>
+      ) : isMobile ? (
+        /* Mobile: Card layout */
+        <Grid container spacing={1.5}>
+          {filtered.map(c => (
+            <Grid item xs={12} key={c.id}>
+              <Card variant="outlined">
+                <CardActionArea onClick={() => navigate(`/admin/customers/${c.id}`)}>
+                  <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+                    <Box display="flex" justifyContent="space-between" alignItems="center">
+                      <Box>
+                        <Typography fontWeight={600}>{c.name}</Typography>
+                        <Typography variant="body2" color="text.secondary">{c.email}</Typography>
+                        {c.phone && (
+                          <Typography variant="body2" color="text.secondary">{c.phone}</Typography>
+                        )}
+                      </Box>
+                      <ChevronRight color="action" />
+                    </Box>
+                    <Box display="flex" gap={1} mt={1} flexWrap="wrap">
+                      <Chip label={`${c.booking_count || 0} bookings`} size="small" variant="outlined" />
+                      <Chip label={`£${parseFloat(c.total_spent || 0).toFixed(2)}`} size="small" variant="outlined" />
+                      {c.last_booking_date && (
+                        <Chip label={dayjs(c.last_booking_date).format('D MMM YYYY')} size="small" variant="outlined" />
+                      )}
+                    </Box>
+                  </CardContent>
+                </CardActionArea>
+              </Card>
+            </Grid>
+          ))}
+        </Grid>
       ) : (
+        /* Desktop: Table layout */
         <TableContainer component={Paper} variant="outlined">
           <Table>
             <TableHead>

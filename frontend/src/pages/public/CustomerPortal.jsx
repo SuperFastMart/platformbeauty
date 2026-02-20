@@ -4,9 +4,9 @@ import {
   Box, Typography, Card, CardContent, Button, Tabs, Tab, Chip,
   Container, Alert, CircularProgress, TextField, Dialog, DialogTitle,
   DialogContent, DialogActions, Radio, RadioGroup, FormControlLabel,
-  Snackbar, IconButton
+  Snackbar, IconButton, Switch
 } from '@mui/material';
-import { Logout, Edit } from '@mui/icons-material';
+import { Logout, Edit, EmojiEvents } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import api from '../../api/client';
 import { useTenant } from './TenantPublicLayout';
@@ -34,6 +34,8 @@ export default function CustomerPortal() {
   const [messages, setMessages] = useState([]);
   const [newMessageBody, setNewMessageBody] = useState('');
   const [sendingMessage, setSendingMessage] = useState(false);
+  const [loyalty, setLoyalty] = useState(null);
+  const [redeemingCategory, setRedeemingCategory] = useState(null);
   const [error, setError] = useState('');
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
@@ -69,16 +71,18 @@ export default function CustomerPortal() {
 
   const fetchData = async () => {
     try {
-      const [meRes, reqRes, msgRes] = await Promise.all([
+      const [meRes, reqRes, msgRes, loyaltyRes] = await Promise.all([
         authApi('get', `/t/${slug}/auth/me`),
         authApi('get', `/t/${slug}/auth/booking-requests`),
         authApi('get', `/t/${slug}/auth/messages`),
+        authApi('get', `/t/${slug}/loyalty/my-status`).catch(() => ({ data: { active: false } })),
       ]);
       setCustomer(meRes.data.customer);
       setUpcoming(meRes.data.upcoming);
       setHistory(meRes.data.history);
       setRequests(reqRes.data);
       setMessages(msgRes.data);
+      setLoyalty(loyaltyRes.data);
       setEditName(meRes.data.customer.name);
       setEditPhone(meRes.data.customer.phone || '');
     } catch (err) {
@@ -178,6 +182,19 @@ export default function CustomerPortal() {
     }
   };
 
+  const handleRedeem = async (category) => {
+    setRedeemingCategory(category);
+    try {
+      const { data } = await authApi('post', `/t/${slug}/loyalty/redeem`, { category });
+      setSnackbar({ open: true, message: `Reward redeemed! Your code: ${data.code}`, severity: 'success' });
+      fetchData(); // Refresh stamps
+    } catch (err) {
+      setSnackbar({ open: true, message: err.response?.data?.error || 'Failed to redeem', severity: 'error' });
+    } finally {
+      setRedeemingCategory(null);
+    }
+  };
+
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" py={6}>
@@ -248,6 +265,7 @@ export default function CustomerPortal() {
         <Tab label="History" />
         <Tab label={`Requests (${requests.filter(r => r.status === 'pending').length})`} />
         <Tab label={`Messages${messages.length > 0 ? ` (${messages.filter(m => m.direction === 'outbound' && !m.read_at).length})` : ''}`} />
+        {loyalty?.active && <Tab label="Loyalty" />}
         <Tab label="Profile" />
       </Tabs>
 
@@ -371,8 +389,101 @@ export default function CustomerPortal() {
         </Box>
       </TabPanel>
 
+      {/* Loyalty */}
+      {loyalty?.active && (
+        <TabPanel value={tab} index={4}>
+          <Card sx={{ mb: 3 }}>
+            <CardContent>
+              <Box display="flex" alignItems="center" gap={1} mb={2}>
+                <EmojiEvents color="primary" />
+                <Typography fontWeight={600}>Loyalty Stamps</Typography>
+              </Box>
+              <Typography variant="body2" color="text.secondary" mb={2}>
+                Collect {loyalty.stamps_needed} stamps to earn {loyalty.discount_percent}% off your next booking!
+              </Typography>
+
+              {loyalty.stamps?.length === 0 ? (
+                <Typography color="text.secondary" variant="body2">
+                  No stamps yet. Complete a booking to start earning!
+                </Typography>
+              ) : (
+                loyalty.stamps?.map(s => (
+                  <Box key={s.category} mb={2} p={2} bgcolor="grey.50" borderRadius={2}>
+                    <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                      <Typography fontWeight={600}>{s.category}</Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {s.stamps} / {loyalty.stamps_needed} stamps
+                      </Typography>
+                    </Box>
+                    {/* Visual stamp progress */}
+                    <Box display="flex" gap={0.5} mb={1} flexWrap="wrap">
+                      {Array.from({ length: loyalty.stamps_needed }, (_, i) => (
+                        <Box
+                          key={i}
+                          sx={{
+                            width: 28,
+                            height: 28,
+                            borderRadius: '50%',
+                            bgcolor: i < s.stamps ? 'primary.main' : 'grey.300',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            transition: 'background-color 0.2s',
+                          }}
+                        >
+                          {i < s.stamps && (
+                            <Typography variant="caption" color="white" fontWeight={700}>
+                              {i + 1}
+                            </Typography>
+                          )}
+                        </Box>
+                      ))}
+                    </Box>
+                    {s.stamps >= loyalty.stamps_needed && (
+                      <Button
+                        variant="contained"
+                        size="small"
+                        onClick={() => handleRedeem(s.category)}
+                        disabled={redeemingCategory === s.category}
+                        sx={{ mt: 1 }}
+                      >
+                        {redeemingCategory === s.category ? 'Redeeming...' : `Redeem ${loyalty.discount_percent}% Off`}
+                      </Button>
+                    )}
+                    <Typography variant="caption" color="text.secondary" display="block" mt={0.5}>
+                      Lifetime stamps: {s.lifetime_stamps}
+                    </Typography>
+                  </Box>
+                ))
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Active reward codes */}
+          {loyalty.available_rewards?.length > 0 && (
+            <Card>
+              <CardContent>
+                <Typography fontWeight={600} mb={2}>Your Reward Codes</Typography>
+                {loyalty.available_rewards.map(r => (
+                  <Box key={r.id} mb={1.5} p={1.5} bgcolor="success.50" borderRadius={2}
+                    sx={{ bgcolor: 'rgba(46, 125, 50, 0.08)', border: '1px dashed', borderColor: 'success.main' }}>
+                    <Typography fontWeight={700} fontFamily="monospace" fontSize="1.1rem">
+                      {r.code}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {r.reward_name || `${loyalty.discount_percent}% off`}
+                      {r.expires_at && ` — Expires ${dayjs(r.expires_at).format('D MMM YYYY')}`}
+                    </Typography>
+                  </Box>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+        </TabPanel>
+      )}
+
       {/* Profile */}
-      <TabPanel value={tab} index={4}>
+      <TabPanel value={tab} index={loyalty?.active ? 5 : 4}>
         <Card sx={{ mb: 3 }}>
           <CardContent>
             <Typography fontWeight={600} mb={2}>Your Details</Typography>
@@ -385,6 +496,32 @@ export default function CustomerPortal() {
             <Button variant="contained" sx={{ mt: 2 }} onClick={saveProfile}>
               Save Changes
             </Button>
+          </CardContent>
+        </Card>
+
+        <Card sx={{ mb: 3 }}>
+          <CardContent>
+            <Typography fontWeight={600} mb={1}>Admin Access</Typography>
+            <Typography variant="body2" color="text.secondary" mb={2}>
+              Allow the business to access your account for booking management and support purposes.
+            </Typography>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={!!customer?.allow_admin_impersonation}
+                  onChange={async (e) => {
+                    try {
+                      await authApi('put', `/t/${slug}/auth/profile`, { allow_admin_impersonation: e.target.checked });
+                      setCustomer(prev => ({ ...prev, allow_admin_impersonation: e.target.checked }));
+                      setSnackbar({ open: true, message: e.target.checked ? 'Admin access enabled' : 'Admin access disabled', severity: 'success' });
+                    } catch {
+                      setSnackbar({ open: true, message: 'Failed to update', severity: 'error' });
+                    }
+                  }}
+                />
+              }
+              label="Allow business to view my account"
+            />
           </CardContent>
         </Card>
 

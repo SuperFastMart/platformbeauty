@@ -68,6 +68,16 @@ const { adminRouter: reviewsAdminRoutes, publicRouter: reviewsPublicRoutes } = r
 app.use('/api/admin/reviews', reviewsAdminRoutes);
 app.use('/api/t/:tenant/reviews', reviewsPublicRoutes);
 
+// --- Sprint 5: Calendar feed ---
+const calendarRoutes = require('./routes/calendar');
+app.use('/api/admin/calendar', calendarRoutes);
+
+// --- Sprint 6: Support tickets ---
+const { tenantAuth, platformAuth } = require('./middleware/auth');
+const { adminRouter: supportAdminRoutes, platformRouter: supportPlatformRoutes } = require('./routes/support');
+app.use('/api/admin/support', tenantAuth, supportAdminRoutes);
+app.use('/api/platform/support', platformAuth, supportPlatformRoutes);
+
 // Serve frontend for all non-API routes in production
 if (process.env.NODE_ENV === 'production') {
   app.get('*', (req, res) => {

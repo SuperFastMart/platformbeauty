@@ -67,6 +67,98 @@ router.get('/slots', asyncHandler(async (req, res) => {
   res.json(slots);
 }));
 
+// GET /api/t/:tenant/next-available — find the next available slot for given services
+router.get('/next-available', asyncHandler(async (req, res) => {
+  const { serviceIds, from } = req.query;
+
+  if (!serviceIds) {
+    return res.status(400).json({ error: 'serviceIds query parameter is required' });
+  }
+
+  const ids = serviceIds.split(',').map(Number).filter(Boolean);
+  if (ids.length === 0) {
+    return res.status(400).json({ error: 'Invalid serviceIds' });
+  }
+
+  // Get total duration needed
+  const placeholders = ids.map((_, i) => `$${i + 2}`).join(',');
+  const services = await getAll(
+    `SELECT duration FROM services WHERE id IN (${placeholders}) AND tenant_id = $1 AND active = TRUE`,
+    [req.tenantId, ...ids]
+  );
+
+  if (services.length === 0) {
+    return res.status(400).json({ error: 'No valid services found' });
+  }
+
+  const totalDuration = services.reduce((sum, s) => sum + s.duration, 0);
+
+  // Get actual slot duration from existing slots instead of hardcoding 30
+  const sampleSlot = await getOne(
+    `SELECT start_time, end_time FROM time_slots
+     WHERE tenant_id = $1 AND date >= CURRENT_DATE AND is_available = TRUE
+     ORDER BY date, start_time LIMIT 1`,
+    [req.tenantId]
+  );
+  let slotMinutes = 30;
+  if (sampleSlot && sampleSlot.start_time && sampleSlot.end_time) {
+    const st = sampleSlot.start_time.split(':').map(Number);
+    const et = sampleSlot.end_time.split(':').map(Number);
+    slotMinutes = (et[0] * 60 + et[1]) - (st[0] * 60 + st[1]);
+    if (slotMinutes <= 0) slotMinutes = 30;
+  }
+  const slotsNeeded = Math.ceil(totalDuration / slotMinutes);
+
+  const startDate = from || new Date().toISOString().split('T')[0];
+
+  // Scan up to 30 days ahead
+  for (let dayOffset = 0; dayOffset < 30; dayOffset++) {
+    const checkDate = new Date(startDate);
+    checkDate.setDate(checkDate.getDate() + dayOffset);
+    const dateStr = checkDate.toISOString().split('T')[0];
+
+    // Skip past dates
+    const today = new Date().toISOString().split('T')[0];
+    if (dateStr < today) continue;
+
+    const slots = await getAll(
+      `SELECT id, start_time, end_time FROM time_slots
+       WHERE tenant_id = $1 AND date = $2 AND is_available = TRUE
+       ORDER BY start_time`,
+      [req.tenantId, dateStr]
+    );
+
+    // Find consecutive slots that cover the needed duration
+    for (let i = 0; i <= slots.length - slotsNeeded; i++) {
+      let consecutive = true;
+      const candidateSlots = [slots[i]];
+
+      for (let j = 1; j < slotsNeeded; j++) {
+        const nextSlot = slots[i + j];
+        const prevSlot = slots[i + j - 1];
+
+        // Check slots are consecutive (previous end_time === next start_time)
+        if (prevSlot.end_time !== nextSlot.start_time) {
+          consecutive = false;
+          break;
+        }
+        candidateSlots.push(nextSlot);
+      }
+
+      if (consecutive) {
+        return res.json({
+          found: true,
+          date: dateStr,
+          time: slots[i].start_time.slice(0, 5),
+          slotIds: candidateSlots.map(s => s.id),
+        });
+      }
+    }
+  }
+
+  res.json({ found: false, message: 'No available slots found in the next 30 days' });
+}));
+
 // POST /api/t/:tenant/bookings - create a booking
 router.post('/bookings', asyncHandler(async (req, res) => {
   const { customerName, customerEmail, customerPhone, serviceIds, date, startTime, notes, discountCode } = req.body;
@@ -208,6 +300,10 @@ router.post('/bookings', asyncHandler(async (req, res) => {
   const tenant = req.tenant;
   sendBookingPendingNotification(booking, tenant).catch(err => console.error('Email error:', err));
   sendAdminNewBookingNotification(booking, tenant).catch(err => console.error('Email error:', err));
+
+  // Activity log
+  const { logActivity } = require('../utils/activityLog');
+  logActivity(req.tenantId, 'customer', customer?.id, customerEmail, 'booking_created', { booking_id: booking.id, services: serviceNames, date, time: startTime });
 
   res.status(201).json(booking);
 }));

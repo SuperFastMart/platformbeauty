@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react';
 import {
   Box, Typography, Card, CardContent, Grid, TextField, Button,
-  Table, TableHead, TableRow, TableCell, TableBody, Chip, Divider
+  Table, TableHead, TableRow, TableCell, TableBody, Chip, Divider,
+  TableContainer, useMediaQuery, useTheme
 } from '@mui/material';
 import dayjs from 'dayjs';
 import api from '../../api/client';
 
 export default function Reports() {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [from, setFrom] = useState(dayjs().startOf('month').format('YYYY-MM-DD'));
   const [to, setTo] = useState(dayjs().format('YYYY-MM-DD'));
   const [revenue, setRevenue] = useState(null);
@@ -161,32 +164,30 @@ export default function Reports() {
               {services.length === 0 ? (
                 <Typography color="text.secondary">No data for this period</Typography>
               ) : (
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Service</TableCell>
-                      <TableCell>Category</TableCell>
-                      <TableCell align="right">Price</TableCell>
-                      <TableCell align="right">Bookings</TableCell>
-                      <TableCell align="right">Completed</TableCell>
-                      <TableCell align="right">Cancelled</TableCell>
-                      <TableCell align="right">Est. Revenue</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {services.map(s => (
-                      <TableRow key={s.id}>
-                        <TableCell>{s.name}</TableCell>
-                        <TableCell>{s.category || '—'}</TableCell>
-                        <TableCell align="right">£{s.service_price.toFixed(2)}</TableCell>
-                        <TableCell align="right">{s.booking_count}</TableCell>
-                        <TableCell align="right">{s.completed_count}</TableCell>
-                        <TableCell align="right">{s.cancelled_count}</TableCell>
-                        <TableCell align="right">£{s.estimated_revenue.toFixed(2)}</TableCell>
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Service</TableCell>
+                        {!isMobile && <TableCell>Category</TableCell>}
+                        <TableCell align="right">Price</TableCell>
+                        <TableCell align="right">Bookings</TableCell>
+                        <TableCell align="right">Revenue</TableCell>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHead>
+                    <TableBody>
+                      {services.map(s => (
+                        <TableRow key={s.id}>
+                          <TableCell>{s.name}</TableCell>
+                          {!isMobile && <TableCell>{s.category || '—'}</TableCell>}
+                          <TableCell align="right">£{s.service_price.toFixed(2)}</TableCell>
+                          <TableCell align="right">{s.booking_count}</TableCell>
+                          <TableCell align="right">£{s.estimated_revenue.toFixed(2)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
               )}
             </CardContent>
           </Card>
@@ -196,28 +197,30 @@ export default function Reports() {
             <Card sx={{ mb: 3 }}>
               <CardContent>
                 <Typography variant="h6" fontWeight={600} mb={2}>Daily Revenue</Typography>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Date</TableCell>
-                      <TableCell align="right">Revenue</TableCell>
-                      <TableCell align="right">Card</TableCell>
-                      <TableCell align="right">Cash</TableCell>
-                      <TableCell align="right">Payments</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {dailyRevenue.map(d => (
-                      <TableRow key={d.date}>
-                        <TableCell>{dayjs(d.date).format('ddd D MMM')}</TableCell>
-                        <TableCell align="right">£{d.revenue.toFixed(2)}</TableCell>
-                        <TableCell align="right">£{d.card.toFixed(2)}</TableCell>
-                        <TableCell align="right">£{d.cash.toFixed(2)}</TableCell>
-                        <TableCell align="right">{d.payments}</TableCell>
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Date</TableCell>
+                        <TableCell align="right">Revenue</TableCell>
+                        {!isMobile && <TableCell align="right">Card</TableCell>}
+                        {!isMobile && <TableCell align="right">Cash</TableCell>}
+                        <TableCell align="right">Payments</TableCell>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHead>
+                    <TableBody>
+                      {dailyRevenue.map(d => (
+                        <TableRow key={d.date}>
+                          <TableCell>{dayjs(d.date).format(isMobile ? 'D MMM' : 'ddd D MMM')}</TableCell>
+                          <TableCell align="right">£{d.revenue.toFixed(2)}</TableCell>
+                          {!isMobile && <TableCell align="right">£{d.card.toFixed(2)}</TableCell>}
+                          {!isMobile && <TableCell align="right">£{d.cash.toFixed(2)}</TableCell>}
+                          <TableCell align="right">{d.payments}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
               </CardContent>
             </Card>
           )}
@@ -229,42 +232,36 @@ export default function Reports() {
               {transactions.length === 0 ? (
                 <Typography color="text.secondary">No transactions for this period</Typography>
               ) : (
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Date</TableCell>
-                      <TableCell>Customer</TableCell>
-                      <TableCell>Service</TableCell>
-                      <TableCell>Method</TableCell>
-                      <TableCell align="right">Amount</TableCell>
-                      <TableCell>Status</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {transactions.map(t => (
-                      <TableRow key={t.id}>
-                        <TableCell>{t.paid_at ? dayjs(t.paid_at).format('D MMM HH:mm') : '—'}</TableCell>
-                        <TableCell>{t.customer_name || '—'}</TableCell>
-                        <TableCell>{t.service_names || '—'}</TableCell>
-                        <TableCell>
-                          <Chip
-                            label={t.payment_method}
-                            size="small"
-                            color={t.payment_method === 'card' ? 'primary' : 'default'}
-                          />
-                        </TableCell>
-                        <TableCell align="right">£{t.amount.toFixed(2)}</TableCell>
-                        <TableCell>
-                          <Chip
-                            label={t.payment_status}
-                            size="small"
-                            color={t.payment_status === 'completed' ? 'success' : 'warning'}
-                          />
-                        </TableCell>
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Date</TableCell>
+                        <TableCell>Customer</TableCell>
+                        {!isMobile && <TableCell>Service</TableCell>}
+                        <TableCell>Method</TableCell>
+                        <TableCell align="right">Amount</TableCell>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHead>
+                    <TableBody>
+                      {transactions.map(t => (
+                        <TableRow key={t.id}>
+                          <TableCell>{t.paid_at ? dayjs(t.paid_at).format('D MMM HH:mm') : '—'}</TableCell>
+                          <TableCell>{t.customer_name || '—'}</TableCell>
+                          {!isMobile && <TableCell>{t.service_names || '—'}</TableCell>}
+                          <TableCell>
+                            <Chip
+                              label={t.payment_method}
+                              size="small"
+                              color={t.payment_method === 'card' ? 'primary' : 'default'}
+                            />
+                          </TableCell>
+                          <TableCell align="right">£{t.amount.toFixed(2)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
               )}
             </CardContent>
           </Card>

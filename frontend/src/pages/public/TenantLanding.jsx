@@ -4,7 +4,7 @@ import {
   Box, Typography, Card, CardContent, Button, Checkbox, Chip, Divider, Container,
   Rating, Grid
 } from '@mui/material';
-import { AccessTime, Schedule, Star } from '@mui/icons-material';
+import { AccessTime, Schedule, Star, Place } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import api from '../../api/client';
 import { useTenant } from './TenantPublicLayout';
@@ -78,15 +78,65 @@ export default function TenantLanding() {
         )}
       </Box>
 
-      {/* About Section */}
-      {(siteSettings.about_title || siteSettings.about_text) && (
+      {/* About / Meet Me Section */}
+      {(siteSettings.about_title || siteSettings.about_text || siteSettings.about_profile_image_url) && (
         <Box mb={4}>
-          {siteSettings.about_title && (
-            <Typography variant="h6" fontWeight={600} mb={1}>{siteSettings.about_title}</Typography>
+          {siteSettings.about_profile_image_url ? (
+            <Box display="flex" flexDirection={{ xs: 'column', sm: 'row' }} gap={3} alignItems={{ sm: 'flex-start' }}>
+              <Box
+                component="img"
+                src={siteSettings.about_profile_image_url}
+                alt={siteSettings.about_title || 'About'}
+                sx={{
+                  width: { xs: 120, sm: 150 },
+                  height: { xs: 120, sm: 150 },
+                  borderRadius: '50%',
+                  objectFit: 'cover',
+                  border: '3px solid',
+                  borderColor: 'primary.main',
+                  mx: { xs: 'auto', sm: 0 },
+                  flexShrink: 0,
+                }}
+              />
+              <Box>
+                {siteSettings.about_title && (
+                  <Typography variant="h6" fontWeight={600} mb={1}>{siteSettings.about_title}</Typography>
+                )}
+                {siteSettings.about_text && (
+                  <Typography color="text.secondary" whiteSpace="pre-line">{siteSettings.about_text}</Typography>
+                )}
+              </Box>
+            </Box>
+          ) : (
+            <>
+              {siteSettings.about_title && (
+                <Typography variant="h6" fontWeight={600} mb={1}>{siteSettings.about_title}</Typography>
+              )}
+              {siteSettings.about_text && (
+                <Typography color="text.secondary" whiteSpace="pre-line">{siteSettings.about_text}</Typography>
+              )}
+            </>
           )}
-          {siteSettings.about_text && (
-            <Typography color="text.secondary" whiteSpace="pre-line">{siteSettings.about_text}</Typography>
+
+          {/* Google Maps embed */}
+          {siteSettings.about_show_map && siteSettings.about_map_embed_url && (
+            <Box mt={3}>
+              <Typography variant="subtitle2" fontWeight={600} mb={1} display="flex" alignItems="center" gap={0.5}>
+                <Place fontSize="small" /> Find Us
+              </Typography>
+              <Box
+                component="iframe"
+                src={siteSettings.about_map_embed_url}
+                width="100%"
+                height="300"
+                sx={{ border: 0, borderRadius: 3 }}
+                allowFullScreen
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+              />
+            </Box>
           )}
+
           <Divider sx={{ mt: 3 }} />
         </Box>
       )}

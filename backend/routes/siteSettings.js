@@ -79,6 +79,7 @@ publicRouter.get('/', asyncHandler(async (req, res) => {
     'about_title', 'about_text', 'business_hours',
     'contact_phone', 'contact_email', 'contact_address',
     'category_order',
+    'about_profile_image_url', 'about_show_map', 'about_map_embed_url',
   ];
 
   const placeholders = publicKeys.map((_, i) => `$${i + 2}`).join(',');

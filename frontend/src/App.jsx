@@ -24,6 +24,14 @@ import DiscountCodes from './pages/admin/DiscountCodes';
 import Reports from './pages/admin/Reports';
 import Messages from './pages/admin/Messages';
 import ReviewsManagement from './pages/admin/ReviewsManagement';
+import Support from './pages/admin/Support';
+import SupportTicketDetail from './pages/admin/SupportTicketDetail';
+
+// Platform admin - expanded
+import PlatformDashboard from './pages/platform/PlatformDashboard';
+import PlatformTenantDetail from './pages/platform/PlatformTenantDetail';
+import PlatformSupport from './pages/platform/PlatformSupport';
+import PlatformTicketDetail from './pages/platform/PlatformTicketDetail';
 
 // Public booking
 import TenantPublicLayout from './pages/public/TenantPublicLayout';
@@ -32,6 +40,7 @@ import BookingFlow from './pages/public/BookingFlow';
 import CustomerLogin from './pages/public/CustomerLogin';
 import VerifyMagicLink from './pages/public/VerifyMagicLink';
 import CustomerPortal from './pages/public/CustomerPortal';
+import BookingWidget from './pages/public/BookingWidget';
 
 export default function App() {
   return (
@@ -46,10 +55,13 @@ export default function App() {
           </ProtectedRoute>
         }
       >
-        <Route index element={<Navigate to="tenants" replace />} />
+        <Route index element={<Navigate to="dashboard" replace />} />
+        <Route path="dashboard" element={<PlatformDashboard />} />
         <Route path="tenants" element={<TenantList />} />
         <Route path="tenants/new" element={<TenantCreate />} />
-        <Route path="tenants/:id" element={<TenantDetail />} />
+        <Route path="tenants/:id" element={<PlatformTenantDetail />} />
+        <Route path="support" element={<PlatformSupport />} />
+        <Route path="support/:id" element={<PlatformTicketDetail />} />
       </Route>
 
       {/* Tenant admin */}
@@ -76,6 +88,8 @@ export default function App() {
         <Route path="reports" element={<Reports />} />
         <Route path="messages" element={<Messages />} />
         <Route path="reviews" element={<ReviewsManagement />} />
+        <Route path="support" element={<Support />} />
+        <Route path="support/:id" element={<SupportTicketDetail />} />
       </Route>
 
       {/* Public booking */}
@@ -86,6 +100,9 @@ export default function App() {
         <Route path="portal/verify" element={<VerifyMagicLink />} />
         <Route path="portal" element={<CustomerPortal />} />
       </Route>
+
+      {/* Embeddable widget (no layout wrapper) */}
+      <Route path="/t/:slug/widget" element={<BookingWidget />} />
 
       {/* Default redirect */}
       <Route path="/" element={<Navigate to="/admin/login" replace />} />

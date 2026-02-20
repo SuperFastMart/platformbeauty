@@ -8,6 +8,7 @@ const {
   sendRequestApprovedNotification, sendRequestRejectedNotification,
 } = require('../utils/emailService');
 const { chargeNoShow, getCustomerPaymentMethods } = require('../utils/stripeService');
+const { awardStampForBooking } = require('./loyalty');
 
 const asyncHandler = (fn) => (req, res, next) =>
   Promise.resolve(fn(req, res, next)).catch(next);
@@ -199,6 +200,10 @@ router.put('/bookings/:id/status', asyncHandler(async (req, res) => {
     }
   }
 
+  // Activity log
+  const { logActivity } = require('../utils/activityLog');
+  logActivity(req.tenantId, 'tenant_admin', req.user.id, req.user.email, `booking_${status}`, { booking_id: booking.id, customer: booking.customer_name });
+
   res.json(booking);
 }));
 
@@ -340,6 +345,10 @@ router.post('/slot-templates/generate', asyncHandler(async (req, res) => {
     current.setDate(current.getDate() + 1);
   }
 
+  // Activity log
+  const { logActivity } = require('../utils/activityLog');
+  logActivity(req.tenantId, 'tenant_admin', req.user.id, req.user.email, 'slots_generated', { start_date: startDate, end_date: endDate, slots_created: slotsCreated });
+
   res.json({ message: `Generated ${slotsCreated} time slots`, slotsCreated });
 }));
 
@@ -396,7 +405,7 @@ router.delete('/slot-exceptions/:id', asyncHandler(async (req, res) => {
 router.get('/dashboard', asyncHandler(async (req, res) => {
   const today = new Date().toISOString().split('T')[0];
 
-  const [todayBookings, pendingCount, weekRevenue, totalCustomers] = await Promise.all([
+  const [todayBookings, pendingCount, weekRevenue, totalCustomers, todayAppointments, pendingRequests] = await Promise.all([
     getOne(
       'SELECT COUNT(*) as count FROM bookings WHERE tenant_id = $1 AND date = $2',
       [req.tenantId, today]
@@ -414,6 +423,16 @@ router.get('/dashboard', asyncHandler(async (req, res) => {
       'SELECT COUNT(*) as count FROM customers WHERE tenant_id = $1',
       [req.tenantId]
     ),
+    getAll(
+      `SELECT id, customer_name, customer_email, service_names, start_time, end_time, status, total_price
+       FROM bookings WHERE tenant_id = $1 AND date = $2 AND status IN ('confirmed', 'pending')
+       ORDER BY start_time`,
+      [req.tenantId, today]
+    ),
+    getOne(
+      "SELECT COUNT(*) as count FROM booking_requests WHERE tenant_id = $1 AND status = 'pending'",
+      [req.tenantId]
+    ),
   ]);
 
   res.json({
@@ -421,6 +440,8 @@ router.get('/dashboard', asyncHandler(async (req, res) => {
     pendingCount: parseInt(pendingCount.count),
     weekRevenue: parseFloat(weekRevenue.total),
     totalCustomers: parseInt(totalCustomers.count),
+    todayAppointments: todayAppointments || [],
+    pendingRequests: parseInt(pendingRequests?.count || 0),
   });
 }));
 
@@ -665,6 +686,45 @@ router.get('/slots', asyncHandler(async (req, res) => {
   res.json(slots);
 }));
 
+// GET /api/admin/slots/overview?days=14 — availability overview for upcoming days
+router.get('/slots/overview', asyncHandler(async (req, res) => {
+  const days = parseInt(req.query.days) || 14;
+
+  const overview = await getAll(
+    `SELECT date,
+       COUNT(*) FILTER (WHERE is_available = TRUE) as available,
+       COUNT(*) FILTER (WHERE is_available = FALSE) as booked,
+       COUNT(*) as total
+     FROM time_slots
+     WHERE tenant_id = $1 AND date >= CURRENT_DATE AND date < CURRENT_DATE + $2
+     GROUP BY date
+     ORDER BY date`,
+    [req.tenantId, days]
+  );
+
+  res.json(overview);
+}));
+
+// GET /api/admin/slots/day?date=YYYY-MM-DD — all slots for a day (both available and booked)
+router.get('/slots/day', asyncHandler(async (req, res) => {
+  const { date } = req.query;
+  if (!date) return res.status(400).json({ error: 'date is required' });
+
+  const slots = await getAll(
+    `SELECT ts.id, ts.start_time, ts.end_time, ts.is_available,
+       b.id as booking_id, b.customer_name, b.service_names, b.status as booking_status
+     FROM time_slots ts
+     LEFT JOIN bookings b ON b.tenant_id = ts.tenant_id AND b.date = ts.date
+       AND ts.start_time >= b.start_time AND ts.start_time < b.end_time
+       AND b.status IN ('confirmed', 'pending')
+     WHERE ts.tenant_id = $1 AND ts.date = $2
+     ORDER BY ts.start_time`,
+    [req.tenantId, date]
+  );
+
+  res.json(slots);
+}));
+
 // ============================================
 // ADMIN BOOKING CREATION
 // ============================================
@@ -840,6 +900,15 @@ router.post('/bookings/:id/cash-payment', asyncHandler(async (req, res) => {
     );
   }
 
+  // Award loyalty stamp
+  if (booking.customer_id && booking.service_ids) {
+    const primaryServiceId = parseInt(booking.service_ids.split(',')[0]);
+    if (primaryServiceId) {
+      awardStampForBooking(req.tenantId, booking.customer_id, booking.id, primaryServiceId, booking.discount_code_id)
+        .catch(err => console.error('Loyalty stamp error:', err));
+    }
+  }
+
   res.json({ message: 'Cash payment recorded', booking_id: booking.id });
 }));
 
@@ -923,6 +992,15 @@ router.post('/bookings/:id/charge-complete', asyncHandler(async (req, res) => {
          WHERE tenant_id = $2 AND email = $3`,
         [booking.date, req.tenantId, booking.customer_email]
       );
+    }
+
+    // Award loyalty stamp
+    if (booking.customer_id && booking.service_ids) {
+      const primaryServiceId = parseInt(booking.service_ids.split(',')[0]);
+      if (primaryServiceId) {
+        awardStampForBooking(req.tenantId, booking.customer_id, booking.id, primaryServiceId, booking.discount_code_id)
+          .catch(err => console.error('Loyalty stamp error:', err));
+      }
     }
 
     res.json({ message: 'Card charged and service completed', payment_intent_id: paymentIntent.id });
@@ -1023,7 +1101,64 @@ router.put('/settings', asyncHandler(async (req, res) => {
     params
   );
 
+  // Activity log
+  const { logActivity } = require('../utils/activityLog');
+  logActivity(req.tenantId, 'tenant_admin', req.user.id, req.user.email, 'settings_updated', { fields: Object.keys(req.body) });
+
   res.json(tenant);
+}));
+
+// ============================================
+// IMPERSONATION: Tenant Admin → Customer
+// ============================================
+
+// POST /api/admin/impersonate/customer/:customerId
+router.post('/impersonate/customer/:customerId', asyncHandler(async (req, res) => {
+  const customer = await getOne(
+    'SELECT id, name, email, phone, allow_admin_impersonation FROM customers WHERE id = $1 AND tenant_id = $2',
+    [req.params.customerId, req.tenantId]
+  );
+  if (!customer) return res.status(404).json({ error: 'Customer not found' });
+  if (!customer.allow_admin_impersonation) {
+    return res.status(403).json({ error: 'Customer has not enabled admin impersonation' });
+  }
+
+  const tenant = await getOne('SELECT name, slug FROM tenants WHERE id = $1', [req.tenantId]);
+
+  // Generate a customer-level token
+  const token = jwt.sign(
+    {
+      customerId: customer.id,
+      tenantId: req.tenantId,
+      email: customer.email,
+      role: 'customer',
+      impersonatedBy: { id: req.user.id, username: req.user.username, type: 'tenant_admin' },
+    },
+    process.env.JWT_SECRET,
+    { expiresIn: '1h' }
+  );
+
+  // Log impersonation session
+  await run(
+    `INSERT INTO impersonation_sessions (impersonator_type, impersonator_id, target_type, target_tenant_id, target_customer_id)
+     VALUES ('tenant_admin', $1, 'customer', $2, $3)`,
+    [req.user.id, req.tenantId, customer.id]
+  ).catch(() => {});
+
+  const { logActivity } = require('../utils/activityLog');
+  logActivity(req.tenantId, 'tenant_admin', req.user.id, req.user.email, 'customer_impersonation_started', { customer_name: customer.name, customer_id: customer.id });
+
+  res.json({
+    token,
+    customer: {
+      id: customer.id,
+      name: customer.name,
+      email: customer.email,
+      impersonating: true,
+      impersonatedBy: req.user.username,
+    },
+    tenantSlug: tenant?.slug,
+  });
 }));
 
 module.exports = router;

@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react';
 import {
   Box, Typography, Button, Card, CardContent, Chip, IconButton,
   Dialog, DialogTitle, DialogContent, DialogActions, TextField,
-  MenuItem, Snackbar, Alert, Divider, Grid
+  MenuItem, Snackbar, Alert, Divider, Grid, LinearProgress,
+  useMediaQuery, useTheme
 } from '@mui/material';
-import { Add, Edit, Delete, AutoFixHigh } from '@mui/icons-material';
+import { Add, Edit, Delete, AutoFixHigh, Visibility, Close } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import api from '../../api/client';
 
@@ -25,6 +26,16 @@ export default function SlotTemplates() {
   });
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
+  // Availability overview state
+  const [overview, setOverview] = useState([]);
+  const [overviewLoading, setOverviewLoading] = useState(false);
+  const [selectedDaySlots, setSelectedDaySlots] = useState(null);
+  const [selectedDayDate, setSelectedDayDate] = useState(null);
+  const [dayLoading, setDayLoading] = useState(false);
+
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+
   const fetchTemplates = () => {
     api.get('/admin/slot-templates')
       .then(({ data }) => setTemplates(data))
@@ -32,7 +43,18 @@ export default function SlotTemplates() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { fetchTemplates(); }, []);
+  const fetchOverview = () => {
+    setOverviewLoading(true);
+    api.get('/admin/slots/overview?days=14')
+      .then(({ data }) => setOverview(data))
+      .catch(console.error)
+      .finally(() => setOverviewLoading(false));
+  };
+
+  useEffect(() => {
+    fetchTemplates();
+    fetchOverview();
+  }, []);
 
   const handleOpen = (template = null) => {
     if (template) {
@@ -81,8 +103,22 @@ export default function SlotTemplates() {
       const { data } = await api.post('/admin/slot-templates/generate', generateForm);
       setSnackbar({ open: true, message: data.message, severity: 'success' });
       setGenerateOpen(false);
+      fetchOverview(); // Refresh overview after generating
     } catch (err) {
       setSnackbar({ open: true, message: err.response?.data?.error || 'Error generating slots', severity: 'error' });
+    }
+  };
+
+  const viewDay = async (dateStr) => {
+    setSelectedDayDate(dateStr);
+    setDayLoading(true);
+    try {
+      const { data } = await api.get(`/admin/slots/day?date=${dateStr}`);
+      setSelectedDaySlots(data);
+    } catch (err) {
+      setSelectedDaySlots([]);
+    } finally {
+      setDayLoading(false);
     }
   };
 
@@ -95,18 +131,106 @@ export default function SlotTemplates() {
 
   return (
     <Box>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3} flexWrap="wrap" gap={1}>
         <Typography variant="h5" fontWeight={600}>Availability</Typography>
         <Box display="flex" gap={1}>
-          <Button variant="outlined" startIcon={<AutoFixHigh />} onClick={() => setGenerateOpen(true)}>
+          <Button variant="outlined" startIcon={<AutoFixHigh />} onClick={() => setGenerateOpen(true)} sx={{ minHeight: 44 }}>
             Generate Slots
           </Button>
-          <Button variant="contained" startIcon={<Add />} onClick={() => handleOpen()}>
-            Add Template
+          <Button variant="contained" startIcon={<Add />} onClick={() => handleOpen()} sx={{ minHeight: 44 }}>
+            {isMobile ? 'Add' : 'Add Template'}
           </Button>
         </Box>
       </Box>
 
+      {/* Slot Availability Overview */}
+      <Card sx={{ mb: 3 }}>
+        <CardContent>
+          <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+            <Typography variant="h6" fontWeight={600}>Upcoming Availability</Typography>
+            <Button size="small" onClick={fetchOverview} disabled={overviewLoading}>
+              Refresh
+            </Button>
+          </Box>
+
+          {overviewLoading ? (
+            <LinearProgress />
+          ) : overview.length === 0 ? (
+            <Alert severity="info" variant="outlined">
+              No time slots generated yet. Use "Generate Slots" above to create bookable time slots from your templates.
+            </Alert>
+          ) : (
+            <Grid container spacing={1}>
+              {overview.map(day => {
+                const d = dayjs(day.date);
+                const available = parseInt(day.available);
+                const booked = parseInt(day.booked);
+                const total = parseInt(day.total);
+                const pct = total > 0 ? Math.round((available / total) * 100) : 0;
+                const isToday = d.isSame(dayjs(), 'day');
+
+                return (
+                  <Grid item xs={6} sm={4} md={3} lg={12 / 7} key={day.date}>
+                    <Card
+                      variant="outlined"
+                      sx={{
+                        cursor: 'pointer',
+                        bgcolor: available === 0 ? 'error.50' : pct <= 30 ? 'warning.50' : 'transparent',
+                        border: isToday ? 2 : 1,
+                        borderColor: isToday ? 'primary.main' : 'divider',
+                        '&:hover': { bgcolor: 'action.hover' },
+                        transition: 'background-color 0.15s',
+                      }}
+                      onClick={() => viewDay(day.date)}
+                    >
+                      <CardContent sx={{ py: 1, px: 1.5, '&:last-child': { pb: 1 }, textAlign: 'center' }}>
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          {d.format('ddd')}
+                        </Typography>
+                        <Typography fontWeight={700} fontSize="1.1rem">
+                          {d.format('D MMM')}
+                        </Typography>
+                        <Box mt={0.5}>
+                          <Chip
+                            label={`${available}/${total}`}
+                            size="small"
+                            color={available === 0 ? 'error' : pct <= 30 ? 'warning' : 'success'}
+                            variant="outlined"
+                            sx={{ fontSize: '0.75rem', height: 22 }}
+                          />
+                        </Box>
+                        {booked > 0 && (
+                          <Typography variant="caption" color="text.secondary" display="block">
+                            {booked} booked
+                          </Typography>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                );
+              })}
+            </Grid>
+          )}
+
+          <Box display="flex" gap={2} mt={2} flexWrap="wrap">
+            <Box display="flex" alignItems="center" gap={0.5}>
+              <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: 'success.main' }} />
+              <Typography variant="caption">Available</Typography>
+            </Box>
+            <Box display="flex" alignItems="center" gap={0.5}>
+              <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: 'warning.main' }} />
+              <Typography variant="caption">Filling up</Typography>
+            </Box>
+            <Box display="flex" alignItems="center" gap={0.5}>
+              <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: 'error.main' }} />
+              <Typography variant="caption">Fully booked</Typography>
+            </Box>
+          </Box>
+        </CardContent>
+      </Card>
+
+      {/* Weekly Templates */}
+      <Typography variant="h6" fontWeight={600} mb={2}>Weekly Schedule Templates</Typography>
       {loading ? (
         <Typography>Loading...</Typography>
       ) : templates.length === 0 ? (
@@ -154,6 +278,71 @@ export default function SlotTemplates() {
           })}
         </Grid>
       )}
+
+      {/* Day Detail Dialog */}
+      <Dialog open={!!selectedDayDate} onClose={() => { setSelectedDayDate(null); setSelectedDaySlots(null); }} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          <Box display="flex" justifyContent="space-between" alignItems="center">
+            <Typography variant="h6" fontWeight={600}>
+              {selectedDayDate && dayjs(selectedDayDate).format('dddd D MMMM YYYY')}
+            </Typography>
+            <IconButton onClick={() => { setSelectedDayDate(null); setSelectedDaySlots(null); }}>
+              <Close />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          {dayLoading ? (
+            <LinearProgress />
+          ) : !selectedDaySlots || selectedDaySlots.length === 0 ? (
+            <Typography color="text.secondary">No time slots for this day.</Typography>
+          ) : (
+            <Box>
+              {selectedDaySlots.map(slot => (
+                <Box
+                  key={slot.id}
+                  display="flex"
+                  justifyContent="space-between"
+                  alignItems="center"
+                  py={1}
+                  px={1.5}
+                  mb={0.5}
+                  borderRadius={1}
+                  bgcolor={slot.is_available ? 'success.50' : 'grey.100'}
+                  sx={{ bgcolor: slot.is_available ? 'rgba(46, 125, 50, 0.06)' : 'rgba(0, 0, 0, 0.04)' }}
+                >
+                  <Box display="flex" alignItems="center" gap={1}>
+                    <Typography fontWeight={600} variant="body2" sx={{ minWidth: 100 }}>
+                      {slot.start_time?.slice(0, 5)} - {slot.end_time?.slice(0, 5)}
+                    </Typography>
+                    <Chip
+                      label={slot.is_available ? 'Available' : 'Booked'}
+                      size="small"
+                      color={slot.is_available ? 'success' : 'default'}
+                      variant="outlined"
+                    />
+                  </Box>
+                  {slot.booking_id && (
+                    <Box textAlign="right">
+                      <Typography variant="body2" fontWeight={500}>{slot.customer_name}</Typography>
+                      <Typography variant="caption" color="text.secondary">{slot.service_names}</Typography>
+                    </Box>
+                  )}
+                </Box>
+              ))}
+
+              <Box mt={2} display="flex" gap={2}>
+                <Typography variant="body2" color="success.main">
+                  {selectedDaySlots.filter(s => s.is_available).length} available
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {selectedDaySlots.filter(s => !s.is_available).length} booked
+                </Typography>
+              </Box>
+            </Box>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Template Create/Edit Dialog */}
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>

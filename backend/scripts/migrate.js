@@ -476,6 +476,92 @@ const migrations = [
   },
 
   // ============================================
+  // SPRINT 6: Support, Notifications, Impersonation, Activity Log
+  // ============================================
+  {
+    name: '032_create_support_tickets',
+    sql: `
+      CREATE TABLE IF NOT EXISTS support_tickets (
+        id SERIAL PRIMARY KEY,
+        tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+        subject TEXT NOT NULL,
+        category TEXT NOT NULL DEFAULT 'general',
+        priority TEXT NOT NULL DEFAULT 'normal',
+        status TEXT NOT NULL DEFAULT 'open',
+        created_by_email TEXT NOT NULL,
+        created_by_name TEXT NOT NULL,
+        resolved_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_support_tickets_tenant ON support_tickets(tenant_id);
+      CREATE INDEX IF NOT EXISTS idx_support_tickets_status ON support_tickets(status);
+
+      CREATE TABLE IF NOT EXISTS ticket_messages (
+        id SERIAL PRIMARY KEY,
+        ticket_id INTEGER NOT NULL REFERENCES support_tickets(id) ON DELETE CASCADE,
+        content TEXT NOT NULL,
+        sender_type TEXT NOT NULL,
+        sender_name TEXT NOT NULL,
+        sender_email TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_ticket_messages_ticket ON ticket_messages(ticket_id);
+    `
+  },
+  {
+    name: '033_create_platform_notifications',
+    sql: `
+      CREATE TABLE IF NOT EXISTS platform_notifications (
+        id SERIAL PRIMARY KEY,
+        type TEXT NOT NULL,
+        title TEXT NOT NULL,
+        body TEXT,
+        metadata JSONB,
+        tenant_id INTEGER REFERENCES tenants(id),
+        read_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_platform_notifications_read ON platform_notifications(read_at);
+      CREATE INDEX IF NOT EXISTS idx_platform_notifications_created ON platform_notifications(created_at DESC);
+    `
+  },
+  {
+    name: '034_create_impersonation_sessions',
+    sql: `
+      CREATE TABLE IF NOT EXISTS impersonation_sessions (
+        id SERIAL PRIMARY KEY,
+        impersonator_type TEXT NOT NULL,
+        impersonator_id INTEGER NOT NULL,
+        target_type TEXT NOT NULL,
+        target_tenant_id INTEGER REFERENCES tenants(id),
+        target_customer_id INTEGER,
+        started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        ended_at TIMESTAMP
+      );
+
+      ALTER TABLE customers ADD COLUMN IF NOT EXISTS allow_admin_impersonation BOOLEAN DEFAULT FALSE;
+    `
+  },
+  {
+    name: '035_create_activity_log',
+    sql: `
+      CREATE TABLE IF NOT EXISTS activity_log (
+        id SERIAL PRIMARY KEY,
+        tenant_id INTEGER REFERENCES tenants(id),
+        user_type TEXT NOT NULL,
+        user_id INTEGER,
+        user_email TEXT,
+        action TEXT NOT NULL,
+        details JSONB,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_activity_log_tenant ON activity_log(tenant_id);
+      CREATE INDEX IF NOT EXISTS idx_activity_log_created ON activity_log(created_at DESC);
+    `
+  },
+
+  // ============================================
   // MIGRATION TRACKING
   // ============================================
   {

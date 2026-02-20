@@ -6,9 +6,10 @@ import {
   Grid, Alert, Snackbar, Dialog, DialogTitle, DialogContent, DialogActions,
   IconButton
 } from '@mui/material';
-import { ArrowBack, Delete } from '@mui/icons-material';
+import { ArrowBack, Delete, PersonOutline } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import api from '../../api/client';
+import { useAuth } from '../../contexts/AuthContext';
 
 const statusColors = {
   pending: 'warning', confirmed: 'success', rejected: 'error',
@@ -18,6 +19,7 @@ const statusColors = {
 export default function CustomerDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const [customer, setCustomer] = useState(null);
   const [bookings, setBookings] = useState([]);
@@ -67,7 +69,26 @@ export default function CustomerDetail() {
     <Box>
       <Box display="flex" alignItems="center" gap={1} mb={3}>
         <IconButton onClick={() => navigate('/admin/customers')}><ArrowBack /></IconButton>
-        <Typography variant="h5" fontWeight={600}>{customer.name}</Typography>
+        <Typography variant="h5" fontWeight={600} sx={{ flex: 1 }}>{customer.name}</Typography>
+        {customer.allow_admin_impersonation && (
+          <Button
+            variant="outlined" size="small"
+            startIcon={<PersonOutline />}
+            onClick={async () => {
+              try {
+                const { data } = await api.post(`/admin/impersonate/customer/${id}`);
+                // Open customer portal in new tab with the impersonation token
+                localStorage.setItem('customer_token', data.token);
+                localStorage.setItem('customer_user', JSON.stringify(data.customer));
+                window.open(`/t/${data.tenantSlug}/portal`, '_blank');
+              } catch (err) {
+                setSnackbar({ open: true, message: err.response?.data?.error || 'Impersonation failed', severity: 'error' });
+              }
+            }}
+          >
+            View as Customer
+          </Button>
+        )}
       </Box>
 
       {/* Stats */}
