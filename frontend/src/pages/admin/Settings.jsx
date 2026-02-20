@@ -3,7 +3,7 @@ import {
   Box, Typography, Card, CardContent, TextField, Button, Tabs, Tab,
   Snackbar, Alert, CircularProgress, InputAdornment, Chip, Switch, FormControlLabel, Grid
 } from '@mui/material';
-import { Save, CreditCard, Store, Palette, Info, Schedule, Code, ContentCopy } from '@mui/icons-material';
+import { Save, CreditCard, Store, Palette, Info, Schedule, Code, ContentCopy, Share, Delete, Add, DragIndicator, Gavel } from '@mui/icons-material';
 import api from '../../api/client';
 
 function TabPanel({ children, value, index }) {
@@ -117,6 +117,8 @@ export default function Settings() {
         <Tab icon={<Schedule />} label="Hours" iconPosition="start" />
         <Tab icon={<Palette />} label="Branding" iconPosition="start" />
         <Tab icon={<CreditCard />} label="Payments" iconPosition="start" />
+        <Tab icon={<Share />} label="Social" iconPosition="start" />
+        <Tab icon={<Gavel />} label="Policies" iconPosition="start" />
         <Tab icon={<Code />} label="Widget" iconPosition="start" />
       </Tabs>
 
@@ -184,11 +186,27 @@ export default function Settings() {
               label="Show map on booking page"
             />
             {siteSettings.about_show_map && (
-              <TextField fullWidth label="Google Maps Embed URL" margin="normal"
-                value={siteSettings.about_map_embed_url || ''}
-                onChange={e => setSiteSettings(s => ({ ...s, about_map_embed_url: e.target.value }))}
-                placeholder="https://www.google.com/maps/embed?pb=..."
-                helperText='Go to Google Maps → Share → Embed a map → copy the src URL from the iframe code' />
+              <>
+                <Alert severity="info" sx={{ mt: 1, mb: 2 }}>
+                  The map will automatically use your business address from the Business tab. Make sure your address is filled in.
+                  {settings.business_address ? (
+                    <Typography variant="body2" mt={0.5}><strong>Current address:</strong> {settings.business_address}</Typography>
+                  ) : (
+                    <Typography variant="body2" mt={0.5} color="warning.main">No address set — go to the Business tab to add one.</Typography>
+                  )}
+                </Alert>
+                <TextField fullWidth label="Custom Map Embed URL (optional)" margin="normal"
+                  value={siteSettings.about_map_embed_url || ''}
+                  onChange={e => {
+                    let url = e.target.value;
+                    const srcMatch = url.match(/src="([^"]+)"/);
+                    if (srcMatch) url = srcMatch[1];
+                    setSiteSettings(s => ({ ...s, about_map_embed_url: url }));
+                  }}
+                  placeholder="Leave blank to auto-generate from your address"
+                  helperText="Only needed if you want a specific map. Leave blank to use your business address automatically."
+                />
+              </>
             )}
           </CardContent>
         </Card>
@@ -287,6 +305,85 @@ export default function Settings() {
               helperText="Used for buttons, headers, and your public booking page" />
           </CardContent>
         </Card>
+
+        <Card sx={{ mt: 2 }}>
+          <CardContent>
+            <Typography variant="subtitle1" fontWeight={600} mb={1}>Business Name Display</Typography>
+            <Typography variant="body2" color="text.secondary" mb={2}>
+              Choose how your business name appears on your public booking page — as styled text or a logo image.
+            </Typography>
+
+            <Box display="flex" gap={2} mb={2}>
+              <Button
+                variant={(!siteSettings.header_display || siteSettings.header_display === 'text') ? 'contained' : 'outlined'}
+                onClick={() => setSiteSettings(s => ({ ...s, header_display: 'text' }))}
+              >
+                Styled Text
+              </Button>
+              <Button
+                variant={siteSettings.header_display === 'logo' ? 'contained' : 'outlined'}
+                onClick={() => setSiteSettings(s => ({ ...s, header_display: 'logo' }))}
+              >
+                Logo Image
+              </Button>
+            </Box>
+
+            {(!siteSettings.header_display || siteSettings.header_display === 'text') && (
+              <>
+                <TextField fullWidth select label="Header Font" margin="normal"
+                  value={siteSettings.header_font || 'Inter'}
+                  onChange={e => setSiteSettings(s => ({ ...s, header_font: e.target.value }))}
+                >
+                  <MenuItem value="Inter">Inter (Default)</MenuItem>
+                  <MenuItem value="Playfair Display">Playfair Display (Elegant Serif)</MenuItem>
+                  <MenuItem value="Dancing Script">Dancing Script (Script)</MenuItem>
+                  <MenuItem value="Great Vibes">Great Vibes (Calligraphy)</MenuItem>
+                  <MenuItem value="Parisienne">Parisienne (French Script)</MenuItem>
+                  <MenuItem value="Cormorant Garamond">Cormorant Garamond (Classic Serif)</MenuItem>
+                  <MenuItem value="Lora">Lora (Modern Serif)</MenuItem>
+                  <MenuItem value="Montserrat">Montserrat (Modern Sans)</MenuItem>
+                  <MenuItem value="Raleway">Raleway (Thin Modern)</MenuItem>
+                </TextField>
+                <Box mt={2} p={2} border={1} borderColor="divider" borderRadius={2} textAlign="center">
+                  <link
+                    href={`https://fonts.googleapis.com/css2?family=${encodeURIComponent(siteSettings.header_font || 'Inter')}:wght@400;700&display=swap`}
+                    rel="stylesheet"
+                  />
+                  <Typography
+                    variant="h4"
+                    fontWeight={700}
+                    sx={{ fontFamily: `"${siteSettings.header_font || 'Inter'}", serif` }}
+                  >
+                    {settings.name || 'Your Business Name'}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">Preview</Typography>
+                </Box>
+              </>
+            )}
+
+            {siteSettings.header_display === 'logo' && (
+              <>
+                <TextField fullWidth label="Header Logo URL" margin="normal"
+                  value={siteSettings.header_logo_url || ''}
+                  onChange={e => setSiteSettings(s => ({ ...s, header_logo_url: e.target.value }))}
+                  placeholder="https://example.com/your-header-logo.png"
+                  helperText="Recommended: transparent PNG, max height ~80px. This replaces the text name on your booking page."
+                />
+                {siteSettings.header_logo_url && (
+                  <Box mt={2} p={2} border={1} borderColor="divider" borderRadius={2} textAlign="center" bgcolor="grey.50">
+                    <img
+                      src={siteSettings.header_logo_url}
+                      alt="Header logo preview"
+                      style={{ maxHeight: 80, maxWidth: '100%' }}
+                      onError={(e) => { e.target.style.display = 'none'; }}
+                    />
+                    <Typography variant="caption" color="text.secondary" display="block" mt={1}>Preview</Typography>
+                  </Box>
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
       </TabPanel>
 
       {/* Payments / Stripe */}
@@ -361,8 +458,179 @@ export default function Settings() {
         </Card>
       </TabPanel>
 
-      {/* Widget */}
+      {/* Social Embeds */}
       <TabPanel value={tab} index={5}>
+        <Card>
+          <CardContent>
+            <Typography variant="subtitle1" fontWeight={600} mb={1}>Social Media Widgets</Typography>
+            <Typography variant="body2" color="text.secondary" mb={3}>
+              Embed your Instagram feed, TikTok, Facebook page, or any social widget on your public booking page.
+              Use services like <a href="https://lightwidget.com" target="_blank" rel="noopener noreferrer">LightWidget</a> for
+              Instagram, or copy embed codes directly from your social platforms.
+            </Typography>
+
+            {(siteSettings.social_embeds || []).map((embed, idx) => (
+              <Card key={idx} variant="outlined" sx={{ mb: 2, p: 2 }}>
+                <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={1}>
+                  <Box display="flex" alignItems="center" gap={1} flex={1}>
+                    <DragIndicator sx={{ color: 'text.disabled', cursor: 'grab' }} />
+                    <TextField
+                      size="small" label="Label" placeholder="e.g. Instagram Feed"
+                      value={embed.label || ''}
+                      onChange={(e) => {
+                        const updated = [...(siteSettings.social_embeds || [])];
+                        updated[idx] = { ...updated[idx], label: e.target.value };
+                        setSiteSettings(s => ({ ...s, social_embeds: updated }));
+                      }}
+                      sx={{ width: 200 }}
+                    />
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          size="small"
+                          checked={embed.visible !== false}
+                          onChange={(e) => {
+                            const updated = [...(siteSettings.social_embeds || [])];
+                            updated[idx] = { ...updated[idx], visible: e.target.checked };
+                            setSiteSettings(s => ({ ...s, social_embeds: updated }));
+                          }}
+                        />
+                      }
+                      label={embed.visible !== false ? 'Visible' : 'Hidden'}
+                    />
+                  </Box>
+                  <Button
+                    size="small" color="error"
+                    startIcon={<Delete />}
+                    onClick={() => {
+                      const updated = (siteSettings.social_embeds || []).filter((_, i) => i !== idx);
+                      setSiteSettings(s => ({ ...s, social_embeds: updated }));
+                    }}
+                  >
+                    Remove
+                  </Button>
+                </Box>
+                <TextField
+                  fullWidth multiline rows={4}
+                  label="Embed Code"
+                  placeholder={'Paste your embed code here, e.g.:\n<iframe src="https://lightwidget.com/widgets/abc123..." scrolling="no" allowtransparency="true" ...></iframe>'}
+                  value={embed.code || ''}
+                  onChange={(e) => {
+                    const updated = [...(siteSettings.social_embeds || [])];
+                    updated[idx] = { ...updated[idx], code: e.target.value };
+                    setSiteSettings(s => ({ ...s, social_embeds: updated }));
+                  }}
+                  InputProps={{ sx: { fontFamily: 'monospace', fontSize: 12 } }}
+                  sx={{ mt: 1 }}
+                />
+              </Card>
+            ))}
+
+            <Button
+              variant="outlined"
+              startIcon={<Add />}
+              onClick={() => {
+                const current = siteSettings.social_embeds || [];
+                setSiteSettings(s => ({
+                  ...s,
+                  social_embeds: [...current, { label: '', code: '', visible: true }],
+                }));
+              }}
+            >
+              Add Social Widget
+            </Button>
+
+            <Alert severity="info" sx={{ mt: 3 }}>
+              <strong>How to get embed codes:</strong><br />
+              <strong>Instagram:</strong> Use <a href="https://lightwidget.com" target="_blank" rel="noopener noreferrer">LightWidget.com</a> — connect your account, customise the grid, copy the embed code.<br />
+              <strong>Facebook:</strong> Go to your Facebook page → Share → Embed → copy the code.<br />
+              <strong>TikTok:</strong> On any video, click Share → Embed → copy the code.<br />
+              <strong>Google Reviews:</strong> Use a service like Elfsight or paste a Google review widget embed code.
+            </Alert>
+          </CardContent>
+        </Card>
+      </TabPanel>
+
+      {/* Policies */}
+      <TabPanel value={tab} index={6}>
+        <Card>
+          <CardContent>
+            <Typography variant="subtitle1" fontWeight={600} mb={2}>Business Policies</Typography>
+            <Typography variant="body2" color="text.secondary" mb={3}>
+              Set your cancellation, no-show, privacy, and terms policies. These will be shown to customers during booking
+              and on your public page. Default templates are provided — customise them to suit your business.
+            </Typography>
+
+            <Typography variant="subtitle2" fontWeight={600} mb={1}>Cancellation Policy</Typography>
+            <TextField
+              fullWidth multiline rows={4} sx={{ mb: 3 }}
+              placeholder="Enter your cancellation policy..."
+              value={siteSettings.policy_cancellation || ''}
+              onChange={e => setSiteSettings(s => ({ ...s, policy_cancellation: e.target.value }))}
+            />
+            {!siteSettings.policy_cancellation && (
+              <Button size="small" variant="outlined" sx={{ mb: 3, mt: -2 }}
+                onClick={() => setSiteSettings(s => ({ ...s, policy_cancellation: 'Cancellations must be made at least 24 hours before your scheduled appointment. Late cancellations (less than 24 hours notice) may be subject to a cancellation fee of up to 50% of the service cost. To cancel or reschedule, please contact us directly or use your customer portal.' }))}
+              >
+                Use Default Template
+              </Button>
+            )}
+
+            <Typography variant="subtitle2" fontWeight={600} mb={1}>No-Show Policy</Typography>
+            <TextField
+              fullWidth multiline rows={4} sx={{ mb: 3 }}
+              placeholder="Enter your no-show policy..."
+              value={siteSettings.policy_noshow || ''}
+              onChange={e => setSiteSettings(s => ({ ...s, policy_noshow: e.target.value }))}
+            />
+            {!siteSettings.policy_noshow && (
+              <Button size="small" variant="outlined" sx={{ mb: 3, mt: -2 }}
+                onClick={() => setSiteSettings(s => ({ ...s, policy_noshow: 'Clients who fail to attend their appointment without prior notice will be marked as a no-show. After two no-shows, a deposit or prepayment may be required for future bookings. We understand emergencies happen — please let us know as soon as possible if you cannot make your appointment.' }))}
+              >
+                Use Default Template
+              </Button>
+            )}
+
+            <Typography variant="subtitle2" fontWeight={600} mb={1}>Privacy Policy</Typography>
+            <TextField
+              fullWidth multiline rows={4} sx={{ mb: 3 }}
+              placeholder="Enter your privacy policy..."
+              value={siteSettings.policy_privacy || ''}
+              onChange={e => setSiteSettings(s => ({ ...s, policy_privacy: e.target.value }))}
+            />
+            {!siteSettings.policy_privacy && (
+              <Button size="small" variant="outlined" sx={{ mb: 3, mt: -2 }}
+                onClick={() => setSiteSettings(s => ({ ...s, policy_privacy: 'We collect your name, contact details, and booking information solely to provide our services. Your personal data is stored securely and will never be shared with third parties for marketing purposes. You may request access to, correction of, or deletion of your personal data at any time by contacting us.' }))}
+              >
+                Use Default Template
+              </Button>
+            )}
+
+            <Typography variant="subtitle2" fontWeight={600} mb={1}>Terms &amp; Conditions</Typography>
+            <TextField
+              fullWidth multiline rows={4} sx={{ mb: 2 }}
+              placeholder="Enter your terms and conditions..."
+              value={siteSettings.policy_terms || ''}
+              onChange={e => setSiteSettings(s => ({ ...s, policy_terms: e.target.value }))}
+            />
+            {!siteSettings.policy_terms && (
+              <Button size="small" variant="outlined" sx={{ mb: 2, mt: -1 }}
+                onClick={() => setSiteSettings(s => ({ ...s, policy_terms: 'By booking an appointment, you agree to our cancellation and no-show policies. Prices are subject to change and will be confirmed at the time of booking. We reserve the right to refuse service. Payment is due at the time of the appointment unless otherwise agreed. Gift vouchers are non-refundable and must be used within 12 months of purchase.' }))}
+              >
+                Use Default Template
+              </Button>
+            )}
+
+            <Alert severity="info" sx={{ mt: 1 }}>
+              These policies are saved along with your other settings when you click <strong>Save Settings</strong> above.
+              Customers will see a link to your policies during the booking process and on your public landing page.
+            </Alert>
+          </CardContent>
+        </Card>
+      </TabPanel>
+
+      {/* Widget */}
+      <TabPanel value={tab} index={7}>
         <Card>
           <CardContent>
             <Typography variant="subtitle1" fontWeight={600} mb={1}>Embeddable Booking Widget</Typography>

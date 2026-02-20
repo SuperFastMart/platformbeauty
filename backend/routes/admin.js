@@ -42,6 +42,9 @@ router.post('/auth/login', asyncHandler(async (req, res) => {
     return res.status(401).json({ error: 'Invalid credentials' });
   }
 
+  // Update last login timestamp
+  run('UPDATE tenant_users SET last_login_at = NOW() WHERE id = $1', [user.id]).catch(() => {});
+
   const token = jwt.sign(
     { id: user.id, tenantId: user.tenant_id, username: user.username, role: user.role },
     process.env.JWT_SECRET,
@@ -445,6 +448,92 @@ router.get('/dashboard', asyncHandler(async (req, res) => {
   });
 }));
 
+// GET /api/admin/analytics — extended stats for dashboard charts
+router.get('/analytics', asyncHandler(async (req, res) => {
+  const days = parseInt(req.query.days) || 30;
+  const endDate = new Date();
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - days);
+  const startStr = startDate.toISOString().split('T')[0];
+  const endStr = endDate.toISOString().split('T')[0];
+
+  const [bookingTrends, revenueTrends, statusBreakdown, topServices, monthlyRevenue, newCustomers, repeatRate] = await Promise.all([
+    // Daily booking counts
+    getAll(
+      `SELECT d::date as date, COALESCE(b.count, 0)::int as count
+       FROM generate_series($2::date, $3::date, '1 day') d
+       LEFT JOIN (
+         SELECT date, COUNT(*) as count FROM bookings
+         WHERE tenant_id = $1 AND date >= $2 AND date <= $3
+         GROUP BY date
+       ) b ON b.date = d::date
+       ORDER BY d`,
+      [req.tenantId, startStr, endStr]
+    ),
+    // Daily revenue
+    getAll(
+      `SELECT d::date as date, COALESCE(b.total, 0)::numeric as revenue
+       FROM generate_series($2::date, $3::date, '1 day') d
+       LEFT JOIN (
+         SELECT date, SUM(total_price) as total FROM bookings
+         WHERE tenant_id = $1 AND date >= $2 AND date <= $3 AND status = 'confirmed'
+         GROUP BY date
+       ) b ON b.date = d::date
+       ORDER BY d`,
+      [req.tenantId, startStr, endStr]
+    ),
+    // Status breakdown
+    getAll(
+      `SELECT status, COUNT(*)::int as count FROM bookings
+       WHERE tenant_id = $1 AND date >= $2
+       GROUP BY status ORDER BY count DESC`,
+      [req.tenantId, startStr]
+    ),
+    // Top services
+    getAll(
+      `SELECT service_names, COUNT(*)::int as count, SUM(total_price)::numeric as revenue
+       FROM bookings WHERE tenant_id = $1 AND date >= $2
+       GROUP BY service_names ORDER BY count DESC LIMIT 5`,
+      [req.tenantId, startStr]
+    ),
+    // Monthly revenue (last 6 months)
+    getAll(
+      `SELECT DATE_TRUNC('month', date) as month, SUM(total_price)::numeric as revenue, COUNT(*)::int as bookings
+       FROM bookings WHERE tenant_id = $1 AND status = 'confirmed' AND date >= CURRENT_DATE - INTERVAL '6 months'
+       GROUP BY DATE_TRUNC('month', date) ORDER BY month`,
+      [req.tenantId]
+    ),
+    // New customers this period
+    getOne(
+      `SELECT COUNT(*)::int as count FROM customers WHERE tenant_id = $1 AND created_at >= $2`,
+      [req.tenantId, startStr]
+    ),
+    // Repeat customer rate
+    getOne(
+      `SELECT
+         COUNT(DISTINCT customer_email)::int as total_customers,
+         COUNT(DISTINCT CASE WHEN booking_count > 1 THEN customer_email END)::int as repeat_customers
+       FROM (
+         SELECT customer_email, COUNT(*) as booking_count
+         FROM bookings WHERE tenant_id = $1 AND date >= $2
+         GROUP BY customer_email
+       ) sub`,
+      [req.tenantId, startStr]
+    ),
+  ]);
+
+  res.json({
+    booking_trends: bookingTrends || [],
+    revenue_trends: revenueTrends || [],
+    status_breakdown: statusBreakdown || [],
+    top_services: topServices || [],
+    monthly_revenue: monthlyRevenue || [],
+    new_customers: newCustomers?.count || 0,
+    repeat_customers: repeatRate?.repeat_customers || 0,
+    total_unique_customers: repeatRate?.total_customers || 0,
+  });
+}));
+
 // ============================================
 // BOOKING REQUESTS (cancel/amend from customers)
 // ============================================
@@ -689,6 +778,8 @@ router.get('/slots', asyncHandler(async (req, res) => {
 // GET /api/admin/slots/overview?days=14 — availability overview for upcoming days
 router.get('/slots/overview', asyncHandler(async (req, res) => {
   const days = parseInt(req.query.days) || 14;
+  const endDate = new Date();
+  endDate.setDate(endDate.getDate() + days);
 
   const overview = await getAll(
     `SELECT date,
@@ -696,10 +787,10 @@ router.get('/slots/overview', asyncHandler(async (req, res) => {
        COUNT(*) FILTER (WHERE is_available = FALSE) as booked,
        COUNT(*) as total
      FROM time_slots
-     WHERE tenant_id = $1 AND date >= CURRENT_DATE AND date < CURRENT_DATE + $2
+     WHERE tenant_id = $1 AND date >= CURRENT_DATE AND date <= $2
      GROUP BY date
      ORDER BY date`,
-    [req.tenantId, days]
+    [req.tenantId, endDate.toISOString().split('T')[0]]
   );
 
   res.json(overview);

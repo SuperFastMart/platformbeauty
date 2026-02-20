@@ -4,9 +4,9 @@ import {
   Box, Typography, Stepper, Step, StepLabel, Button, Card, CardContent,
   TextField, Checkbox, Container, Chip, Alert, CircularProgress,
   IconButton, Grid, useMediaQuery, useTheme,
-  Accordion, AccordionSummary, AccordionDetails
+  Accordion, AccordionSummary, AccordionDetails, FormControlLabel
 } from '@mui/material';
-import { ChevronLeft, ChevronRight, Search, ExpandMore, CheckCircle, Add } from '@mui/icons-material';
+import { ChevronLeft, ChevronRight, Search, ExpandMore, CheckCircle, Add, Gavel } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements } from '@stripe/react-stripe-js';
@@ -75,7 +75,14 @@ export default function BookingFlow() {
   // Find next available
   const [findingNext, setFindingNext] = useState(false);
 
-  // Load services
+  // Policies
+  const [siteSettings, setSiteSettings] = useState({});
+  const [policyAgreed, setPolicyAgreed] = useState(false);
+
+  const hasPolicies = !!(siteSettings.policy_cancellation || siteSettings.policy_noshow
+    || siteSettings.policy_privacy || siteSettings.policy_terms);
+
+  // Load services & site settings
   useEffect(() => {
     api.get(`/t/${slug}/services`)
       .then(({ data }) => {
@@ -83,6 +90,9 @@ export default function BookingFlow() {
         setGrouped(data.grouped);
       })
       .catch(console.error);
+    api.get(`/t/${slug}/settings`)
+      .then(({ data }) => setSiteSettings(data))
+      .catch(() => {});
   }, [slug]);
 
   // Load slots when date changes
@@ -809,6 +819,58 @@ export default function BookingFlow() {
               </Box>
             </CardContent>
           </Card>
+
+          {hasPolicies && (
+            <Box mt={2}>
+              <Accordion variant="outlined" disableGutters sx={{ mb: 1 }}>
+                <AccordionSummary expandIcon={<ExpandMore />}>
+                  <Typography variant="body2" fontWeight={500} display="flex" alignItems="center" gap={0.5}>
+                    <Gavel fontSize="small" /> View Policies
+                  </Typography>
+                </AccordionSummary>
+                <AccordionDetails sx={{ pt: 0 }}>
+                  {siteSettings.policy_cancellation && (
+                    <Box mb={2}>
+                      <Typography variant="subtitle2" fontWeight={600}>Cancellation Policy</Typography>
+                      <Typography variant="body2" color="text.secondary" whiteSpace="pre-line">{siteSettings.policy_cancellation}</Typography>
+                    </Box>
+                  )}
+                  {siteSettings.policy_noshow && (
+                    <Box mb={2}>
+                      <Typography variant="subtitle2" fontWeight={600}>No-Show Policy</Typography>
+                      <Typography variant="body2" color="text.secondary" whiteSpace="pre-line">{siteSettings.policy_noshow}</Typography>
+                    </Box>
+                  )}
+                  {siteSettings.policy_privacy && (
+                    <Box mb={2}>
+                      <Typography variant="subtitle2" fontWeight={600}>Privacy Policy</Typography>
+                      <Typography variant="body2" color="text.secondary" whiteSpace="pre-line">{siteSettings.policy_privacy}</Typography>
+                    </Box>
+                  )}
+                  {siteSettings.policy_terms && (
+                    <Box>
+                      <Typography variant="subtitle2" fontWeight={600}>Terms & Conditions</Typography>
+                      <Typography variant="body2" color="text.secondary" whiteSpace="pre-line">{siteSettings.policy_terms}</Typography>
+                    </Box>
+                  )}
+                </AccordionDetails>
+              </Accordion>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={policyAgreed}
+                    onChange={e => setPolicyAgreed(e.target.checked)}
+                    size="small"
+                  />
+                }
+                label={
+                  <Typography variant="body2">
+                    I have read and agree to the cancellation, no-show, and privacy policies
+                  </Typography>
+                }
+              />
+            </Box>
+          )}
         </Box>
       )}
 
@@ -836,7 +898,7 @@ export default function BookingFlow() {
           <Button
             variant="contained"
             onClick={handleSubmit}
-            disabled={submitting}
+            disabled={submitting || (hasPolicies && !policyAgreed)}
             sx={{ minHeight: 44 }}
           >
             {submitting ? 'Submitting...' : 'Confirm Booking'}

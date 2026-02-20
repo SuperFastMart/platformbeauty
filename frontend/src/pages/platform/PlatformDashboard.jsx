@@ -37,7 +37,7 @@ export default function PlatformDashboard() {
     { label: 'Total Tenants', value: stats?.total_tenants || 0, icon: <Business fontSize="large" />, color: '#8B2635' },
     { label: 'Active (30d)', value: stats?.active_tenants || 0, icon: <People fontSize="large" />, color: '#1976d2' },
     { label: 'Total Bookings', value: stats?.total_bookings || 0, icon: <CalendarMonth fontSize="large" />, color: '#2e7d32' },
-    { label: 'Total Revenue', value: `£${((stats?.total_revenue || 0) / 100).toFixed(2)}`, icon: <AttachMoney fontSize="large" />, color: '#D4A853' },
+    { label: 'Total Revenue', value: `£${parseFloat(stats?.total_revenue || 0).toFixed(2)}`, icon: <AttachMoney fontSize="large" />, color: '#D4A853' },
     { label: 'New This Month', value: stats?.new_this_month || 0, icon: <TrendingUp fontSize="large" />, color: '#7b1fa2' },
   ];
 

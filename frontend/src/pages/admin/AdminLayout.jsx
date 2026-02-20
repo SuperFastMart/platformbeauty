@@ -9,9 +9,11 @@ import {
   Dashboard as DashboardIcon, ContentCut, CalendarMonth,
   Schedule, Logout, People, AddCircle, Settings as SettingsIcon,
   Loyalty as LoyaltyIcon, LocalOffer, Assessment,
-  Chat, StarBorder, Menu as MenuIcon, SupportAgent
+  Chat, StarBorder, Menu as MenuIcon, SupportAgent,
+  DarkMode, LightMode
 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
+import { useThemeMode } from '../../contexts/ThemeContext';
 
 const DRAWER_WIDTH = 240;
 
@@ -33,6 +35,7 @@ const navItems = [
 
 export default function AdminLayout() {
   const { user, logout, exitImpersonation, isImpersonating } = useAuth();
+  const { mode, toggleTheme } = useThemeMode();
   const navigate = useNavigate();
   const location = useLocation();
   const theme = useTheme();
@@ -99,6 +102,9 @@ export default function AdminLayout() {
               onClick={() => window.open(`/t/${user.tenantSlug}`, '_blank')}
             />
           )}
+          <IconButton color="inherit" onClick={toggleTheme} sx={{ mr: 1 }}>
+            {mode === 'dark' ? <LightMode /> : <DarkMode />}
+          </IconButton>
           <Button color="inherit" startIcon={<Logout />} onClick={handleLogout}>
             {isMobile ? '' : 'Logout'}
           </Button>

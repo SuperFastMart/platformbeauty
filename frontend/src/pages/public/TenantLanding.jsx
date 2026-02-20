@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Box, Typography, Card, CardContent, Button, Checkbox, Chip, Divider, Container,
-  Rating, Grid
+  Rating, Grid, Accordion, AccordionSummary, AccordionDetails
 } from '@mui/material';
-import { AccessTime, Schedule, Star, Place } from '@mui/icons-material';
+import { AccessTime, Schedule, Star, Place, Gavel, ExpandMore } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import api from '../../api/client';
 import { useTenant } from './TenantPublicLayout';
@@ -56,15 +56,52 @@ export default function TenantLanding() {
 
   const businessHours = siteSettings.business_hours;
 
+  // Load custom Google Font if set
+  useEffect(() => {
+    const font = siteSettings.header_font;
+    if (font && font !== 'Inter' && (!siteSettings.header_display || siteSettings.header_display === 'text')) {
+      const linkId = 'custom-header-font';
+      if (!document.getElementById(linkId)) {
+        const link = document.createElement('link');
+        link.id = linkId;
+        link.rel = 'stylesheet';
+        link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(font)}:wght@400;700&display=swap`;
+        document.head.appendChild(link);
+      }
+    }
+  }, [siteSettings.header_font, siteSettings.header_display]);
+
   if (loading) return <Box p={4}><Typography>Loading...</Typography></Box>;
 
   return (
     <Container maxWidth="md" sx={{ py: 4 }}>
       {/* Header */}
       <Box textAlign="center" mb={4}>
-        <Typography variant="h4" fontWeight={700} gutterBottom>
-          {tenant?.name}
-        </Typography>
+        {siteSettings.header_display === 'logo' && siteSettings.header_logo_url ? (
+          <Box
+            component="img"
+            src={siteSettings.header_logo_url}
+            alt={tenant?.name}
+            sx={{
+              maxHeight: 100,
+              maxWidth: '80%',
+              objectFit: 'contain',
+              mb: 1,
+            }}
+          />
+        ) : (
+          <Typography
+            variant="h4"
+            fontWeight={700}
+            gutterBottom
+            sx={siteSettings.header_font && siteSettings.header_font !== 'Inter'
+              ? { fontFamily: `"${siteSettings.header_font}", serif`, fontSize: '2.4rem' }
+              : {}
+            }
+          >
+            {tenant?.name}
+          </Typography>
+        )}
         {tenant?.business_phone && (
           <Typography color="text.secondary">{tenant.business_phone}</Typography>
         )}
@@ -118,24 +155,37 @@ export default function TenantLanding() {
             </>
           )}
 
-          {/* Google Maps embed */}
-          {siteSettings.about_show_map && siteSettings.about_map_embed_url && (
-            <Box mt={3}>
-              <Typography variant="subtitle2" fontWeight={600} mb={1} display="flex" alignItems="center" gap={0.5}>
-                <Place fontSize="small" /> Find Us
-              </Typography>
-              <Box
-                component="iframe"
-                src={siteSettings.about_map_embed_url}
-                width="100%"
-                height="300"
-                sx={{ border: 0, borderRadius: 3 }}
-                allowFullScreen
-                loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
-              />
-            </Box>
-          )}
+          {/* Map embed */}
+          {siteSettings.about_show_map && (siteSettings.about_map_embed_url || tenant?.business_address) && (() => {
+            const mapSrc = siteSettings.about_map_embed_url
+              || `https://www.openstreetmap.org/export/embed.html?bbox=-180,-90,180,90&layer=mapnik&marker=0,0`;
+            const address = tenant?.business_address;
+            const osmSearchUrl = address
+              ? `https://www.openstreetmap.org/export/embed.html?bbox=-180,-90,180,90&layer=mapnik`
+              : null;
+            // Use Google Maps embed search if no custom URL and address exists
+            const autoMapUrl = address && !siteSettings.about_map_embed_url
+              ? `https://maps.google.com/maps?q=${encodeURIComponent(address)}&output=embed`
+              : siteSettings.about_map_embed_url;
+
+            return autoMapUrl ? (
+              <Box mt={3}>
+                <Typography variant="subtitle2" fontWeight={600} mb={1} display="flex" alignItems="center" gap={0.5}>
+                  <Place fontSize="small" /> Find Us
+                </Typography>
+                <Box
+                  component="iframe"
+                  src={autoMapUrl}
+                  width="100%"
+                  height="300"
+                  sx={{ border: 0, borderRadius: 3 }}
+                  allowFullScreen
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
+                />
+              </Box>
+            ) : null;
+          })()}
 
           <Divider sx={{ mt: 3 }} />
         </Box>
@@ -253,6 +303,88 @@ export default function TenantLanding() {
               </Grid>
             ))}
           </Grid>
+        </Box>
+      )}
+
+      {/* Social Media Embeds */}
+      {siteSettings.social_embeds?.filter(e => e.visible !== false && e.code).length > 0 && (
+        <Box mb={4}>
+          <Divider sx={{ mb: 3 }} />
+          {siteSettings.social_embeds
+            .filter(e => e.visible !== false && e.code)
+            .map((embed, idx) => (
+              <Box key={idx} mb={3}>
+                {embed.label && (
+                  <Typography variant="h6" fontWeight={600} mb={2}>{embed.label}</Typography>
+                )}
+                <Box
+                  sx={{
+                    '& iframe': { maxWidth: '100%', borderRadius: 2 },
+                    '& img': { maxWidth: '100%', borderRadius: 2 },
+                    overflow: 'hidden',
+                  }}
+                  dangerouslySetInnerHTML={{ __html: embed.code }}
+                />
+              </Box>
+            ))}
+        </Box>
+      )}
+
+      {/* Policies Section */}
+      {(siteSettings.policy_cancellation || siteSettings.policy_noshow || siteSettings.policy_privacy || siteSettings.policy_terms) && (
+        <Box mb={4}>
+          <Divider sx={{ mb: 3 }} />
+          <Typography variant="h6" fontWeight={600} mb={2} display="flex" alignItems="center" gap={1}>
+            <Gavel fontSize="small" /> Our Policies
+          </Typography>
+          {siteSettings.policy_cancellation && (
+            <Accordion variant="outlined" disableGutters sx={{ mb: 1 }}>
+              <AccordionSummary expandIcon={<ExpandMore />}>
+                <Typography fontWeight={500}>Cancellation Policy</Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Typography variant="body2" color="text.secondary" whiteSpace="pre-line">
+                  {siteSettings.policy_cancellation}
+                </Typography>
+              </AccordionDetails>
+            </Accordion>
+          )}
+          {siteSettings.policy_noshow && (
+            <Accordion variant="outlined" disableGutters sx={{ mb: 1 }}>
+              <AccordionSummary expandIcon={<ExpandMore />}>
+                <Typography fontWeight={500}>No-Show Policy</Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Typography variant="body2" color="text.secondary" whiteSpace="pre-line">
+                  {siteSettings.policy_noshow}
+                </Typography>
+              </AccordionDetails>
+            </Accordion>
+          )}
+          {siteSettings.policy_privacy && (
+            <Accordion variant="outlined" disableGutters sx={{ mb: 1 }}>
+              <AccordionSummary expandIcon={<ExpandMore />}>
+                <Typography fontWeight={500}>Privacy Policy</Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Typography variant="body2" color="text.secondary" whiteSpace="pre-line">
+                  {siteSettings.policy_privacy}
+                </Typography>
+              </AccordionDetails>
+            </Accordion>
+          )}
+          {siteSettings.policy_terms && (
+            <Accordion variant="outlined" disableGutters>
+              <AccordionSummary expandIcon={<ExpandMore />}>
+                <Typography fontWeight={500}>Terms &amp; Conditions</Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Typography variant="body2" color="text.secondary" whiteSpace="pre-line">
+                  {siteSettings.policy_terms}
+                </Typography>
+              </AccordionDetails>
+            </Accordion>
+          )}
         </Box>
       )}
 

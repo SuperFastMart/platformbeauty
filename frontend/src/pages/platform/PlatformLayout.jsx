@@ -7,11 +7,12 @@ import {
 } from '@mui/material';
 import {
   Dashboard, Business, SupportAgent, Logout, Notifications,
-  FiberNew, DoneAll
+  FiberNew, DoneAll, DarkMode, LightMode
 } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { useAuth } from '../../contexts/AuthContext';
+import { useThemeMode } from '../../contexts/ThemeContext';
 import api from '../../api/client';
 
 dayjs.extend(relativeTime);
@@ -26,6 +27,7 @@ const navItems = [
 
 export default function PlatformLayout() {
   const { logout } = useAuth();
+  const { mode, toggleTheme } = useThemeMode();
   const navigate = useNavigate();
   const location = useLocation();
   const [anchorEl, setAnchorEl] = useState(null);
@@ -77,6 +79,9 @@ export default function PlatformLayout() {
             <Badge badgeContent={unreadCount} color="error">
               <Notifications />
             </Badge>
+          </IconButton>
+          <IconButton color="inherit" onClick={toggleTheme} sx={{ mr: 1 }}>
+            {mode === 'dark' ? <LightMode /> : <DarkMode />}
           </IconButton>
           <Button color="inherit" startIcon={<Logout />} onClick={handleLogout}>
             Logout

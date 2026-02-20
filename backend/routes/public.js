@@ -160,7 +160,8 @@ router.get('/next-available', asyncHandler(async (req, res) => {
 }));
 
 // POST /api/t/:tenant/bookings - create a booking
-router.post('/bookings', asyncHandler(async (req, res) => {
+const { bookingLimiter } = require('../middleware/rateLimit');
+router.post('/bookings', bookingLimiter, asyncHandler(async (req, res) => {
   const { customerName, customerEmail, customerPhone, serviceIds, date, startTime, notes, discountCode } = req.body;
 
   if (!customerName || !customerEmail || !serviceIds?.length || !date || !startTime) {

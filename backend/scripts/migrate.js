@@ -561,6 +561,13 @@ const migrations = [
     `
   },
 
+  {
+    name: '036_alter_tenant_users_last_login',
+    sql: `
+      ALTER TABLE tenant_users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP;
+    `
+  },
+
   // ============================================
   // MIGRATION TRACKING
   // ============================================

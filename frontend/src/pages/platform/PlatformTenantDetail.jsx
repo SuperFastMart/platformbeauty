@@ -16,14 +16,15 @@ export default function PlatformTenantDetail() {
   const { startImpersonation } = useAuth();
   const [tenant, setTenant] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [deleteDialog, setDeleteDialog] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
 
   const fetchTenant = () => {
     api.get(`/platform/tenants/${id}/detail`)
-      .then(({ data }) => setTenant(data))
-      .catch(() => navigate('/platform/tenants'))
+      .then(({ data }) => { setTenant(data); setError(null); })
+      .catch((err) => setError(err.response?.data?.error || 'Failed to load tenant'))
       .finally(() => setLoading(false));
   };
 
@@ -71,6 +72,14 @@ export default function PlatformTenantDetail() {
   };
 
   if (loading) return <Box display="flex" justifyContent="center" py={6}><CircularProgress /></Box>;
+  if (error) return (
+    <Box>
+      <Button startIcon={<ArrowBack />} onClick={() => navigate('/platform/tenants')} sx={{ mb: 2 }}>
+        Back to Tenants
+      </Button>
+      <Alert severity="error">{error}</Alert>
+    </Box>
+  );
   if (!tenant) return null;
 
   return (
@@ -144,7 +153,7 @@ export default function PlatformTenantDetail() {
           { label: 'Customers', value: tenant.customer_count || 0, color: '#1976d2' },
           { label: 'Bookings (30d)', value: tenant.booking_count || 0, color: '#2e7d32' },
           { label: 'Services', value: tenant.service_count || 0, color: '#7b1fa2' },
-          { label: 'Revenue (30d)', value: `£${((tenant.revenue || 0) / 100).toFixed(2)}`, color: '#D4A853' },
+          { label: 'Revenue (30d)', value: `£${parseFloat(tenant.revenue || 0).toFixed(2)}`, color: '#D4A853' },
         ].map(s => (
           <Grid item xs={6} sm={3} key={s.label}>
             <Card sx={{ borderTop: `3px solid ${s.color}` }}>

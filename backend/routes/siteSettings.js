@@ -80,6 +80,9 @@ publicRouter.get('/', asyncHandler(async (req, res) => {
     'contact_phone', 'contact_email', 'contact_address',
     'category_order',
     'about_profile_image_url', 'about_show_map', 'about_map_embed_url',
+    'social_embeds',
+    'header_display', 'header_font', 'header_logo_url',
+    'policy_cancellation', 'policy_noshow', 'policy_privacy', 'policy_terms',
   ];
 
   const placeholders = publicKeys.map((_, i) => `$${i + 2}`).join(',');

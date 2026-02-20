@@ -11,15 +11,37 @@ export default function TenantPublicLayout() {
   const { slug } = useParams();
   const navigate = useNavigate();
   const [tenant, setTenant] = useState(null);
+  const [siteSettings, setSiteSettings] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    api.get(`/t/${slug}/`)
-      .then(({ data }) => setTenant(data))
+    Promise.all([
+      api.get(`/t/${slug}/`),
+      api.get(`/t/${slug}/settings`).catch(() => ({ data: {} })),
+    ])
+      .then(([tenantRes, settingsRes]) => {
+        setTenant(tenantRes.data);
+        setSiteSettings(settingsRes.data);
+      })
       .catch(() => setError(true))
       .finally(() => setLoading(false));
   }, [slug]);
+
+  // Load custom Google Font for AppBar
+  useEffect(() => {
+    const font = siteSettings.header_font;
+    if (font && font !== 'Inter' && (!siteSettings.header_display || siteSettings.header_display === 'text')) {
+      const linkId = 'custom-header-font';
+      if (!document.getElementById(linkId)) {
+        const link = document.createElement('link');
+        link.id = linkId;
+        link.rel = 'stylesheet';
+        link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(font)}:wght@400;700&display=swap`;
+        document.head.appendChild(link);
+      }
+    }
+  }, [siteSettings.header_font, siteSettings.header_display]);
 
   if (loading) {
     return (
@@ -68,13 +90,33 @@ export default function TenantPublicLayout() {
         <Box minHeight="100vh" bgcolor="background.default">
           <AppBar position="static" elevation={0}>
             <Toolbar>
-              {tenant.logo_url && (
-                <Box component="img" src={tenant.logo_url} alt={tenant.name}
-                  sx={{ height: 36, mr: 2, borderRadius: 1 }} />
+              {siteSettings.header_display === 'logo' && siteSettings.header_logo_url ? (
+                <Box
+                  component="img"
+                  src={siteSettings.header_logo_url}
+                  alt={tenant.name}
+                  sx={{ height: 40, maxWidth: 200, objectFit: 'contain', mr: 2, flexGrow: 1, objectPosition: 'left' }}
+                />
+              ) : (
+                <>
+                  {tenant.logo_url && (
+                    <Box component="img" src={tenant.logo_url} alt={tenant.name}
+                      sx={{ height: 36, mr: 2, borderRadius: 1 }} />
+                  )}
+                  <Typography
+                    variant="h6"
+                    fontWeight={600}
+                    sx={{
+                      flexGrow: 1,
+                      ...(siteSettings.header_font && siteSettings.header_font !== 'Inter'
+                        ? { fontFamily: `"${siteSettings.header_font}", serif` }
+                        : {}),
+                    }}
+                  >
+                    {tenant.name}
+                  </Typography>
+                </>
               )}
-              <Typography variant="h6" fontWeight={600} sx={{ flexGrow: 1 }}>
-                {tenant.name}
-              </Typography>
               <Button
                 color="inherit" size="small" startIcon={<Person />}
                 onClick={() => {
