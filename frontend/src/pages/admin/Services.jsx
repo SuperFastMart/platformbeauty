@@ -19,6 +19,7 @@ export default function Services() {
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [categoryOrder, setCategoryOrder] = useState([]);
   const [orderChanged, setOrderChanged] = useState(false);
+  const [newCategoryMode, setNewCategoryMode] = useState(false);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
@@ -51,6 +52,7 @@ export default function Services() {
       setEditing(null);
       setForm(emptyService);
     }
+    setNewCategoryMode(false);
     setDialogOpen(true);
   };
 
@@ -293,27 +295,48 @@ export default function Services() {
               value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))}
             />
           </Box>
-          <TextField
-            fullWidth select label="Category" margin="normal"
-            value={form.category}
-            onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
-            helperText="Select an existing category or type a new one"
-            SelectProps={{ native: false }}
-          >
-            {existingCategories.map(cat => (
-              <MenuItem key={cat} value={cat}>{cat}</MenuItem>
-            ))}
-            <Divider />
-            <MenuItem value="" sx={{ fontStyle: 'italic', color: 'text.secondary' }}>
-              Type a new category below...
-            </MenuItem>
-          </TextField>
-          {form.category === '' && (
+          {!newCategoryMode ? (
             <TextField
-              fullWidth label="New Category Name" margin="normal"
-              onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
-              placeholder="e.g. Nails, Hair Cuts, Semi Perm Makeup"
-            />
+              fullWidth select label="Category" margin="normal"
+              value={form.category}
+              onChange={e => {
+                if (e.target.value === '__new__') {
+                  setNewCategoryMode(true);
+                  setForm(f => ({ ...f, category: '' }));
+                } else {
+                  setForm(f => ({ ...f, category: e.target.value }));
+                }
+              }}
+              helperText="Select an existing category or create a new one"
+              SelectProps={{ native: false }}
+            >
+              {existingCategories.map(cat => (
+                <MenuItem key={cat} value={cat}>{cat}</MenuItem>
+              ))}
+              <Divider />
+              <MenuItem value="__new__" sx={{ fontStyle: 'italic', color: 'text.secondary' }}>
+                + Create new category...
+              </MenuItem>
+            </TextField>
+          ) : (
+            <Box display="flex" gap={1} alignItems="flex-start">
+              <TextField
+                fullWidth label="New Category Name" margin="normal"
+                value={form.category}
+                onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
+                placeholder="e.g. Nails, Hair Cuts, Semi Perm Makeup"
+                autoFocus
+              />
+              <Button
+                size="small" sx={{ mt: 2.5 }}
+                onClick={() => {
+                  setNewCategoryMode(false);
+                  if (!form.category) setForm(f => ({ ...f, category: existingCategories[0] || '' }));
+                }}
+              >
+                Cancel
+              </Button>
+            </Box>
           )}
           <TextField
             label="Display Order" type="number" margin="normal"
