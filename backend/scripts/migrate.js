@@ -433,6 +433,49 @@ const migrations = [
   },
 
   // ============================================
+  // SPRINT 4: Messages + Site Settings + Reviews Enhancements
+  // ============================================
+  {
+    name: '029_create_messages',
+    sql: `
+      CREATE TABLE IF NOT EXISTS messages (
+        id SERIAL PRIMARY KEY,
+        tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+        customer_id INTEGER NOT NULL REFERENCES customers(id),
+        booking_id INTEGER,
+        direction VARCHAR(20) NOT NULL,
+        subject VARCHAR(500),
+        body TEXT NOT NULL,
+        sent_via VARCHAR(20) DEFAULT 'email',
+        read_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `
+  },
+  {
+    name: '030_create_message_templates',
+    sql: `
+      CREATE TABLE IF NOT EXISTS message_templates (
+        id SERIAL PRIMARY KEY,
+        tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+        name VARCHAR(255) NOT NULL,
+        subject VARCHAR(500),
+        body TEXT NOT NULL,
+        category VARCHAR(100),
+        active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `
+  },
+  {
+    name: '031_alter_slot_exceptions_unique',
+    sql: `
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_slot_exceptions_unique
+      ON slot_exceptions (tenant_id, date)
+    `
+  },
+
+  // ============================================
   // MIGRATION TRACKING
   // ============================================
   {

@@ -6,7 +6,8 @@ import {
 import {
   Dashboard as DashboardIcon, ContentCut, CalendarMonth,
   Schedule, Logout, People, AddCircle, Settings as SettingsIcon,
-  Loyalty as LoyaltyIcon, LocalOffer, Assessment
+  Loyalty as LoyaltyIcon, LocalOffer, Assessment,
+  Chat, StarBorder
 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -22,6 +23,8 @@ const navItems = [
   { label: 'Loyalty', path: '/admin/loyalty', icon: <LoyaltyIcon /> },
   { label: 'Discount Codes', path: '/admin/discount-codes', icon: <LocalOffer /> },
   { label: 'Reports', path: '/admin/reports', icon: <Assessment /> },
+  { label: 'Messages', path: '/admin/messages', icon: <Chat /> },
+  { label: 'Reviews', path: '/admin/reviews', icon: <StarBorder /> },
   { label: 'Settings', path: '/admin/settings', icon: <SettingsIcon /> },
 ];
 

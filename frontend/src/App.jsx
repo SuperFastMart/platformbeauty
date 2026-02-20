@@ -22,6 +22,8 @@ import Settings from './pages/admin/Settings';
 import Loyalty from './pages/admin/Loyalty';
 import DiscountCodes from './pages/admin/DiscountCodes';
 import Reports from './pages/admin/Reports';
+import Messages from './pages/admin/Messages';
+import ReviewsManagement from './pages/admin/ReviewsManagement';
 
 // Public booking
 import TenantPublicLayout from './pages/public/TenantPublicLayout';
@@ -72,6 +74,8 @@ export default function App() {
         <Route path="loyalty" element={<Loyalty />} />
         <Route path="discount-codes" element={<DiscountCodes />} />
         <Route path="reports" element={<Reports />} />
+        <Route path="messages" element={<Messages />} />
+        <Route path="reviews" element={<ReviewsManagement />} />
       </Route>
 
       {/* Public booking */}

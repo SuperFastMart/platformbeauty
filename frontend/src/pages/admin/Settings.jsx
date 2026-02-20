@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import {
   Box, Typography, Card, CardContent, TextField, Button, Tabs, Tab,
-  Snackbar, Alert, CircularProgress, InputAdornment, Chip
+  Snackbar, Alert, CircularProgress, InputAdornment, Chip, Switch, FormControlLabel, Grid
 } from '@mui/material';
-import { Save, CreditCard, Store, Palette } from '@mui/icons-material';
+import { Save, CreditCard, Store, Palette, Info, Schedule } from '@mui/icons-material';
 import api from '../../api/client';
 
 function TabPanel({ children, value, index }) {
@@ -30,9 +30,36 @@ export default function Settings() {
     subscription_status: '',
   });
 
+  // Site settings (stored in tenant_settings table)
+  const defaultHours = {
+    monday: { open: '09:00', close: '17:00', closed: false },
+    tuesday: { open: '09:00', close: '17:00', closed: false },
+    wednesday: { open: '09:00', close: '17:00', closed: false },
+    thursday: { open: '09:00', close: '17:00', closed: false },
+    friday: { open: '09:00', close: '17:00', closed: false },
+    saturday: { open: '09:00', close: '15:00', closed: false },
+    sunday: { open: '09:00', close: '15:00', closed: true },
+  };
+
+  const [siteSettings, setSiteSettings] = useState({
+    about_title: '',
+    about_text: '',
+    business_hours: defaultHours,
+  });
+
   useEffect(() => {
-    api.get('/admin/settings')
-      .then(({ data }) => setSettings(s => ({ ...s, ...data, stripe_secret_key: '' })))
+    Promise.all([
+      api.get('/admin/settings'),
+      api.get('/admin/site-settings'),
+    ])
+      .then(([settingsRes, siteRes]) => {
+        setSettings(s => ({ ...s, ...settingsRes.data, stripe_secret_key: '' }));
+        setSiteSettings(prev => ({
+          ...prev,
+          ...siteRes.data,
+          business_hours: siteRes.data.business_hours || defaultHours,
+        }));
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
@@ -55,6 +82,10 @@ export default function Settings() {
       delete payload.subscription_status;
 
       await api.put('/admin/settings', payload);
+
+      // Save site settings too
+      await api.put('/admin/site-settings', siteSettings);
+
       setSnackbar({ open: true, message: 'Settings saved', severity: 'success' });
 
       // Refresh to get updated masked values
@@ -80,8 +111,10 @@ export default function Settings() {
         </Button>
       </Box>
 
-      <Tabs value={tab} onChange={(_, v) => setTab(v)}>
+      <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="scrollable" scrollButtons="auto">
         <Tab icon={<Store />} label="Business" iconPosition="start" />
+        <Tab icon={<Info />} label="About" iconPosition="start" />
+        <Tab icon={<Schedule />} label="Hours" iconPosition="start" />
         <Tab icon={<Palette />} label="Branding" iconPosition="start" />
         <Tab icon={<CreditCard />} label="Payments" iconPosition="start" />
       </Tabs>
@@ -101,8 +134,94 @@ export default function Settings() {
         </Card>
       </TabPanel>
 
-      {/* Branding */}
+      {/* About */}
       <TabPanel value={tab} index={1}>
+        <Card>
+          <CardContent>
+            <Typography variant="subtitle1" fontWeight={600} mb={2}>Public About Section</Typography>
+            <Typography variant="body2" color="text.secondary" mb={2}>
+              This content appears on your public booking page for customers to see.
+            </Typography>
+            <TextField fullWidth label="About Title" margin="normal"
+              value={siteSettings.about_title || ''}
+              onChange={e => setSiteSettings(s => ({ ...s, about_title: e.target.value }))}
+              placeholder="e.g. Welcome to Studio Jen" />
+            <TextField fullWidth label="About Text" margin="normal" multiline rows={4}
+              value={siteSettings.about_text || ''}
+              onChange={e => setSiteSettings(s => ({ ...s, about_text: e.target.value }))}
+              placeholder="Tell your customers about your business..." />
+          </CardContent>
+        </Card>
+      </TabPanel>
+
+      {/* Hours */}
+      <TabPanel value={tab} index={2}>
+        <Card>
+          <CardContent>
+            <Typography variant="subtitle1" fontWeight={600} mb={2}>Business Hours</Typography>
+            <Typography variant="body2" color="text.secondary" mb={2}>
+              Displayed on your public booking page. These are for display only and don't affect slot availability.
+            </Typography>
+            {Object.entries(siteSettings.business_hours || defaultHours).map(([day, hours]) => (
+              <Box key={day} display="flex" alignItems="center" gap={2} mb={1.5}>
+                <Typography sx={{ width: 100, textTransform: 'capitalize' }} fontWeight={500}>
+                  {day}
+                </Typography>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={!hours.closed}
+                      onChange={(e) => setSiteSettings(s => ({
+                        ...s,
+                        business_hours: {
+                          ...s.business_hours,
+                          [day]: { ...hours, closed: !e.target.checked },
+                        },
+                      }))}
+                      size="small"
+                    />
+                  }
+                  label={hours.closed ? 'Closed' : 'Open'}
+                  sx={{ minWidth: 90 }}
+                />
+                {!hours.closed && (
+                  <>
+                    <TextField
+                      type="time" size="small" label="Open"
+                      value={hours.open}
+                      onChange={(e) => setSiteSettings(s => ({
+                        ...s,
+                        business_hours: {
+                          ...s.business_hours,
+                          [day]: { ...hours, open: e.target.value },
+                        },
+                      }))}
+                      InputLabelProps={{ shrink: true }}
+                      sx={{ width: 140 }}
+                    />
+                    <TextField
+                      type="time" size="small" label="Close"
+                      value={hours.close}
+                      onChange={(e) => setSiteSettings(s => ({
+                        ...s,
+                        business_hours: {
+                          ...s.business_hours,
+                          [day]: { ...hours, close: e.target.value },
+                        },
+                      }))}
+                      InputLabelProps={{ shrink: true }}
+                      sx={{ width: 140 }}
+                    />
+                  </>
+                )}
+              </Box>
+            ))}
+          </CardContent>
+        </Card>
+      </TabPanel>
+
+      {/* Branding */}
+      <TabPanel value={tab} index={3}>
         <Card>
           <CardContent>
             <Typography variant="subtitle1" fontWeight={600} mb={2}>Branding</Typography>
@@ -131,7 +250,7 @@ export default function Settings() {
       </TabPanel>
 
       {/* Payments / Stripe */}
-      <TabPanel value={tab} index={2}>
+      <TabPanel value={tab} index={4}>
         <Card>
           <CardContent>
             <Typography variant="subtitle1" fontWeight={600} mb={1}>Stripe Integration</Typography>

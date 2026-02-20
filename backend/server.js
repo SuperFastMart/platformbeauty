@@ -56,6 +56,18 @@ app.use('/api/t/:tenant/discount', discountCodePublicRoutes);
 const reportsRoutes = require('./routes/reports');
 app.use('/api/admin/reports', reportsRoutes);
 
+// --- Sprint 4: Messages, Site Settings, Reviews ---
+const messagesRoutes = require('./routes/messages');
+app.use('/api/admin/messages', messagesRoutes);
+
+const { adminRouter: siteSettingsAdminRoutes, publicRouter: siteSettingsPublicRoutes } = require('./routes/siteSettings');
+app.use('/api/admin/site-settings', siteSettingsAdminRoutes);
+app.use('/api/t/:tenant/settings', siteSettingsPublicRoutes);
+
+const { adminRouter: reviewsAdminRoutes, publicRouter: reviewsPublicRoutes } = require('./routes/reviews');
+app.use('/api/admin/reviews', reviewsAdminRoutes);
+app.use('/api/t/:tenant/reviews', reviewsPublicRoutes);
+
 // Serve frontend for all non-API routes in production
 if (process.env.NODE_ENV === 'production') {
   app.get('*', (req, res) => {

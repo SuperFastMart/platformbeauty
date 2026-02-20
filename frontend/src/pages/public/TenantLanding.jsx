@@ -1,11 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
-  Box, Typography, Card, CardContent, Button, Checkbox, Chip, Divider, Container
+  Box, Typography, Card, CardContent, Button, Checkbox, Chip, Divider, Container,
+  Rating, Grid
 } from '@mui/material';
-import { AccessTime, AttachMoney } from '@mui/icons-material';
+import { AccessTime, Schedule, Star } from '@mui/icons-material';
+import dayjs from 'dayjs';
 import api from '../../api/client';
 import { useTenant } from './TenantPublicLayout';
+
+const DAY_ORDER = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
 export default function TenantLanding() {
   const { slug } = useParams();
@@ -15,12 +19,22 @@ export default function TenantLanding() {
   const [allServices, setAllServices] = useState([]);
   const [selected, setSelected] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [siteSettings, setSiteSettings] = useState({});
+  const [reviews, setReviews] = useState([]);
+  const [reviewStats, setReviewStats] = useState(null);
 
   useEffect(() => {
-    api.get(`/t/${slug}/services`)
-      .then(({ data }) => {
-        setServices(data.grouped);
-        setAllServices(data.services);
+    Promise.all([
+      api.get(`/t/${slug}/services`),
+      api.get(`/t/${slug}/settings`).catch(() => ({ data: {} })),
+      api.get(`/t/${slug}/reviews`).catch(() => ({ data: { reviews: [], stats: null } })),
+    ])
+      .then(([servicesRes, settingsRes, reviewsRes]) => {
+        setServices(servicesRes.data.grouped);
+        setAllServices(servicesRes.data.services);
+        setSiteSettings(settingsRes.data);
+        setReviews(reviewsRes.data.reviews || []);
+        setReviewStats(reviewsRes.data.stats || null);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -40,7 +54,9 @@ export default function TenantLanding() {
     navigate(`/t/${slug}/book`, { state: { selectedServiceIds: selected } });
   };
 
-  if (loading) return <Box p={4}><Typography>Loading services...</Typography></Box>;
+  const businessHours = siteSettings.business_hours;
+
+  if (loading) return <Box p={4}><Typography>Loading...</Typography></Box>;
 
   return (
     <Container maxWidth="md" sx={{ py: 4 }}>
@@ -52,12 +68,67 @@ export default function TenantLanding() {
         {tenant?.business_phone && (
           <Typography color="text.secondary">{tenant.business_phone}</Typography>
         )}
+        {reviewStats && reviewStats.total > 0 && (
+          <Box display="flex" justifyContent="center" alignItems="center" gap={1} mt={1}>
+            <Rating value={reviewStats.average_rating} precision={0.1} readOnly size="small" />
+            <Typography variant="body2" color="text.secondary">
+              {reviewStats.average_rating} ({reviewStats.total} review{reviewStats.total !== 1 ? 's' : ''})
+            </Typography>
+          </Box>
+        )}
       </Box>
 
+      {/* About Section */}
+      {(siteSettings.about_title || siteSettings.about_text) && (
+        <Box mb={4}>
+          {siteSettings.about_title && (
+            <Typography variant="h6" fontWeight={600} mb={1}>{siteSettings.about_title}</Typography>
+          )}
+          {siteSettings.about_text && (
+            <Typography color="text.secondary" whiteSpace="pre-line">{siteSettings.about_text}</Typography>
+          )}
+          <Divider sx={{ mt: 3 }} />
+        </Box>
+      )}
+
+      {/* Business Hours */}
+      {businessHours && (
+        <Box mb={4}>
+          <Typography variant="h6" fontWeight={600} mb={2} display="flex" alignItems="center" gap={1}>
+            <Schedule fontSize="small" /> Opening Hours
+          </Typography>
+          <Card variant="outlined">
+            <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+              {DAY_ORDER.map(day => {
+                const hours = businessHours[day];
+                if (!hours) return null;
+                const today = dayjs().format('dddd').toLowerCase() === day;
+                return (
+                  <Box
+                    key={day}
+                    display="flex" justifyContent="space-between" py={0.5}
+                    sx={{ fontWeight: today ? 600 : 400 }}
+                  >
+                    <Typography variant="body2" sx={{ fontWeight: 'inherit', textTransform: 'capitalize' }}>
+                      {day}
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 'inherit' }} color={hours.closed ? 'text.secondary' : 'text.primary'}>
+                      {hours.closed ? 'Closed' : `${hours.open} – ${hours.close}`}
+                    </Typography>
+                  </Box>
+                );
+              })}
+            </CardContent>
+          </Card>
+          <Divider sx={{ mt: 3 }} />
+        </Box>
+      )}
+
       {/* Services by category */}
+      <Typography variant="h6" fontWeight={600} mb={2}>Our Services</Typography>
       {Object.entries(services).map(([category, categoryServices]) => (
         <Box key={category} mb={4}>
-          <Typography variant="h6" fontWeight={600} mb={2}>{category}</Typography>
+          <Typography variant="subtitle1" fontWeight={600} mb={1} color="text.secondary">{category}</Typography>
           {categoryServices.map(service => {
             const isSelected = selected.includes(service.id);
             return (
@@ -91,6 +162,49 @@ export default function TenantLanding() {
           })}
         </Box>
       ))}
+
+      {/* Reviews Section */}
+      {reviews.length > 0 && (
+        <Box mb={4}>
+          <Divider sx={{ mb: 3 }} />
+          <Typography variant="h6" fontWeight={600} mb={2} display="flex" alignItems="center" gap={1}>
+            <Star fontSize="small" /> Customer Reviews
+          </Typography>
+          {reviewStats && (
+            <Box display="flex" alignItems="center" gap={2} mb={2}>
+              <Typography variant="h4" fontWeight={700}>{reviewStats.average_rating}</Typography>
+              <Box>
+                <Rating value={reviewStats.average_rating} precision={0.1} readOnly />
+                <Typography variant="body2" color="text.secondary">
+                  Based on {reviewStats.total} review{reviewStats.total !== 1 ? 's' : ''}
+                </Typography>
+              </Box>
+            </Box>
+          )}
+          <Grid container spacing={2}>
+            {reviews.slice(0, 6).map(review => (
+              <Grid item xs={12} sm={6} key={review.id}>
+                <Card variant="outlined">
+                  <CardContent>
+                    <Box display="flex" justifyContent="space-between" alignItems="start" mb={1}>
+                      <Typography fontWeight={600} variant="body2">{review.customer_name}</Typography>
+                      <Rating value={review.rating} readOnly size="small" />
+                    </Box>
+                    {review.comment && (
+                      <Typography variant="body2" color="text.secondary">
+                        {review.comment}
+                      </Typography>
+                    )}
+                    <Typography variant="caption" color="text.secondary" display="block" mt={1}>
+                      {dayjs(review.created_at).format('D MMM YYYY')}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+        </Box>
+      )}
 
       {/* Sticky bottom bar when services selected */}
       {selected.length > 0 && (
