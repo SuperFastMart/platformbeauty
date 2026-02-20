@@ -224,6 +224,30 @@ export default function TenantLanding() {
         </Box>
       )}
 
+      {/* Social Media Embeds */}
+      {siteSettings.social_embeds?.filter(e => e.visible !== false && e.code).length > 0 && (
+        <Box mb={4}>
+          {siteSettings.social_embeds
+            .filter(e => e.visible !== false && e.code)
+            .map((embed, idx) => (
+              <Box key={idx} mb={3}>
+                {embed.label && (
+                  <Typography variant="h6" fontWeight={600} mb={2}>{embed.label}</Typography>
+                )}
+                <Box
+                  sx={{
+                    '& iframe': { maxWidth: '100%', borderRadius: 2 },
+                    '& img': { maxWidth: '100%', borderRadius: 2 },
+                    overflow: 'hidden',
+                  }}
+                  dangerouslySetInnerHTML={{ __html: embed.code }}
+                />
+              </Box>
+            ))}
+          <Divider sx={{ mt: 3 }} />
+        </Box>
+      )}
+
       {/* Services by category */}
       <Typography variant="h6" fontWeight={600} mb={2}>Our Services</Typography>
       {Object.entries(services).map(([category, categoryServices]) => (
@@ -303,30 +327,6 @@ export default function TenantLanding() {
               </Grid>
             ))}
           </Grid>
-        </Box>
-      )}
-
-      {/* Social Media Embeds */}
-      {siteSettings.social_embeds?.filter(e => e.visible !== false && e.code).length > 0 && (
-        <Box mb={4}>
-          <Divider sx={{ mb: 3 }} />
-          {siteSettings.social_embeds
-            .filter(e => e.visible !== false && e.code)
-            .map((embed, idx) => (
-              <Box key={idx} mb={3}>
-                {embed.label && (
-                  <Typography variant="h6" fontWeight={600} mb={2}>{embed.label}</Typography>
-                )}
-                <Box
-                  sx={{
-                    '& iframe': { maxWidth: '100%', borderRadius: 2 },
-                    '& img': { maxWidth: '100%', borderRadius: 2 },
-                    overflow: 'hidden',
-                  }}
-                  dangerouslySetInnerHTML={{ __html: embed.code }}
-                />
-              </Box>
-            ))}
         </Box>
       )}
 
