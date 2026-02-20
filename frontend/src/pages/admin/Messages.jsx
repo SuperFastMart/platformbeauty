@@ -3,15 +3,16 @@ import {
   Box, Typography, Card, CardContent, Grid, List, ListItemButton,
   ListItemText, ListItemAvatar, Avatar, Badge, TextField, Button,
   Dialog, DialogTitle, DialogContent, DialogActions, Chip, Divider,
-  Snackbar, Alert, IconButton, MenuItem
+  Snackbar, Alert, IconButton, Autocomplete, CircularProgress
 } from '@mui/material';
-import { Send, Add, Delete } from '@mui/icons-material';
+import { Send, Add, Delete, PersonAdd } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import api from '../../api/client';
 
 export default function Messages() {
   const [conversations, setConversations] = useState([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState(null);
+  const [selectedCustomerInfo, setSelectedCustomerInfo] = useState(null);
   const [thread, setThread] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [subject, setSubject] = useState('');
@@ -21,6 +22,12 @@ export default function Messages() {
   const [templateForm, setTemplateForm] = useState({ name: '', subject: '', body: '', category: '' });
   const [editingTemplate, setEditingTemplate] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+
+  // New conversation state
+  const [newConvoDialog, setNewConvoDialog] = useState(false);
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [customerResults, setCustomerResults] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
 
   const fetchConversations = () => {
     api.get('/admin/messages/conversations')
@@ -39,9 +46,37 @@ export default function Messages() {
     fetchTemplates();
   }, []);
 
-  const selectCustomer = (customerId) => {
+  // Search customers when typing in new conversation dialog
+  useEffect(() => {
+    if (customerSearch.length < 2) {
+      setCustomerResults([]);
+      return;
+    }
+    setSearchLoading(true);
+    const timeout = setTimeout(() => {
+      api.get(`/admin/customers/search?q=${encodeURIComponent(customerSearch)}`)
+        .then(({ data }) => setCustomerResults(data))
+        .catch(console.error)
+        .finally(() => setSearchLoading(false));
+    }, 300);
+    return () => clearTimeout(timeout);
+  }, [customerSearch]);
+
+  const selectCustomer = (customerId, customerInfo) => {
     setSelectedCustomerId(customerId);
+    if (customerInfo) setSelectedCustomerInfo(customerInfo);
     api.get(`/admin/messages/customer/${customerId}`)
+      .then(({ data }) => setThread(data))
+      .catch(console.error);
+  };
+
+  const handleStartConversation = (customer) => {
+    setNewConvoDialog(false);
+    setCustomerSearch('');
+    setSelectedCustomerId(customer.id);
+    setSelectedCustomerInfo({ name: customer.name, email: customer.email });
+    // Load any existing thread (may be empty)
+    api.get(`/admin/messages/customer/${customer.id}`)
       .then(({ data }) => setThread(data))
       .catch(console.error);
   };
@@ -59,6 +94,7 @@ export default function Messages() {
       setSubject('');
       selectCustomer(selectedCustomerId);
       fetchConversations();
+      setSnackbar({ open: true, message: 'Message sent', severity: 'success' });
     } catch (err) {
       setSnackbar({ open: true, message: err.response?.data?.error || 'Failed to send', severity: 'error' });
     } finally {
@@ -98,13 +134,24 @@ export default function Messages() {
   };
 
   const selectedConversation = conversations.find(c => c.id === selectedCustomerId);
+  const displayName = selectedConversation?.name || selectedCustomerInfo?.name || '';
+  const displayEmail = selectedConversation?.email || selectedCustomerInfo?.email || '';
   const totalUnread = conversations.reduce((sum, c) => sum + parseInt(c.unread_count || 0), 0);
 
   return (
     <Box>
-      <Typography variant="h5" fontWeight={600} mb={3}>
-        Messages {totalUnread > 0 && <Chip label={totalUnread} color="error" size="small" sx={{ ml: 1 }} />}
-      </Typography>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+        <Typography variant="h5" fontWeight={600}>
+          Messages {totalUnread > 0 && <Chip label={totalUnread} color="error" size="small" sx={{ ml: 1 }} />}
+        </Typography>
+        <Button
+          variant="contained"
+          startIcon={<PersonAdd />}
+          onClick={() => { setNewConvoDialog(true); setCustomerSearch(''); setCustomerResults([]); }}
+        >
+          New Message
+        </Button>
+      </Box>
 
       <Grid container spacing={2}>
         {/* Conversations sidebar */}
@@ -113,7 +160,7 @@ export default function Messages() {
             <CardContent sx={{ p: 0 }}>
               {conversations.length === 0 ? (
                 <Box p={3}>
-                  <Typography color="text.secondary">No conversations yet. Messages will appear here once you send one to a customer.</Typography>
+                  <Typography color="text.secondary">No conversations yet. Click "New Message" to send your first message to a customer.</Typography>
                 </Box>
               ) : (
                 <List disablePadding>
@@ -121,7 +168,7 @@ export default function Messages() {
                     <ListItemButton
                       key={c.id}
                       selected={selectedCustomerId === c.id}
-                      onClick={() => selectCustomer(c.id)}
+                      onClick={() => selectCustomer(c.id, c)}
                     >
                       <ListItemAvatar>
                         <Badge badgeContent={parseInt(c.unread_count) || 0} color="error">
@@ -152,19 +199,23 @@ export default function Messages() {
           <Card sx={{ height: 500, display: 'flex', flexDirection: 'column' }}>
             {!selectedCustomerId ? (
               <CardContent sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Typography color="text.secondary">Select a conversation or send a new message from the Customers page</Typography>
+                <Typography color="text.secondary">Select a conversation or click "New Message" to get started</Typography>
               </CardContent>
             ) : (
               <>
                 {/* Header */}
                 <Box px={2} py={1.5} borderBottom={1} borderColor="divider">
-                  <Typography fontWeight={600}>{selectedConversation?.name}</Typography>
-                  <Typography variant="caption" color="text.secondary">{selectedConversation?.email}</Typography>
+                  <Typography fontWeight={600}>{displayName}</Typography>
+                  <Typography variant="caption" color="text.secondary">{displayEmail}</Typography>
                 </Box>
 
                 {/* Messages */}
                 <Box flex={1} overflow="auto" p={2}>
-                  {thread.map(m => (
+                  {thread.length === 0 ? (
+                    <Box display="flex" alignItems="center" justifyContent="center" height="100%">
+                      <Typography color="text.secondary">No messages yet. Send the first message below.</Typography>
+                    </Box>
+                  ) : thread.map(m => (
                     <Box
                       key={m.id}
                       mb={1.5}
@@ -281,6 +332,51 @@ export default function Messages() {
           </Grid>
         )}
       </Box>
+
+      {/* New Conversation Dialog */}
+      <Dialog open={newConvoDialog} onClose={() => setNewConvoDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>New Message</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" mb={2}>
+            Search for a customer to send them a message.
+          </Typography>
+          <TextField
+            fullWidth
+            label="Search customers"
+            placeholder="Type a name, email, or phone..."
+            value={customerSearch}
+            onChange={e => setCustomerSearch(e.target.value)}
+            margin="normal"
+            autoFocus
+            InputProps={{
+              endAdornment: searchLoading ? <CircularProgress size={20} /> : null,
+            }}
+          />
+          {customerResults.length > 0 && (
+            <List sx={{ maxHeight: 300, overflow: 'auto' }}>
+              {customerResults.map(c => (
+                <ListItemButton key={c.id} onClick={() => handleStartConversation(c)}>
+                  <ListItemAvatar>
+                    <Avatar sx={{ width: 32, height: 32, fontSize: '0.85rem' }}>{c.name?.charAt(0)}</Avatar>
+                  </ListItemAvatar>
+                  <ListItemText
+                    primary={c.name}
+                    secondary={c.email}
+                  />
+                </ListItemButton>
+              ))}
+            </List>
+          )}
+          {customerSearch.length >= 2 && !searchLoading && customerResults.length === 0 && (
+            <Typography variant="body2" color="text.secondary" mt={1}>
+              No customers found matching "{customerSearch}"
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setNewConvoDialog(false)}>Cancel</Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Template Dialog */}
       <Dialog open={templateDialog} onClose={() => setTemplateDialog(false)} maxWidth="sm" fullWidth>
