@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react';
 import {
   Box, Typography, Button, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, Paper, Chip, IconButton, Dialog, DialogTitle,
-  DialogContent, DialogActions, TextField, Snackbar, Alert
+  DialogContent, DialogActions, TextField, Snackbar, Alert, Card, CardContent,
+  MenuItem, Divider, useMediaQuery, useTheme
 } from '@mui/material';
-import { Add, Edit, Delete } from '@mui/icons-material';
+import { Add, Edit, Delete, ArrowUpward, ArrowDownward, DragIndicator } from '@mui/icons-material';
 import api from '../../api/client';
 
 const emptyService = { name: '', description: '', duration: 30, price: '', category: '', display_order: 0 };
@@ -16,10 +17,22 @@ export default function Services() {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(emptyService);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const [categoryOrder, setCategoryOrder] = useState([]);
+  const [orderChanged, setOrderChanged] = useState(false);
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   const fetchServices = () => {
-    api.get('/admin/services')
-      .then(({ data }) => setServices(data))
+    Promise.all([
+      api.get('/admin/services'),
+      api.get('/admin/site-settings'),
+    ])
+      .then(([servicesRes, settingsRes]) => {
+        setServices(servicesRes.data);
+        if (settingsRes.data.category_order) {
+          setCategoryOrder(settingsRes.data.category_order);
+        }
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   };
@@ -76,6 +89,42 @@ export default function Services() {
     categories[cat].push(s);
   });
 
+  // Get ordered category list
+  const categoryNames = Object.keys(categories);
+  const orderedCategories = [...categoryNames].sort((a, b) => {
+    const ai = categoryOrder.indexOf(a);
+    const bi = categoryOrder.indexOf(b);
+    return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+  });
+
+  // Ensure all categories are in the order array
+  const fullOrder = [...categoryOrder.filter(c => categoryNames.includes(c)), ...categoryNames.filter(c => !categoryOrder.includes(c))];
+
+  const moveCategory = (cat, direction) => {
+    const newOrder = [...fullOrder];
+    const idx = newOrder.indexOf(cat);
+    if (idx === -1) return;
+    const swapIdx = idx + direction;
+    if (swapIdx < 0 || swapIdx >= newOrder.length) return;
+    [newOrder[idx], newOrder[swapIdx]] = [newOrder[swapIdx], newOrder[idx]];
+    setCategoryOrder(newOrder);
+    setOrderChanged(true);
+  };
+
+  const saveCategoryOrder = async () => {
+    try {
+      await api.put('/admin/site-settings/category_order', { value: fullOrder });
+      setCategoryOrder(fullOrder);
+      setOrderChanged(false);
+      setSnackbar({ open: true, message: 'Category order saved', severity: 'success' });
+    } catch {
+      setSnackbar({ open: true, message: 'Failed to save order', severity: 'error' });
+    }
+  };
+
+  // Existing category names for dropdown
+  const existingCategories = [...new Set(services.map(s => s.category || 'General').filter(Boolean))];
+
   return (
     <Box>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
@@ -85,54 +134,145 @@ export default function Services() {
         </Button>
       </Box>
 
+      {/* Category Order */}
+      {!loading && orderedCategories.length > 1 && (
+        <Card sx={{ mb: 3 }}>
+          <CardContent sx={{ py: 2, '&:last-child': { pb: 2 } }}>
+            <Box display="flex" justifyContent="space-between" alignItems="center" mb={1.5}>
+              <Typography variant="subtitle2" fontWeight={600}>Category Order</Typography>
+              {orderChanged && (
+                <Button size="small" variant="contained" onClick={saveCategoryOrder}>
+                  Save Order
+                </Button>
+              )}
+            </Box>
+            <Typography variant="body2" color="text.secondary" mb={2}>
+              Arrange the order your service categories appear on your booking page.
+            </Typography>
+            {fullOrder.filter(c => categoryNames.includes(c)).map((cat, idx) => (
+              <Box
+                key={cat}
+                display="flex"
+                alignItems="center"
+                gap={1}
+                py={0.75}
+                px={1.5}
+                mb={0.5}
+                sx={{
+                  bgcolor: 'action.hover',
+                  borderRadius: 2,
+                }}
+              >
+                <DragIndicator sx={{ color: 'text.disabled', fontSize: 20 }} />
+                <Typography variant="body2" fontWeight={500} flex={1}>{cat}</Typography>
+                <Chip label={categories[cat]?.length || 0} size="small" sx={{ height: 22, fontSize: 12 }} />
+                <IconButton
+                  size="small"
+                  disabled={idx === 0}
+                  onClick={() => moveCategory(cat, -1)}
+                >
+                  <ArrowUpward fontSize="small" />
+                </IconButton>
+                <IconButton
+                  size="small"
+                  disabled={idx === fullOrder.filter(c => categoryNames.includes(c)).length - 1}
+                  onClick={() => moveCategory(cat, 1)}
+                >
+                  <ArrowDownward fontSize="small" />
+                </IconButton>
+              </Box>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
       {loading ? (
         <Typography>Loading...</Typography>
-      ) : Object.entries(categories).map(([category, items]) => (
-        <Box key={category} mb={3}>
-          <Typography variant="subtitle1" fontWeight={600} mb={1}>{category}</Typography>
-          <TableContainer component={Paper}>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Name</TableCell>
-                  <TableCell>Duration</TableCell>
-                  <TableCell>Price</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell align="right">Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {items.map(s => (
-                  <TableRow key={s.id}>
-                    <TableCell>
-                      <Typography fontWeight={500}>{s.name}</Typography>
-                      {s.description && (
-                        <Typography variant="body2" color="text.secondary">{s.description}</Typography>
-                      )}
-                    </TableCell>
-                    <TableCell>{s.duration} min</TableCell>
-                    <TableCell>£{parseFloat(s.price).toFixed(2)}</TableCell>
-                    <TableCell>
-                      <Chip label={s.active ? 'Active' : 'Inactive'} size="small"
-                        color={s.active ? 'success' : 'default'} />
-                    </TableCell>
-                    <TableCell align="right">
-                      <IconButton size="small" onClick={() => handleOpen(s)}>
-                        <Edit fontSize="small" />
-                      </IconButton>
-                      {s.active && (
-                        <IconButton size="small" onClick={() => handleDelete(s.id)}>
-                          <Delete fontSize="small" />
+      ) : orderedCategories.map(category => {
+        const items = categories[category];
+        if (!items) return null;
+        return (
+          <Box key={category} mb={3}>
+            <Typography variant="subtitle1" fontWeight={600} mb={1}>{category}</Typography>
+            {isMobile ? (
+              // Mobile: card layout
+              items.map(s => (
+                <Card key={s.id} variant="outlined" sx={{ mb: 1 }}>
+                  <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+                    <Box display="flex" justifyContent="space-between" alignItems="flex-start">
+                      <Box flex={1}>
+                        <Typography fontWeight={500}>{s.name}</Typography>
+                        {s.description && (
+                          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.3 }}>{s.description}</Typography>
+                        )}
+                        <Box display="flex" gap={1.5} mt={0.5} alignItems="center">
+                          <Typography variant="body2">{s.duration} min</Typography>
+                          <Typography variant="body2" fontWeight={600}>£{parseFloat(s.price).toFixed(2)}</Typography>
+                          <Chip label={s.active ? 'Active' : 'Inactive'} size="small"
+                            color={s.active ? 'success' : 'default'} sx={{ height: 20, fontSize: 11 }} />
+                        </Box>
+                      </Box>
+                      <Box display="flex" gap={0.5} ml={1}>
+                        <IconButton size="small" onClick={() => handleOpen(s)}>
+                          <Edit fontSize="small" />
                         </IconButton>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </Box>
-      ))}
+                        {s.active && (
+                          <IconButton size="small" onClick={() => handleDelete(s.id)}>
+                            <Delete fontSize="small" />
+                          </IconButton>
+                        )}
+                      </Box>
+                    </Box>
+                  </CardContent>
+                </Card>
+              ))
+            ) : (
+              // Desktop: table layout
+              <TableContainer component={Paper}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Name</TableCell>
+                      <TableCell sx={{ width: 100 }}>Duration</TableCell>
+                      <TableCell sx={{ width: 100 }}>Price</TableCell>
+                      <TableCell sx={{ width: 90 }}>Status</TableCell>
+                      <TableCell align="right" sx={{ width: 100 }}>Actions</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {items.map(s => (
+                      <TableRow key={s.id}>
+                        <TableCell>
+                          <Typography fontWeight={500}>{s.name}</Typography>
+                          {s.description && (
+                            <Typography variant="body2" color="text.secondary">{s.description}</Typography>
+                          )}
+                        </TableCell>
+                        <TableCell>{s.duration} min</TableCell>
+                        <TableCell>£{parseFloat(s.price).toFixed(2)}</TableCell>
+                        <TableCell>
+                          <Chip label={s.active ? 'Active' : 'Inactive'} size="small"
+                            color={s.active ? 'success' : 'default'} />
+                        </TableCell>
+                        <TableCell align="right">
+                          <IconButton size="small" onClick={() => handleOpen(s)}>
+                            <Edit fontSize="small" />
+                          </IconButton>
+                          {s.active && (
+                            <IconButton size="small" onClick={() => handleDelete(s.id)}>
+                              <Delete fontSize="small" />
+                            </IconButton>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </Box>
+        );
+      })}
 
       {/* Create/Edit Dialog */}
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
@@ -143,17 +283,45 @@ export default function Services() {
           <TextField fullWidth label="Description" margin="normal" multiline rows={2}
             value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
           <Box display="flex" gap={2}>
-            <TextField label="Duration (min)" type="number" margin="normal" required
-              value={form.duration} onChange={e => setForm(f => ({ ...f, duration: parseInt(e.target.value) || 0 }))} />
-            <TextField label="Price (£)" type="number" margin="normal" required inputProps={{ step: 0.01 }}
-              value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))} />
+            <TextField
+              label="Duration (min)" type="number" margin="normal" required sx={{ flex: 1 }}
+              value={form.duration} onChange={e => setForm(f => ({ ...f, duration: parseInt(e.target.value) || 0 }))}
+            />
+            <TextField
+              label="Price (£)" type="number" margin="normal" required sx={{ flex: 1 }}
+              inputProps={{ step: 0.01 }}
+              value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))}
+            />
           </Box>
-          <Box display="flex" gap={2}>
-            <TextField fullWidth label="Category" margin="normal"
-              value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} />
-            <TextField label="Display Order" type="number" margin="normal"
-              value={form.display_order} onChange={e => setForm(f => ({ ...f, display_order: parseInt(e.target.value) || 0 }))} />
-          </Box>
+          <TextField
+            fullWidth select label="Category" margin="normal"
+            value={form.category}
+            onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
+            helperText="Select an existing category or type a new one"
+            SelectProps={{ native: false }}
+          >
+            {existingCategories.map(cat => (
+              <MenuItem key={cat} value={cat}>{cat}</MenuItem>
+            ))}
+            <Divider />
+            <MenuItem value="" sx={{ fontStyle: 'italic', color: 'text.secondary' }}>
+              Type a new category below...
+            </MenuItem>
+          </TextField>
+          {form.category === '' && (
+            <TextField
+              fullWidth label="New Category Name" margin="normal"
+              onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
+              placeholder="e.g. Nails, Hair Cuts, Semi Perm Makeup"
+            />
+          )}
+          <TextField
+            label="Display Order" type="number" margin="normal"
+            value={form.display_order}
+            onChange={e => setForm(f => ({ ...f, display_order: parseInt(e.target.value) || 0 }))}
+            helperText="Order within the category (lower = first)"
+            sx={{ width: 160 }}
+          />
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDialogOpen(false)}>Cancel</Button>

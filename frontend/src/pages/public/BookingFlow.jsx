@@ -353,7 +353,18 @@ export default function BookingFlow() {
               '&.Mui-expanded': { margin: '12px 0' },
             },
           }}>
-            {Object.entries(grouped).map(([category, services]) => {
+            {(() => {
+              const order = siteSettings.category_order || [];
+              const entries = Object.entries(grouped);
+              if (order.length > 0) {
+                entries.sort((a, b) => {
+                  const ai = order.indexOf(a[0]);
+                  const bi = order.indexOf(b[0]);
+                  return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+                });
+              }
+              return entries;
+            })().map(([category, services]) => {
               const selectedInCategory = services.filter(s => selectedIds.includes(s.id)).length;
               return (
                 <Accordion key={category} defaultExpanded={Object.keys(grouped).length <= 4}>

@@ -250,42 +250,103 @@ export default function TenantLanding() {
 
       {/* Services by category */}
       <Typography variant="h6" fontWeight={600} mb={2}>Our Services</Typography>
-      {Object.entries(services).map(([category, categoryServices]) => (
-        <Box key={category} mb={4}>
-          <Typography variant="subtitle1" fontWeight={600} mb={1} color="text.secondary">{category}</Typography>
-          {categoryServices.map(service => {
-            const isSelected = selected.includes(service.id);
-            return (
-              <Card
-                key={service.id} sx={{ mb: 1.5, cursor: 'pointer',
-                  border: isSelected ? 2 : 1,
-                  borderColor: isSelected ? 'primary.main' : 'divider',
-                  transition: 'border-color 0.2s'
-                }}
-                onClick={() => toggleService(service.id)}
-              >
-                <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
-                  <Box display="flex" alignItems="center" gap={1}>
-                    <Checkbox checked={isSelected} size="small" sx={{ p: 0 }} />
-                    <Box flex={1}>
-                      <Typography fontWeight={500}>{service.name}</Typography>
-                      {service.description && (
-                        <Typography variant="body2" color="text.secondary">{service.description}</Typography>
-                      )}
+      <Box sx={{
+        '& .MuiAccordion-root': {
+          boxShadow: 'none',
+          border: '1px solid',
+          borderColor: 'divider',
+          borderRadius: '12px !important',
+          mb: 1.5,
+          '&:before': { display: 'none' },
+          '&.Mui-expanded': { margin: '0 0 12px 0' },
+        },
+        '& .MuiAccordionSummary-root': {
+          minHeight: 56,
+          '&.Mui-expanded': { minHeight: 56 },
+        },
+        '& .MuiAccordionSummary-content': {
+          margin: '12px 0',
+          '&.Mui-expanded': { margin: '12px 0' },
+        },
+      }}>
+        {(() => {
+          const categoryOrder = siteSettings.category_order || [];
+          const entries = Object.entries(services);
+          if (categoryOrder.length > 0) {
+            entries.sort((a, b) => {
+              const ai = categoryOrder.indexOf(a[0]);
+              const bi = categoryOrder.indexOf(b[0]);
+              return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+            });
+          }
+          return entries;
+        })().map(([category, categoryServices]) => {
+          const selectedInCategory = categoryServices.filter(s => selected.includes(s.id)).length;
+          return (
+            <Accordion key={category} defaultExpanded={Object.keys(services).length <= 4}>
+              <AccordionSummary expandIcon={<ExpandMore />}>
+                <Box display="flex" alignItems="center" gap={1.5} width="100%">
+                  <Typography fontWeight={600} flex={1}>{category}</Typography>
+                  {selectedInCategory > 0 && (
+                    <Chip
+                      label={`${selectedInCategory} selected`}
+                      size="small"
+                      color="primary"
+                      sx={{ fontWeight: 600, height: 24 }}
+                    />
+                  )}
+                  <Chip
+                    label={categoryServices.length}
+                    size="small"
+                    sx={{
+                      bgcolor: 'rgba(139, 38, 53, 0.1)',
+                      color: 'primary.main',
+                      fontWeight: 600,
+                      height: 24,
+                    }}
+                  />
+                </Box>
+              </AccordionSummary>
+              <AccordionDetails sx={{ p: 0 }}>
+                {categoryServices.map((service, idx) => {
+                  const isSelected = selected.includes(service.id);
+                  return (
+                    <Box
+                      key={service.id}
+                      onClick={() => toggleService(service.id)}
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        p: 2,
+                        cursor: 'pointer',
+                        borderTop: idx === 0 ? '1px solid' : 'none',
+                        borderBottom: '1px solid',
+                        borderColor: 'divider',
+                        transition: 'all 0.15s ease',
+                        bgcolor: isSelected ? 'rgba(139, 38, 53, 0.06)' : 'transparent',
+                        '&:hover': { bgcolor: isSelected ? 'rgba(139, 38, 53, 0.1)' : 'action.hover' },
+                        '&:last-child': { borderBottom: 'none', borderRadius: '0 0 12px 12px' },
+                      }}
+                    >
+                      <Checkbox checked={isSelected} size="small" sx={{ mr: 1, p: 0, color: 'grey.400', '&.Mui-checked': { color: 'primary.main' } }} />
+                      <Box flex={1} pr={2}>
+                        <Typography fontWeight={isSelected ? 600 : 500}>{service.name}</Typography>
+                        {service.description && (
+                          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.3 }}>{service.description}</Typography>
+                        )}
+                      </Box>
+                      <Box textAlign="right" flexShrink={0}>
+                        <Typography fontWeight={600} color="primary.main">£{parseFloat(service.price).toFixed(2)}</Typography>
+                        <Typography variant="caption" color="text.secondary">{service.duration} min</Typography>
+                      </Box>
                     </Box>
-                    <Box textAlign="right">
-                      <Typography fontWeight={600}>£{parseFloat(service.price).toFixed(2)}</Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {service.duration} min
-                      </Typography>
-                    </Box>
-                  </Box>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </Box>
-      ))}
+                  );
+                })}
+              </AccordionDetails>
+            </Accordion>
+          );
+        })}
+      </Box>
 
       {/* Reviews Section */}
       {reviews.length > 0 && (
