@@ -234,7 +234,7 @@ export default function Bookings() {
                     {b.service_names}
                   </Typography>
 
-                  <Box display="flex" gap={2} mt={1}>
+                  <Box display="flex" gap={2} mt={1} flexWrap="wrap" alignItems="center">
                     <Typography variant="body2" color="text.secondary">
                       {dayjs(b.date).format('ddd D MMM YYYY')}
                     </Typography>
@@ -244,6 +244,12 @@ export default function Bookings() {
                     <Typography variant="body2" fontWeight={500}>
                       £{parseFloat(b.total_price).toFixed(2)}
                     </Typography>
+                    {b.discount_code && (
+                      <Chip
+                        label={`${b.discount_code} -£${parseFloat(b.discount_amount).toFixed(2)}`}
+                        size="small" color="success" variant="outlined"
+                      />
+                    )}
                   </Box>
 
                   {b.notes && (

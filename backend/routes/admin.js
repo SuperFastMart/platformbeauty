@@ -139,25 +139,25 @@ router.delete('/services/:id', asyncHandler(async (req, res) => {
 // GET /api/admin/bookings
 router.get('/bookings', asyncHandler(async (req, res) => {
   const { date, status, from, to } = req.query;
-  let sql = 'SELECT * FROM bookings WHERE tenant_id = $1';
+  let sql = 'SELECT b.*, dc.code as discount_code FROM bookings b LEFT JOIN discount_codes dc ON dc.id = b.discount_code_id WHERE b.tenant_id = $1';
   const params = [req.tenantId];
 
   if (date) {
     params.push(date);
-    sql += ` AND date = $${params.length}`;
+    sql += ` AND b.date = $${params.length}`;
   }
 
   if (from && to) {
     params.push(from, to);
-    sql += ` AND date >= $${params.length - 1} AND date <= $${params.length}`;
+    sql += ` AND b.date >= $${params.length - 1} AND b.date <= $${params.length}`;
   }
 
   if (status) {
     params.push(status);
-    sql += ` AND status = $${params.length}`;
+    sql += ` AND b.status = $${params.length}`;
   }
 
-  sql += ' ORDER BY date DESC, start_time ASC';
+  sql += ' ORDER BY b.date DESC, b.start_time ASC';
 
   const bookings = await getAll(sql, params);
   res.json(bookings);
