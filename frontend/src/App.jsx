@@ -47,6 +47,7 @@ const CustomerLogin = lazy(() => import('./pages/public/CustomerLogin'));
 const VerifyMagicLink = lazy(() => import('./pages/public/VerifyMagicLink'));
 const CustomerPortal = lazy(() => import('./pages/public/CustomerPortal'));
 const BookingWidget = lazy(() => import('./pages/public/BookingWidget'));
+const LandingPage = lazy(() => import('./pages/public/LandingPage'));
 
 export default function App() {
   return (
@@ -111,8 +112,8 @@ export default function App() {
         {/* Embeddable widget (no layout wrapper) */}
         <Route path="/t/:slug/widget" element={<BookingWidget />} />
 
-        {/* Default redirect */}
-        <Route path="/" element={<Navigate to="/admin/login" replace />} />
+        {/* Public landing page */}
+        <Route path="/" element={<LandingPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Suspense>

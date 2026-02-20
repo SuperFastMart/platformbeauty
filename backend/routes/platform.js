@@ -42,6 +42,123 @@ router.post('/auth/login', asyncHandler(async (req, res) => {
   });
 }));
 
+// ============================================
+// PUBLIC SIGNUP (no auth required)
+// ============================================
+
+// POST /api/platform/signup — self-service tenant registration
+router.post('/signup', asyncHandler(async (req, res) => {
+  const { business_name, slug, owner_name, owner_email, password } = req.body;
+
+  if (!business_name || !slug || !owner_name || !owner_email || !password) {
+    return res.status(400).json({ error: 'All fields are required' });
+  }
+
+  // Validate slug format
+  if (!/^[a-z0-9]+$/.test(slug)) {
+    return res.status(400).json({ error: 'URL slug must contain only lowercase letters and numbers' });
+  }
+  if (slug.length < 3 || slug.length > 50) {
+    return res.status(400).json({ error: 'URL slug must be between 3 and 50 characters' });
+  }
+
+  // Validate email format
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(owner_email)) {
+    return res.status(400).json({ error: 'Invalid email address' });
+  }
+
+  // Password strength
+  if (password.length < 6) {
+    return res.status(400).json({ error: 'Password must be at least 6 characters' });
+  }
+
+  // Check slug uniqueness
+  const existing = await getOne('SELECT id FROM tenants WHERE slug = $1', [slug]);
+  if (existing) {
+    return res.status(409).json({ error: 'This URL is already taken. Please choose a different one.' });
+  }
+
+  // Check email uniqueness across tenant owners
+  const existingEmail = await getOne('SELECT id FROM tenants WHERE owner_email = $1', [owner_email]);
+  if (existingEmail) {
+    return res.status(409).json({ error: 'An account with this email already exists' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Create tenant
+    const tenantResult = await client.query(
+      `INSERT INTO tenants (name, slug, owner_email, owner_name, trial_ends_at)
+       VALUES ($1, $2, $3, $4, NOW() + INTERVAL '14 days')
+       RETURNING *`,
+      [business_name, slug, owner_email, owner_name]
+    );
+    const tenant = tenantResult.rows[0];
+
+    // Create admin user
+    const hashedPassword = await bcrypt.hash(password, 10);
+    await client.query(
+      `INSERT INTO tenant_users (tenant_id, username, email, password, role)
+       VALUES ($1, $2, $3, $4, 'admin')`,
+      [tenant.id, owner_email, owner_email, hashedPassword]
+    );
+
+    // Create platform notification
+    await client.query(
+      `INSERT INTO platform_notifications (type, title, body, metadata, tenant_id)
+       VALUES ('tenant_signup', $1, $2, $3, $4)`,
+      [`New signup: ${business_name}`, `${owner_name} (${owner_email})`, JSON.stringify({ slug }), tenant.id]
+    ).catch(() => {});
+
+    await client.query('COMMIT');
+
+    // Generate JWT so user is logged in immediately
+    const userResult = await getOne(
+      'SELECT id, tenant_id, username, email, role FROM tenant_users WHERE tenant_id = $1 AND email = $2',
+      [tenant.id, owner_email]
+    );
+
+    const token = jwt.sign(
+      { id: userResult.id, tenantId: tenant.id, username: userResult.username, role: 'admin' },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRY || '24h' }
+    );
+
+    res.status(201).json({
+      token,
+      user: {
+        id: userResult.id,
+        username: userResult.username,
+        email: userResult.email,
+        role: 'admin',
+        tenantId: tenant.id,
+        tenantName: tenant.name,
+        tenantSlug: tenant.slug,
+      },
+      tenant: {
+        id: tenant.id,
+        name: tenant.name,
+        slug: tenant.slug,
+        subscription_status: tenant.subscription_status,
+        trial_ends_at: tenant.trial_ends_at,
+      }
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}));
+
+// GET /api/platform/check-slug/:slug — check slug availability
+router.get('/check-slug/:slug', asyncHandler(async (req, res) => {
+  const existing = await getOne('SELECT id FROM tenants WHERE slug = $1', [req.params.slug]);
+  res.json({ available: !existing });
+}));
+
 // GET /api/platform/tenants
 router.get('/tenants', platformAuth, asyncHandler(async (req, res) => {
   const tenants = await getAll(
