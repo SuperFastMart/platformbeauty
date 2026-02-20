@@ -31,6 +31,9 @@ export default function CustomerPortal() {
   const [upcoming, setUpcoming] = useState([]);
   const [history, setHistory] = useState([]);
   const [requests, setRequests] = useState([]);
+  const [messages, setMessages] = useState([]);
+  const [newMessageBody, setNewMessageBody] = useState('');
+  const [sendingMessage, setSendingMessage] = useState(false);
   const [error, setError] = useState('');
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
@@ -66,14 +69,16 @@ export default function CustomerPortal() {
 
   const fetchData = async () => {
     try {
-      const [meRes, reqRes] = await Promise.all([
+      const [meRes, reqRes, msgRes] = await Promise.all([
         authApi('get', `/t/${slug}/auth/me`),
         authApi('get', `/t/${slug}/auth/booking-requests`),
+        authApi('get', `/t/${slug}/auth/messages`),
       ]);
       setCustomer(meRes.data.customer);
       setUpcoming(meRes.data.upcoming);
       setHistory(meRes.data.history);
       setRequests(reqRes.data);
+      setMessages(msgRes.data);
       setEditName(meRes.data.customer.name);
       setEditPhone(meRes.data.customer.phone || '');
     } catch (err) {
@@ -121,6 +126,22 @@ export default function CustomerPortal() {
       setSnackbar({ open: true, message: err.response?.data?.error || 'Failed to submit request', severity: 'error' });
     } finally {
       setSubmittingRequest(false);
+    }
+  };
+
+  const handleSendMessage = async () => {
+    if (!newMessageBody.trim()) return;
+    setSendingMessage(true);
+    try {
+      await authApi('post', `/t/${slug}/auth/messages`, { body: newMessageBody });
+      setNewMessageBody('');
+      const { data } = await authApi('get', `/t/${slug}/auth/messages`);
+      setMessages(data);
+      setSnackbar({ open: true, message: 'Message sent', severity: 'success' });
+    } catch (err) {
+      setSnackbar({ open: true, message: 'Failed to send message', severity: 'error' });
+    } finally {
+      setSendingMessage(false);
     }
   };
 
@@ -221,10 +242,12 @@ export default function CustomerPortal() {
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-      <Tabs value={tab} onChange={(e, v) => setTab(v)} sx={{ borderBottom: 1, borderColor: 'divider', mb: 1 }}>
+      <Tabs value={tab} onChange={(e, v) => setTab(v)} variant="scrollable" scrollButtons="auto"
+        sx={{ borderBottom: 1, borderColor: 'divider', mb: 1 }}>
         <Tab label={`Upcoming (${upcoming.length})`} />
         <Tab label="History" />
         <Tab label={`Requests (${requests.filter(r => r.status === 'pending').length})`} />
+        <Tab label={`Messages${messages.length > 0 ? ` (${messages.filter(m => m.direction === 'outbound' && !m.read_at).length})` : ''}`} />
         <Tab label="Profile" />
       </Tabs>
 
@@ -293,8 +316,63 @@ export default function CustomerPortal() {
         ))}
       </TabPanel>
 
-      {/* Profile */}
+      {/* Messages */}
       <TabPanel value={tab} index={3}>
+        <Card sx={{ mb: 2 }}>
+          <CardContent sx={{ maxHeight: 400, overflow: 'auto' }}>
+            {messages.length === 0 ? (
+              <Typography color="text.secondary" textAlign="center" py={4}>
+                No messages yet. Send a message below and we'll get back to you.
+              </Typography>
+            ) : (
+              messages.map(m => (
+                <Box
+                  key={m.id}
+                  mb={1.5}
+                  display="flex"
+                  justifyContent={m.direction === 'inbound' ? 'flex-end' : 'flex-start'}
+                >
+                  <Box
+                    maxWidth="80%"
+                    p={1.5}
+                    borderRadius={2}
+                    bgcolor={m.direction === 'inbound' ? 'primary.main' : 'grey.100'}
+                    color={m.direction === 'inbound' ? 'white' : 'text.primary'}
+                  >
+                    {m.subject && (
+                      <Typography variant="caption" fontWeight={600} display="block" mb={0.5}>
+                        {m.subject}
+                      </Typography>
+                    )}
+                    <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{m.body}</Typography>
+                    <Typography variant="caption" sx={{ opacity: 0.7 }} display="block" textAlign="right" mt={0.5}>
+                      {dayjs(m.created_at).format('D MMM HH:mm')}
+                    </Typography>
+                  </Box>
+                </Box>
+              ))
+            )}
+          </CardContent>
+        </Card>
+        <Box display="flex" gap={1}>
+          <TextField
+            size="small" fullWidth placeholder="Type a message..."
+            value={newMessageBody} onChange={e => setNewMessageBody(e.target.value)}
+            multiline maxRows={3}
+            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
+          />
+          <Button
+            variant="contained"
+            onClick={handleSendMessage}
+            disabled={!newMessageBody.trim() || sendingMessage}
+          >
+            Send
+          </Button>
+        </Box>
+      </TabPanel>
+
+      {/* Profile */}
+      <TabPanel value={tab} index={4}>
         <Card sx={{ mb: 3 }}>
           <CardContent>
             <Typography fontWeight={600} mb={2}>Your Details</Typography>

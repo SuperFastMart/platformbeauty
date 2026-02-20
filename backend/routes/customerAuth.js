@@ -289,6 +289,43 @@ router.post('/change-password', asyncHandler(async (req, res) => {
 }));
 
 // ============================================
+// MESSAGES
+// ============================================
+
+// GET /api/t/:tenant/auth/messages
+router.get('/messages', asyncHandler(async (req, res) => {
+  const messages = await getAll(
+    `SELECT * FROM messages
+     WHERE tenant_id = $1 AND customer_id = $2
+     ORDER BY created_at ASC`,
+    [req.tenantId, req.customer.id]
+  );
+
+  // Mark inbound (from admin) as read
+  await run(
+    `UPDATE messages SET read_at = NOW()
+     WHERE tenant_id = $1 AND customer_id = $2 AND direction = 'outbound' AND read_at IS NULL`,
+    [req.tenantId, req.customer.id]
+  );
+
+  res.json(messages);
+}));
+
+// POST /api/t/:tenant/auth/messages — customer sends reply
+router.post('/messages', asyncHandler(async (req, res) => {
+  const { body, subject } = req.body;
+  if (!body) return res.status(400).json({ error: 'Message body is required' });
+
+  const message = await getOne(
+    `INSERT INTO messages (tenant_id, customer_id, direction, subject, body, sent_via)
+     VALUES ($1, $2, 'inbound', $3, $4, 'portal') RETURNING *`,
+    [req.tenantId, req.customer.id, subject || null, body]
+  );
+
+  res.status(201).json(message);
+}));
+
+// ============================================
 // BOOKING REQUESTS (cancel / amend)
 // ============================================
 

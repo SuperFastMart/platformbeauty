@@ -34,6 +34,10 @@ export default function CustomerLogin() {
   const [regPassword, setRegPassword] = useState('');
   const [regConfirm, setRegConfirm] = useState('');
 
+  // Forgot Password screen
+  const [showForgot, setShowForgot] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+
   // Magic Link
   const [magicEmail, setMagicEmail] = useState('');
 
@@ -104,14 +108,15 @@ export default function CustomerLogin() {
     } finally { setLoading(false); }
   };
 
-  const handleForgotPassword = async () => {
-    if (!loginEmail) {
-      setError('Enter your email above first');
+  const handleForgotPassword = async (e) => {
+    e.preventDefault();
+    if (!forgotEmail) {
+      setError('Please enter your email address');
       return;
     }
     setError(''); setLoading(true);
     try {
-      const { data } = await api.post(`/t/${slug}/auth/forgot-password`, { email: loginEmail });
+      const { data } = await api.post(`/t/${slug}/auth/forgot-password`, { email: forgotEmail });
       setSuccess(data.message);
     } catch (err) {
       setError('Failed to send reset link');
@@ -147,6 +152,26 @@ export default function CustomerLogin() {
                 </Button>
               </form>
             </Box>
+          ) : showForgot ? (
+            <Box>
+              <Typography variant="h6" mb={1}>Forgot Password</Typography>
+              <Typography variant="body2" color="text.secondary" mb={2}>
+                Enter your email address and we'll send you a link to reset your password.
+              </Typography>
+              <form onSubmit={handleForgotPassword}>
+                <TextField fullWidth label="Email" type="email" margin="normal" required
+                  value={forgotEmail} onChange={e => setForgotEmail(e.target.value)}
+                  autoFocus />
+                <Button type="submit" variant="contained" fullWidth sx={{ mt: 2 }} disabled={loading}>
+                  {loading ? <CircularProgress size={24} /> : 'Send Reset Link'}
+                </Button>
+              </form>
+              <Box textAlign="center" mt={2}>
+                <Link component="button" variant="body2" onClick={() => { setShowForgot(false); setError(''); setSuccess(''); }}>
+                  Back to Sign In
+                </Link>
+              </Box>
+            </Box>
           ) : (
             <>
               <Tabs value={tab} onChange={(e, v) => { setTab(v); setError(''); setSuccess(''); }}
@@ -166,7 +191,7 @@ export default function CustomerLogin() {
                     {loading ? <CircularProgress size={24} /> : 'Sign In'}
                   </Button>
                   <Box textAlign="center" mt={1}>
-                    <Link component="button" variant="body2" onClick={handleForgotPassword}>
+                    <Link component="button" variant="body2" onClick={() => { setShowForgot(true); setForgotEmail(loginEmail); setError(''); setSuccess(''); }}>
                       Forgot password?
                     </Link>
                   </Box>
