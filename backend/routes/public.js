@@ -69,7 +69,7 @@ router.get('/slots', asyncHandler(async (req, res) => {
 
 // POST /api/t/:tenant/bookings - create a booking
 router.post('/bookings', asyncHandler(async (req, res) => {
-  const { customerName, customerEmail, customerPhone, serviceIds, date, startTime, notes } = req.body;
+  const { customerName, customerEmail, customerPhone, serviceIds, date, startTime, notes, discountCode } = req.body;
 
   if (!customerName || !customerEmail || !serviceIds?.length || !date || !startTime) {
     return res.status(400).json({
@@ -89,9 +89,36 @@ router.post('/bookings', asyncHandler(async (req, res) => {
   }
 
   // Calculate totals
-  const totalPrice = services.reduce((sum, s) => sum + parseFloat(s.price), 0);
+  const subtotal = services.reduce((sum, s) => sum + parseFloat(s.price), 0);
   const totalDuration = services.reduce((sum, s) => sum + s.duration, 0);
   const serviceNames = services.map(s => s.name).join(', ');
+
+  // Validate discount code if provided
+  let discountAmount = 0;
+  let discountCodeId = null;
+  if (discountCode) {
+    const dc = await getOne(
+      'SELECT * FROM discount_codes WHERE tenant_id = $1 AND code = $2 AND active = TRUE',
+      [req.tenantId, discountCode.toUpperCase()]
+    );
+    if (dc) {
+      const notExpired = !dc.expires_at || new Date(dc.expires_at) > new Date();
+      const notMaxed = !dc.max_uses || dc.uses_count < dc.max_uses;
+      const meetsMin = subtotal >= parseFloat(dc.min_spend);
+      if (notExpired && notMaxed && meetsMin) {
+        discountCodeId = dc.id;
+        if (dc.discount_type === 'percentage') {
+          discountAmount = Math.round(subtotal * (parseFloat(dc.discount_value) / 100) * 100) / 100;
+        } else {
+          discountAmount = Math.min(parseFloat(dc.discount_value), subtotal);
+        }
+        // Increment uses
+        await run('UPDATE discount_codes SET uses_count = uses_count + 1 WHERE id = $1', [dc.id]);
+      }
+    }
+  }
+
+  const totalPrice = subtotal - discountAmount;
 
   // Calculate end time
   const [hours, minutes] = startTime.split(':').map(Number);
@@ -128,12 +155,12 @@ router.post('/bookings', asyncHandler(async (req, res) => {
   const booking = await getOne(
     `INSERT INTO bookings (tenant_id, customer_name, customer_email, customer_phone,
        service_ids, service_names, date, start_time, end_time,
-       total_price, total_duration, status, notes)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'pending', $12)
+       total_price, total_duration, status, notes, discount_code_id, discount_amount)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'pending', $12, $13, $14)
      RETURNING *`,
     [req.tenantId, customerName, customerEmail, customerPhone || null,
      serviceIds.join(','), serviceNames, date, startTime, endTime,
-     totalPrice, totalDuration, notes || null]
+     totalPrice, totalDuration, notes || null, discountCodeId, discountAmount]
   );
 
   // Mark time slots as unavailable
@@ -166,6 +193,15 @@ router.post('/bookings', asyncHandler(async (req, res) => {
   // Link booking to customer
   if (customer) {
     await run('UPDATE bookings SET customer_id = $1 WHERE id = $2', [customer.id, booking.id]);
+  }
+
+  // Record discount code usage
+  if (discountCodeId && customer) {
+    await run(
+      `INSERT INTO discount_code_uses (tenant_id, discount_code_id, booking_id, customer_id, discount_amount)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [req.tenantId, discountCodeId, booking.id, customer.id, discountAmount]
+    );
   }
 
   // Send email notifications (fire and forget)

@@ -45,6 +45,12 @@ export default function BookingFlow() {
   const [cardSaved, setCardSaved] = useState(false);
   const [cardLoading, setCardLoading] = useState(false);
 
+  // Discount code
+  const [discountInput, setDiscountInput] = useState('');
+  const [discountResult, setDiscountResult] = useState(null);
+  const [discountError, setDiscountError] = useState('');
+  const [discountLoading, setDiscountLoading] = useState(false);
+
   // Load services
   useEffect(() => {
     api.get(`/t/${slug}/services`)
@@ -68,6 +74,32 @@ export default function BookingFlow() {
   const selectedServices = allServices.filter(s => selectedIds.includes(s.id));
   const totalPrice = selectedServices.reduce((sum, s) => sum + parseFloat(s.price), 0);
   const totalDuration = selectedServices.reduce((sum, s) => sum + s.duration, 0);
+  const discountAmount = discountResult?.discount_amount || 0;
+  const finalPrice = Math.max(0, totalPrice - discountAmount);
+
+  const validateDiscount = async () => {
+    if (!discountInput.trim()) return;
+    setDiscountLoading(true);
+    setDiscountError('');
+    setDiscountResult(null);
+    try {
+      const { data } = await api.post(`/t/${slug}/discount/validate`, {
+        code: discountInput,
+        total_price: totalPrice,
+      });
+      setDiscountResult(data);
+    } catch (err) {
+      setDiscountError(err.response?.data?.error || 'Invalid code');
+    } finally {
+      setDiscountLoading(false);
+    }
+  };
+
+  const clearDiscount = () => {
+    setDiscountInput('');
+    setDiscountResult(null);
+    setDiscountError('');
+  };
 
   const toggleService = (id) => {
     setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
@@ -88,6 +120,7 @@ export default function BookingFlow() {
         date: selectedDate,
         startTime: selectedSlot,
         notes: customerForm.notes,
+        discountCode: discountResult?.code || null,
       });
       setBookingResult(data);
       setActiveStep(5); // Success step
@@ -309,6 +342,47 @@ export default function BookingFlow() {
           <TextField fullWidth label="Notes (optional)" margin="normal" multiline rows={2}
             value={customerForm.notes}
             onChange={e => setCustomerForm(f => ({ ...f, notes: e.target.value }))} />
+
+          {/* Discount code */}
+          <Box mt={2} p={2} bgcolor="grey.50" borderRadius={2}>
+            <Typography variant="subtitle2" mb={1}>Discount Code</Typography>
+            <Box display="flex" gap={1}>
+              <TextField
+                size="small"
+                placeholder="Enter code"
+                value={discountInput}
+                onChange={e => setDiscountInput(e.target.value.toUpperCase())}
+                disabled={!!discountResult}
+                inputProps={{ style: { fontFamily: 'monospace', fontWeight: 600 } }}
+                fullWidth
+              />
+              {!discountResult ? (
+                <Button
+                  variant="outlined" size="small"
+                  onClick={validateDiscount}
+                  disabled={!discountInput.trim() || discountLoading}
+                  sx={{ minWidth: 80 }}
+                >
+                  {discountLoading ? '...' : 'Apply'}
+                </Button>
+              ) : (
+                <Button variant="outlined" size="small" color="error" onClick={clearDiscount} sx={{ minWidth: 80 }}>
+                  Remove
+                </Button>
+              )}
+            </Box>
+            {discountError && (
+              <Typography variant="caption" color="error" mt={0.5} display="block">{discountError}</Typography>
+            )}
+            {discountResult && (
+              <Alert severity="success" sx={{ mt: 1 }} variant="outlined">
+                {discountResult.discount_type === 'percentage'
+                  ? `${discountResult.discount_value}% off`
+                  : `£${discountResult.discount_value.toFixed(2)} off`}
+                {' — '}you save £{discountResult.discount_amount.toFixed(2)}
+              </Alert>
+            )}
+          </Box>
         </Box>
       )}
 
@@ -325,9 +399,19 @@ export default function BookingFlow() {
                   <Typography variant="body2">£{parseFloat(s.price).toFixed(2)}</Typography>
                 </Box>
               ))}
+              {discountResult && (
+                <Box display="flex" justifyContent="space-between" py={0.5}>
+                  <Typography variant="body2" color="success.main">
+                    Discount ({discountResult.code})
+                  </Typography>
+                  <Typography variant="body2" color="success.main">
+                    -£{discountAmount.toFixed(2)}
+                  </Typography>
+                </Box>
+              )}
               <Box display="flex" justifyContent="space-between" pt={1} mt={1} borderTop={1} borderColor="divider">
                 <Typography fontWeight={600}>Total</Typography>
-                <Typography fontWeight={600}>£{totalPrice.toFixed(2)} — {totalDuration} min</Typography>
+                <Typography fontWeight={600}>£{finalPrice.toFixed(2)} — {totalDuration} min</Typography>
               </Box>
 
               <Box mt={3}>
