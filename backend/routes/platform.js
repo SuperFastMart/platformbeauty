@@ -187,13 +187,55 @@ router.get('/analytics', platformAuth, asyncHandler(async (req, res) => {
     "SELECT COALESCE(subscription_tier, 'free') as tier, COUNT(*)::int as count FROM tenants WHERE active = TRUE GROUP BY subscription_tier ORDER BY count DESC"
   );
 
+  // Total customers across all tenants
+  const totalCustomers = await getOne('SELECT COUNT(*)::int as count FROM customers');
+
+  // Bookings by hour of day (all time)
+  const bookingsByHour = await getAll(
+    `SELECT EXTRACT(HOUR FROM b.created_at)::int as hour, COUNT(*)::int as count
+     FROM bookings b GROUP BY hour ORDER BY hour`
+  );
+
+  // Tenant growth (signups per month, last 6 months)
+  const tenantGrowth = await getAll(
+    `SELECT TO_CHAR(DATE_TRUNC('month', created_at), 'YYYY-MM') as month,
+            COUNT(*)::int as count
+     FROM tenants
+     WHERE created_at > NOW() - INTERVAL '6 months'
+     GROUP BY month ORDER BY month`
+  );
+
+  // Top tenants by booking count (last 30 days)
+  const topTenants = await getAll(
+    `SELECT t.name, t.slug, COUNT(b.id)::int as booking_count
+     FROM tenants t
+     LEFT JOIN bookings b ON b.tenant_id = t.id AND b.created_at > NOW() - INTERVAL '30 days'
+     WHERE t.active = TRUE
+     GROUP BY t.id, t.name, t.slug
+     ORDER BY booking_count DESC
+     LIMIT 10`
+  );
+
+  // Booking status breakdown (last 30 days)
+  const statusBreakdown = await getAll(
+    `SELECT status, COUNT(*)::int as count
+     FROM bookings
+     WHERE created_at > NOW() - INTERVAL '30 days'
+     GROUP BY status`
+  );
+
   res.json({
     total_tenants: totalTenants?.count || 0,
     active_tenants: activeTenants?.count || 0,
     total_bookings: totalBookings?.count || 0,
     total_revenue: totalRevenue?.total || 0,
     new_this_month: newThisMonth?.count || 0,
+    total_customers: totalCustomers?.count || 0,
     plan_distribution: planDistribution || [],
+    bookings_by_hour: bookingsByHour || [],
+    tenant_growth: tenantGrowth || [],
+    top_tenants: topTenants || [],
+    status_breakdown: statusBreakdown || [],
   });
 }));
 
