@@ -609,6 +609,21 @@ const migrations = [
     `
   },
 
+  {
+    name: '039_alter_tenant_users_verification_mfa',
+    sql: `
+      ALTER TABLE tenant_users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE;
+      ALTER TABLE tenant_users ADD COLUMN IF NOT EXISTS email_verification_token TEXT;
+      ALTER TABLE tenant_users ADD COLUMN IF NOT EXISTS email_verification_expires TIMESTAMP;
+      ALTER TABLE tenant_users ADD COLUMN IF NOT EXISTS mfa_secret TEXT;
+      ALTER TABLE tenant_users ADD COLUMN IF NOT EXISTS mfa_enabled BOOLEAN DEFAULT FALSE;
+      ALTER TABLE tenant_users ADD COLUMN IF NOT EXISTS mfa_backup_codes TEXT;
+      ALTER TABLE tenant_users ADD COLUMN IF NOT EXISTS mfa_dismissed_at TIMESTAMP;
+      -- Mark existing users as verified since they pre-date this feature
+      UPDATE tenant_users SET email_verified = TRUE WHERE email_verified = FALSE;
+    `
+  },
+
   // ============================================
   // MIGRATION TRACKING
   // ============================================

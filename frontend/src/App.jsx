@@ -49,6 +49,7 @@ const VerifyMagicLink = lazy(() => import('./pages/public/VerifyMagicLink'));
 const CustomerPortal = lazy(() => import('./pages/public/CustomerPortal'));
 const BookingWidget = lazy(() => import('./pages/public/BookingWidget'));
 const LandingPage = lazy(() => import('./pages/public/LandingPage'));
+const EmailVerification = lazy(() => import('./pages/public/EmailVerification'));
 
 export default function App() {
   return (
@@ -113,6 +114,9 @@ export default function App() {
 
         {/* Embeddable widget (no layout wrapper) */}
         <Route path="/t/:slug/widget" element={<BookingWidget />} />
+
+        {/* Email verification */}
+        <Route path="/verify-email" element={<EmailVerification />} />
 
         {/* Public landing page */}
         <Route path="/" element={<LandingPage />} />

@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const { getOne, getAll, run } = require('../config/database');
 const { tenantAuth } = require('../middleware/auth');
 const {
@@ -9,6 +10,8 @@ const {
 } = require('../utils/emailService');
 const { chargeNoShow, getCustomerPaymentMethods } = require('../utils/stripeService');
 const { awardStampForBooking } = require('./loyalty');
+const { TOTP, Secret } = require('otpauth');
+const QRCode = require('qrcode');
 
 const asyncHandler = (fn) => (req, res, next) =>
   Promise.resolve(fn(req, res, next)).catch(next);
@@ -19,7 +22,7 @@ const asyncHandler = (fn) => (req, res, next) =>
 
 // POST /api/admin/auth/login
 router.post('/auth/login', asyncHandler(async (req, res) => {
-  const { email, password } = req.body;
+  const { email, password, mfa_code } = req.body;
 
   if (!email || !password) {
     return res.status(400).json({ error: 'Email and password are required' });
@@ -42,6 +45,36 @@ router.post('/auth/login', asyncHandler(async (req, res) => {
     return res.status(401).json({ error: 'Invalid credentials' });
   }
 
+  // Check MFA if enabled
+  if (user.mfa_enabled && user.mfa_secret) {
+    if (!mfa_code) {
+      // Return MFA required flag — client should show MFA input
+      return res.json({
+        mfa_required: true,
+        message: 'Please enter your two-factor authentication code',
+      });
+    }
+
+    // Verify TOTP code
+    const totp = new TOTP({ secret: Secret.fromBase32(user.mfa_secret), algorithm: 'SHA1', digits: 6, period: 30 });
+    const valid = totp.validate({ token: mfa_code, window: 1 }) !== null;
+
+    // Also check backup codes
+    if (!valid && user.mfa_backup_codes) {
+      const backupCodes = JSON.parse(user.mfa_backup_codes);
+      const codeIdx = backupCodes.indexOf(mfa_code);
+      if (codeIdx !== -1) {
+        // Remove used backup code
+        backupCodes.splice(codeIdx, 1);
+        await run('UPDATE tenant_users SET mfa_backup_codes = $1 WHERE id = $2', [JSON.stringify(backupCodes), user.id]);
+      } else {
+        return res.status(401).json({ error: 'Invalid authentication code' });
+      }
+    } else if (!valid) {
+      return res.status(401).json({ error: 'Invalid authentication code' });
+    }
+  }
+
   // Update last login timestamp
   run('UPDATE tenant_users SET last_login_at = NOW() WHERE id = $1', [user.id]).catch(() => {});
 
@@ -56,7 +89,69 @@ router.post('/auth/login', asyncHandler(async (req, res) => {
     user: {
       id: user.id, tenantId: user.tenant_id, username: user.username,
       email: user.email, role: user.role,
-      tenantName: user.tenant_name, tenantSlug: user.tenant_slug
+      tenantName: user.tenant_name, tenantSlug: user.tenant_slug,
+      email_verified: user.email_verified !== false,
+      mfa_enabled: !!user.mfa_enabled,
+    }
+  });
+}));
+
+// POST /api/admin/auth/mfa/verify — verify MFA code during login (alternative to inline)
+router.post('/auth/mfa/verify', asyncHandler(async (req, res) => {
+  const { email, password, mfa_code } = req.body;
+  if (!email || !password || !mfa_code) {
+    return res.status(400).json({ error: 'Email, password, and MFA code are required' });
+  }
+
+  // Re-validate credentials + MFA by forwarding to login handler logic
+  const user = await getOne(
+    `SELECT tu.*, t.name as tenant_name, t.slug as tenant_slug
+     FROM tenant_users tu
+     JOIN tenants t ON t.id = tu.tenant_id
+     WHERE tu.email = $1 AND t.active = TRUE`,
+    [email]
+  );
+
+  if (!user) return res.status(401).json({ error: 'Invalid credentials' });
+
+  const validPassword = await bcrypt.compare(password, user.password);
+  if (!validPassword) return res.status(401).json({ error: 'Invalid credentials' });
+
+  const totp = new TOTP({ secret: Secret.fromBase32(user.mfa_secret), algorithm: 'SHA1', digits: 6, period: 30 });
+  const valid = totp.validate({ token: mfa_code, window: 1 }) !== null;
+
+  if (!valid) {
+    // Check backup codes
+    if (user.mfa_backup_codes) {
+      const backupCodes = JSON.parse(user.mfa_backup_codes);
+      const codeIdx = backupCodes.indexOf(mfa_code);
+      if (codeIdx !== -1) {
+        backupCodes.splice(codeIdx, 1);
+        await run('UPDATE tenant_users SET mfa_backup_codes = $1 WHERE id = $2', [JSON.stringify(backupCodes), user.id]);
+      } else {
+        return res.status(401).json({ error: 'Invalid authentication code' });
+      }
+    } else {
+      return res.status(401).json({ error: 'Invalid authentication code' });
+    }
+  }
+
+  run('UPDATE tenant_users SET last_login_at = NOW() WHERE id = $1', [user.id]).catch(() => {});
+
+  const token = jwt.sign(
+    { id: user.id, tenantId: user.tenant_id, username: user.username, role: user.role },
+    process.env.JWT_SECRET,
+    { expiresIn: process.env.JWT_EXPIRY || '24h' }
+  );
+
+  res.json({
+    token,
+    user: {
+      id: user.id, tenantId: user.tenant_id, username: user.username,
+      email: user.email, role: user.role,
+      tenantName: user.tenant_name, tenantSlug: user.tenant_slug,
+      email_verified: user.email_verified !== false,
+      mfa_enabled: true,
     }
   });
 }));
@@ -65,6 +160,121 @@ router.post('/auth/login', asyncHandler(async (req, res) => {
 // All routes below require tenantAuth
 // ============================================
 router.use(tenantAuth);
+
+// ============================================
+// MFA (Two-Factor Authentication)
+// ============================================
+
+// GET /api/admin/mfa/status — check current MFA status
+router.get('/mfa/status', asyncHandler(async (req, res) => {
+  const user = await getOne(
+    'SELECT mfa_enabled, mfa_dismissed_at FROM tenant_users WHERE id = $1',
+    [req.user.id]
+  );
+  res.json({
+    mfa_enabled: !!user?.mfa_enabled,
+    mfa_dismissed_at: user?.mfa_dismissed_at || null,
+  });
+}));
+
+// POST /api/admin/mfa/setup — generate TOTP secret and QR code
+router.post('/mfa/setup', asyncHandler(async (req, res) => {
+  const user = await getOne('SELECT email, mfa_enabled FROM tenant_users WHERE id = $1', [req.user.id]);
+  if (user.mfa_enabled) {
+    return res.status(400).json({ error: 'MFA is already enabled. Disable it first to reconfigure.' });
+  }
+
+  const secret = new Secret({ size: 20 });
+  const totp = new TOTP({
+    issuer: 'PlatformBeauty',
+    label: user.email,
+    algorithm: 'SHA1',
+    digits: 6,
+    period: 30,
+    secret,
+  });
+
+  const otpauthUri = totp.toString();
+
+  // Generate QR code as data URL
+  const qrDataUrl = await QRCode.toDataURL(otpauthUri, { width: 256, margin: 2 });
+
+  // Store secret temporarily (not yet enabled)
+  await run(
+    'UPDATE tenant_users SET mfa_secret = $1 WHERE id = $2',
+    [secret.base32, req.user.id]
+  );
+
+  res.json({
+    secret: secret.base32,
+    qr_code: qrDataUrl,
+    otpauth_uri: otpauthUri,
+  });
+}));
+
+// POST /api/admin/mfa/verify-setup — verify TOTP code and enable MFA
+router.post('/mfa/verify-setup', asyncHandler(async (req, res) => {
+  const { code } = req.body;
+  if (!code) return res.status(400).json({ error: 'Verification code is required' });
+
+  const user = await getOne('SELECT mfa_secret, mfa_enabled FROM tenant_users WHERE id = $1', [req.user.id]);
+  if (!user.mfa_secret) {
+    return res.status(400).json({ error: 'Please start MFA setup first' });
+  }
+  if (user.mfa_enabled) {
+    return res.status(400).json({ error: 'MFA is already enabled' });
+  }
+
+  const totp = new TOTP({ secret: Secret.fromBase32(user.mfa_secret), algorithm: 'SHA1', digits: 6, period: 30 });
+  const valid = totp.validate({ token: code, window: 1 }) !== null;
+
+  if (!valid) {
+    return res.status(400).json({ error: 'Invalid code. Please try again.' });
+  }
+
+  // Generate backup codes
+  const backupCodes = Array.from({ length: 8 }, () => crypto.randomBytes(4).toString('hex'));
+
+  await run(
+    'UPDATE tenant_users SET mfa_enabled = TRUE, mfa_backup_codes = $1 WHERE id = $2',
+    [JSON.stringify(backupCodes), req.user.id]
+  );
+
+  res.json({
+    success: true,
+    backup_codes: backupCodes,
+    message: 'Two-factor authentication has been enabled. Save your backup codes.',
+  });
+}));
+
+// POST /api/admin/mfa/disable — disable MFA (requires current TOTP code)
+router.post('/mfa/disable', asyncHandler(async (req, res) => {
+  const { code } = req.body;
+  if (!code) return res.status(400).json({ error: 'Current authentication code is required' });
+
+  const user = await getOne('SELECT mfa_secret, mfa_enabled FROM tenant_users WHERE id = $1', [req.user.id]);
+  if (!user.mfa_enabled) {
+    return res.status(400).json({ error: 'MFA is not enabled' });
+  }
+
+  const totp = new TOTP({ secret: Secret.fromBase32(user.mfa_secret), algorithm: 'SHA1', digits: 6, period: 30 });
+  const valid = totp.validate({ token: code, window: 1 }) !== null;
+
+  if (!valid) return res.status(400).json({ error: 'Invalid code' });
+
+  await run(
+    'UPDATE tenant_users SET mfa_enabled = FALSE, mfa_secret = NULL, mfa_backup_codes = NULL WHERE id = $1',
+    [req.user.id]
+  );
+
+  res.json({ success: true, message: 'Two-factor authentication has been disabled' });
+}));
+
+// POST /api/admin/mfa/dismiss — dismiss the MFA suggestion banner
+router.post('/mfa/dismiss', asyncHandler(async (req, res) => {
+  await run('UPDATE tenant_users SET mfa_dismissed_at = NOW() WHERE id = $1', [req.user.id]);
+  res.json({ success: true });
+}));
 
 // ============================================
 // SERVICES

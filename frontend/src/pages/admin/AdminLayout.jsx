@@ -1,19 +1,20 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   Box, AppBar, Toolbar, Typography, Drawer, SwipeableDrawer, List,
   ListItemButton, ListItemIcon, ListItemText, Button, Chip,
-  IconButton, useMediaQuery, useTheme
+  IconButton, useMediaQuery, useTheme, Alert
 } from '@mui/material';
 import {
   Dashboard as DashboardIcon, ContentCut, CalendarMonth,
   Schedule, Logout, People, AddCircle, Settings as SettingsIcon,
   Loyalty as LoyaltyIcon, LocalOffer, Assessment,
   Chat, StarBorder, Menu as MenuIcon, SupportAgent,
-  DarkMode, LightMode
+  DarkMode, LightMode, Security, Close
 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
 import { useThemeMode } from '../../contexts/ThemeContext';
+import api from '../../api/client';
 
 const DRAWER_WIDTH = 240;
 
@@ -41,6 +42,26 @@ export default function AdminLayout() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [showMfaBanner, setShowMfaBanner] = useState(false);
+
+  // Check MFA status for subtle suggestion
+  useEffect(() => {
+    // Don't show if dismissed locally
+    if (localStorage.getItem('mfa_banner_dismissed')) return;
+    api.get('/admin/mfa/status')
+      .then(r => {
+        if (!r.data.mfa_enabled && !r.data.mfa_dismissed_at) {
+          setShowMfaBanner(true);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const dismissMfaBanner = () => {
+    setShowMfaBanner(false);
+    localStorage.setItem('mfa_banner_dismissed', '1');
+    api.post('/admin/mfa/dismiss').catch(() => {});
+  };
 
   const handleLogout = () => {
     if (isImpersonating) {
@@ -175,6 +196,30 @@ export default function AdminLayout() {
               Exit Impersonation
             </Button>
           </Box>
+        )}
+        {showMfaBanner && !isImpersonating && (
+          <Alert
+            severity="info"
+            icon={<Security fontSize="small" />}
+            action={
+              <Box display="flex" gap={1} alignItems="center">
+                <Button
+                  color="inherit" size="small"
+                  onClick={() => { navigate('/admin/settings?tab=security'); dismissMfaBanner(); }}
+                >
+                  Set up
+                </Button>
+                <IconButton size="small" color="inherit" onClick={dismissMfaBanner}>
+                  <Close fontSize="small" />
+                </IconButton>
+              </Box>
+            }
+            sx={{ mb: 2, borderRadius: 2 }}
+          >
+            <Typography variant="body2">
+              <strong>Protect your account</strong> — Enable two-factor authentication for extra security.
+            </Typography>
+          </Alert>
         )}
         <Outlet />
       </Box>

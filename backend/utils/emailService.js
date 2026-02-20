@@ -406,8 +406,67 @@ async function sendRequestRejectedNotification(request, booking, tenant) {
   });
 }
 
+// Platform-level email (for signup verification, etc.)
+async function sendPlatformEmail({ to, toName, subject, html }) {
+  const apiKey = process.env.BREVO_API_KEY;
+  const platformName = 'PlatformBeauty';
+  const platformColor = '#8B2635';
+
+  if (!apiKey) {
+    console.log(`[Email] BREVO_API_KEY not set. Would send "${subject}" to ${to}`);
+    return { success: false, reason: 'no_api_key' };
+  }
+
+  try {
+    const fromEmail = process.env.BREVO_FROM_EMAIL || 'noreply@bookingplatform.com';
+    const wrappedHtml = wrapInTemplate(html, { name: platformName, primary_color: platformColor });
+
+    const response = await fetch(BREVO_API_URL, {
+      method: 'POST',
+      headers: { 'accept': 'application/json', 'content-type': 'application/json', 'api-key': apiKey },
+      body: JSON.stringify({
+        sender: { name: platformName, email: fromEmail },
+        to: [{ email: to, name: toName || to }],
+        subject,
+        htmlContent: wrappedHtml,
+      }),
+    });
+
+    const result = await response.json();
+    if (response.ok) {
+      return { success: true, messageId: result.messageId };
+    } else {
+      console.error('[Email] Platform email error:', result);
+      return { success: false, error: result };
+    }
+  } catch (err) {
+    console.error('[Email] Platform email error:', err.message);
+    return { success: false, error: err.message };
+  }
+}
+
+async function sendVerificationEmail(email, name, token) {
+  const platformUrl = process.env.PLATFORM_URL || 'https://platformbeauty-production.up.railway.app';
+  const link = `${platformUrl}/verify-email?token=${token}`;
+  const html = `
+    <h2 style="margin:0 0 16px;color:#333;">Verify Your Email</h2>
+    <p style="color:#555;">Hi ${name},</p>
+    <p style="color:#555;">Thanks for signing up! Please verify your email address to activate your account.</p>
+    <p style="text-align:center;margin:24px 0;">
+      <a href="${link}" style="display:inline-block;background:#8B2635;color:#fff;padding:14px 36px;border-radius:8px;text-decoration:none;font-weight:600;font-size:16px;">
+        Verify Email Address
+      </a>
+    </p>
+    <p style="color:#999;font-size:13px;">This link expires in 24 hours. If you didn't create an account, you can safely ignore this email.</p>
+    <p style="color:#ccc;font-size:11px;margin-top:20px;">Or copy this link: ${link}</p>`;
+
+  return sendPlatformEmail({ to: email, toName: name, subject: 'Verify your email - PlatformBeauty', html });
+}
+
 module.exports = {
   sendEmail,
+  sendPlatformEmail,
+  sendVerificationEmail,
   sendBookingPendingNotification,
   sendBookingApprovedNotification,
   sendBookingRejectedNotification,

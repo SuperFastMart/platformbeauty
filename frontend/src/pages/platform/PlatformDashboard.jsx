@@ -15,47 +15,54 @@ import api from '../../api/client';
 
 dayjs.extend(relativeTime);
 
-// SVG Bar Chart
+// SVG Bar Chart — bars in SVG (stretch fine), labels as HTML (no distortion)
 function BarChart({ data, xKey, yKey, color = '#8B2635', height = 200, formatX, formatY }) {
   if (!data || data.length === 0) return <Typography color="text.secondary" variant="body2">No data</Typography>;
   const maxVal = Math.max(...data.map(d => parseFloat(d[yKey]) || 0), 1);
-  const barWidth = Math.max(Math.min(Math.floor((100 / data.length) * 0.7), 20), 4);
-  const gap = 100 / data.length;
+  const barHeight = height - 28;
+  const barPadding = 0.3;
 
   return (
-    <Box sx={{ position: 'relative', height, width: '100%' }}>
-      <svg width="100%" height={height} viewBox={`0 0 ${data.length * gap + 10} ${height}`} preserveAspectRatio="none">
+    <Box sx={{ width: '100%' }}>
+      <svg width="100%" height={barHeight} viewBox={`0 0 ${data.length} ${barHeight}`} preserveAspectRatio="none">
         {data.map((d, i) => {
           const val = parseFloat(d[yKey]) || 0;
-          const barH = (val / maxVal) * (height - 30);
+          const h = (val / maxVal) * barHeight;
           return (
-            <g key={i}>
-              <rect
-                x={i * gap + (gap - barWidth) / 2}
-                y={height - 20 - barH}
-                width={barWidth}
-                height={barH}
-                rx={2}
-                fill={color}
-                opacity={0.85}
-              >
-                <title>{`${formatX ? formatX(d[xKey]) : d[xKey]}: ${formatY ? formatY(val) : val}`}</title>
-              </rect>
-              {data.length <= 31 && (
-                <text
-                  x={i * gap + gap / 2}
-                  y={height - 4}
-                  textAnchor="middle"
-                  fontSize={data.length > 20 ? 5 : 7}
-                  fill="#999"
-                >
-                  {formatX ? formatX(d[xKey]) : d[xKey]}
-                </text>
-              )}
-            </g>
+            <rect
+              key={i}
+              x={i + barPadding / 2}
+              y={barHeight - h}
+              width={1 - barPadding}
+              height={h}
+              fill={color}
+              opacity={0.85}
+            >
+              <title>{`${formatX ? formatX(d[xKey]) : d[xKey]}: ${formatY ? formatY(val) : val}`}</title>
+            </rect>
           );
         })}
       </svg>
+      {data.length <= 31 && (
+        <Box sx={{ display: 'flex', width: '100%', mt: 0.5 }}>
+          {data.map((d, i) => (
+            <Typography
+              key={i}
+              variant="caption"
+              sx={{
+                flex: 1,
+                textAlign: 'center',
+                fontSize: data.length > 20 ? 9 : 11,
+                color: 'text.secondary',
+                lineHeight: 1,
+                overflow: 'hidden',
+              }}
+            >
+              {formatX ? formatX(d[xKey]) : d[xKey]}
+            </Typography>
+          ))}
+        </Box>
+      )}
     </Box>
   );
 }

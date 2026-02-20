@@ -4,7 +4,7 @@ import {
   Box, Typography, Card, CardContent, TextField, Button, Tabs, Tab,
   Snackbar, Alert, CircularProgress, InputAdornment, Chip, Switch, FormControlLabel, Grid, MenuItem
 } from '@mui/material';
-import { Save, CreditCard, Store, Palette, Info, Schedule, Code, ContentCopy, Share, Delete, Add, DragIndicator, Gavel, Subscriptions, OpenInNew, CheckCircle } from '@mui/icons-material';
+import { Save, CreditCard, Store, Palette, Info, Schedule, Code, ContentCopy, Share, Delete, Add, DragIndicator, Gavel, Subscriptions, OpenInNew, CheckCircle, Security, Lock, LockOpen } from '@mui/icons-material';
 import api from '../../api/client';
 
 function TabPanel({ children, value, index }) {
@@ -212,11 +212,207 @@ function SubscriptionTab({ snackbar, setSnackbar }) {
   );
 }
 
+function SecurityTab({ snackbar, setSnackbar }) {
+  const [mfaEnabled, setMfaEnabled] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [setupData, setSetupData] = useState(null);
+  const [verifyCode, setVerifyCode] = useState('');
+  const [disableCode, setDisableCode] = useState('');
+  const [backupCodes, setBackupCodes] = useState(null);
+  const [actionLoading, setActionLoading] = useState(false);
+
+  useEffect(() => {
+    api.get('/admin/mfa/status')
+      .then(r => setMfaEnabled(r.data.mfa_enabled))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleStartSetup = async () => {
+    setActionLoading(true);
+    try {
+      const res = await api.post('/admin/mfa/setup');
+      setSetupData(res.data);
+    } catch (err) {
+      setSnackbar({ open: true, message: err.response?.data?.error || 'Failed to start setup', severity: 'error' });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleVerifySetup = async () => {
+    if (verifyCode.length !== 6) return;
+    setActionLoading(true);
+    try {
+      const res = await api.post('/admin/mfa/verify-setup', { code: verifyCode });
+      setBackupCodes(res.data.backup_codes);
+      setMfaEnabled(true);
+      setSetupData(null);
+      setVerifyCode('');
+      setSnackbar({ open: true, message: 'Two-factor authentication enabled!', severity: 'success' });
+    } catch (err) {
+      setSnackbar({ open: true, message: err.response?.data?.error || 'Invalid code', severity: 'error' });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleDisable = async () => {
+    if (disableCode.length < 6) return;
+    setActionLoading(true);
+    try {
+      await api.post('/admin/mfa/disable', { code: disableCode });
+      setMfaEnabled(false);
+      setDisableCode('');
+      setBackupCodes(null);
+      setSnackbar({ open: true, message: 'Two-factor authentication disabled', severity: 'info' });
+    } catch (err) {
+      setSnackbar({ open: true, message: err.response?.data?.error || 'Invalid code', severity: 'error' });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  if (loading) return <Box display="flex" justifyContent="center" py={4}><CircularProgress size={32} /></Box>;
+
+  return (
+    <Box>
+      {/* MFA Status Card */}
+      <Card sx={{ mb: 3 }}>
+        <CardContent>
+          <Box display="flex" alignItems="center" gap={1.5} mb={2}>
+            {mfaEnabled ? <Lock color="success" /> : <LockOpen color="action" />}
+            <Typography variant="subtitle1" fontWeight={600}>
+              Two-Factor Authentication (2FA)
+            </Typography>
+            <Chip
+              label={mfaEnabled ? 'Enabled' : 'Not set up'}
+              size="small"
+              color={mfaEnabled ? 'success' : 'default'}
+            />
+          </Box>
+          <Typography variant="body2" color="text.secondary" mb={2}>
+            Add an extra layer of security to your account. When enabled, you'll need to enter a code
+            from your authenticator app each time you sign in.
+          </Typography>
+
+          {/* Not enabled — show setup button or setup flow */}
+          {!mfaEnabled && !setupData && (
+            <Button
+              variant="contained" onClick={handleStartSetup} disabled={actionLoading}
+              startIcon={<Security />}
+            >
+              {actionLoading ? 'Loading...' : 'Set Up 2FA'}
+            </Button>
+          )}
+
+          {/* Setup flow — QR code + verify */}
+          {!mfaEnabled && setupData && (
+            <Box>
+              <Alert severity="info" sx={{ mb: 2 }}>
+                Scan the QR code below with your authenticator app (Google Authenticator, Authy, 1Password, etc.)
+              </Alert>
+              <Box display="flex" gap={3} flexWrap="wrap" alignItems="flex-start">
+                <Box textAlign="center">
+                  <img src={setupData.qr_code} alt="QR Code" style={{ width: 200, height: 200, borderRadius: 8, border: '1px solid #eee' }} />
+                  <Typography variant="caption" display="block" color="text.secondary" mt={1}>
+                    Can't scan? Enter this key manually:
+                  </Typography>
+                  <Typography variant="caption" fontFamily="monospace" sx={{ wordBreak: 'break-all', fontSize: 11 }}>
+                    {setupData.secret}
+                  </Typography>
+                </Box>
+                <Box flex={1} minWidth={240}>
+                  <Typography variant="body2" fontWeight={500} mb={1}>
+                    Enter the 6-digit code from your app:
+                  </Typography>
+                  <TextField
+                    fullWidth size="small"
+                    value={verifyCode}
+                    onChange={e => setVerifyCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    placeholder="000000"
+                    inputProps={{ maxLength: 6, style: { textAlign: 'center', fontSize: '1.3rem', letterSpacing: 6 } }}
+                    sx={{ mb: 2 }}
+                  />
+                  <Box display="flex" gap={1}>
+                    <Button
+                      variant="contained" onClick={handleVerifySetup}
+                      disabled={actionLoading || verifyCode.length !== 6}
+                    >
+                      {actionLoading ? 'Verifying...' : 'Verify & Enable'}
+                    </Button>
+                    <Button variant="text" onClick={() => { setSetupData(null); setVerifyCode(''); }}>
+                      Cancel
+                    </Button>
+                  </Box>
+                </Box>
+              </Box>
+            </Box>
+          )}
+
+          {/* Backup codes shown after setup */}
+          {backupCodes && (
+            <Alert severity="warning" sx={{ mt: 2 }}>
+              <Typography variant="subtitle2" fontWeight={600} mb={1}>
+                Save your backup codes!
+              </Typography>
+              <Typography variant="body2" mb={1}>
+                Store these codes somewhere safe. Each can be used once if you lose access to your authenticator app.
+              </Typography>
+              <Box sx={{ bgcolor: 'rgba(0,0,0,0.04)', borderRadius: 1, p: 1.5, fontFamily: 'monospace', fontSize: 13 }}>
+                {backupCodes.map((code, i) => (
+                  <span key={i}>{code}{i < backupCodes.length - 1 ? '  •  ' : ''}</span>
+                ))}
+              </Box>
+              <Button
+                size="small" sx={{ mt: 1 }}
+                onClick={() => {
+                  navigator.clipboard.writeText(backupCodes.join('\n'));
+                  setSnackbar({ open: true, message: 'Backup codes copied', severity: 'success' });
+                }}
+              >
+                Copy Codes
+              </Button>
+            </Alert>
+          )}
+
+          {/* Enabled — show disable option */}
+          {mfaEnabled && !backupCodes && (
+            <Box mt={2} pt={2} borderTop="1px solid #eee">
+              <Typography variant="body2" color="text.secondary" mb={1.5}>
+                To disable 2FA, enter a current code from your authenticator app:
+              </Typography>
+              <Box display="flex" gap={1} alignItems="flex-start">
+                <TextField
+                  size="small" placeholder="000000"
+                  value={disableCode}
+                  onChange={e => setDisableCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  inputProps={{ maxLength: 6, style: { textAlign: 'center', letterSpacing: 4 } }}
+                  sx={{ width: 160 }}
+                />
+                <Button
+                  variant="outlined" color="error" size="small"
+                  onClick={handleDisable}
+                  disabled={actionLoading || disableCode.length < 6}
+                  sx={{ height: 40 }}
+                >
+                  Disable 2FA
+                </Button>
+              </Box>
+            </Box>
+          )}
+        </CardContent>
+      </Card>
+    </Box>
+  );
+}
+
 export default function Settings() {
   const [searchParams] = useSearchParams();
   const initialTab = useMemo(() => {
     const tabParam = searchParams.get('tab');
     if (tabParam === 'subscription') return 8;
+    if (tabParam === 'security') return 9;
     return 0;
   }, []);
   const [tab, setTab] = useState(initialTab);
@@ -329,6 +525,7 @@ export default function Settings() {
         <Tab icon={<Gavel />} label="Policies" iconPosition="start" />
         <Tab icon={<Code />} label="Widget" iconPosition="start" />
         <Tab icon={<Subscriptions />} label="Subscription" iconPosition="start" />
+        <Tab icon={<Security />} label="Security" iconPosition="start" />
       </Tabs>
 
       {/* Business Info */}
@@ -904,6 +1101,11 @@ window.addEventListener('message', function(e) {
       {/* Subscription */}
       <TabPanel value={tab} index={8}>
         <SubscriptionTab snackbar={snackbar} setSnackbar={setSnackbar} />
+      </TabPanel>
+
+      {/* Security */}
+      <TabPanel value={tab} index={9}>
+        <SecurityTab snackbar={snackbar} setSnackbar={setSnackbar} />
       </TabPanel>
 
       <Snackbar open={snackbar.open} autoHideDuration={3000} onClose={() => setSnackbar(s => ({ ...s, open: false }))}>

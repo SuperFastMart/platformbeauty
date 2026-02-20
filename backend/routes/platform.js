@@ -1,8 +1,10 @@
 const router = require('express').Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const { pool, getOne, getAll, run } = require('../config/database');
 const { platformAuth } = require('../middleware/auth');
+const { sendVerificationEmail } = require('../utils/emailService');
 
 // Helper: wrap async route handlers
 const asyncHandler = (fn) => (req, res, next) =>
@@ -97,12 +99,15 @@ router.post('/signup', asyncHandler(async (req, res) => {
     );
     const tenant = tenantResult.rows[0];
 
-    // Create admin user
+    // Create admin user with email verification token
     const hashedPassword = await bcrypt.hash(password, 10);
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
     await client.query(
-      `INSERT INTO tenant_users (tenant_id, username, email, password, role)
-       VALUES ($1, $2, $3, $4, 'admin')`,
-      [tenant.id, owner_email, owner_email, hashedPassword]
+      `INSERT INTO tenant_users (tenant_id, username, email, password, role, email_verified, email_verification_token, email_verification_expires)
+       VALUES ($1, $2, $3, $4, 'admin', FALSE, $5, $6)`,
+      [tenant.id, owner_email, owner_email, hashedPassword, verificationToken, verificationExpires]
     );
 
     // Create platform notification
@@ -114,9 +119,14 @@ router.post('/signup', asyncHandler(async (req, res) => {
 
     await client.query('COMMIT');
 
-    // Generate JWT so user is logged in immediately
+    // Send verification email (non-blocking)
+    sendVerificationEmail(owner_email, owner_name, verificationToken).catch(err => {
+      console.error('[Signup] Failed to send verification email:', err);
+    });
+
+    // Generate JWT so user can access the verification page
     const userResult = await getOne(
-      'SELECT id, tenant_id, username, email, role FROM tenant_users WHERE tenant_id = $1 AND email = $2',
+      'SELECT id, tenant_id, username, email, role, email_verified FROM tenant_users WHERE tenant_id = $1 AND email = $2',
       [tenant.id, owner_email]
     );
 
@@ -136,6 +146,7 @@ router.post('/signup', asyncHandler(async (req, res) => {
         tenantId: tenant.id,
         tenantName: tenant.name,
         tenantSlug: tenant.slug,
+        email_verified: false,
       },
       tenant: {
         id: tenant.id,
@@ -157,6 +168,76 @@ router.post('/signup', asyncHandler(async (req, res) => {
 router.get('/check-slug/:slug', asyncHandler(async (req, res) => {
   const existing = await getOne('SELECT id FROM tenants WHERE slug = $1', [req.params.slug]);
   res.json({ available: !existing });
+}));
+
+// GET /api/platform/verify-email?token=xxx — verify email address
+router.get('/verify-email', asyncHandler(async (req, res) => {
+  const { token } = req.query;
+  if (!token) return res.status(400).json({ error: 'Verification token is required' });
+
+  const user = await getOne(
+    `SELECT tu.id, tu.email, tu.email_verified, tu.email_verification_expires, t.name as tenant_name, t.slug as tenant_slug
+     FROM tenant_users tu
+     JOIN tenants t ON t.id = tu.tenant_id
+     WHERE tu.email_verification_token = $1`,
+    [token]
+  );
+
+  if (!user) {
+    return res.status(400).json({ error: 'Invalid or expired verification link' });
+  }
+
+  if (user.email_verified) {
+    return res.json({ success: true, message: 'Email already verified', already_verified: true });
+  }
+
+  if (user.email_verification_expires && new Date(user.email_verification_expires) < new Date()) {
+    return res.status(400).json({ error: 'Verification link has expired. Please request a new one.' });
+  }
+
+  await run(
+    'UPDATE tenant_users SET email_verified = TRUE, email_verification_token = NULL, email_verification_expires = NULL WHERE id = $1',
+    [user.id]
+  );
+
+  res.json({ success: true, message: 'Email verified successfully' });
+}));
+
+// POST /api/platform/resend-verification — resend verification email
+router.post('/resend-verification', asyncHandler(async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'Email is required' });
+
+  const user = await getOne(
+    `SELECT tu.id, tu.email, tu.email_verified, t.owner_name
+     FROM tenant_users tu
+     JOIN tenants t ON t.id = tu.tenant_id
+     WHERE tu.email = $1`,
+    [email]
+  );
+
+  if (!user) {
+    // Don't reveal if email exists
+    return res.json({ success: true, message: 'If an account exists, a verification email has been sent' });
+  }
+
+  if (user.email_verified) {
+    return res.json({ success: true, message: 'Email is already verified' });
+  }
+
+  const newToken = crypto.randomBytes(32).toString('hex');
+  const newExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+  await run(
+    'UPDATE tenant_users SET email_verification_token = $1, email_verification_expires = $2 WHERE id = $3',
+    [newToken, newExpires, user.id]
+  );
+
+  sendVerificationEmail(user.email, user.owner_name || user.email, newToken).catch(err => {
+    console.error('[Resend] Failed to send verification email:', err);
+  });
+
+  res.json({ success: true, message: 'Verification email sent' });
 }));
 
 // GET /api/platform/tenants

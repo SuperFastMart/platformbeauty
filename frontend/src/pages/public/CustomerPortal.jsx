@@ -75,7 +75,7 @@ export default function CustomerPortal() {
         authApi('get', `/t/${slug}/auth/me`),
         authApi('get', `/t/${slug}/auth/booking-requests`),
         authApi('get', `/t/${slug}/auth/messages`),
-        authApi('get', `/t/${slug}/loyalty/my-status`).catch(() => ({ data: { active: false } })),
+        authApi('get', `/t/${slug}/loyalty/status`).catch(() => ({ data: { active: false } })),
       ]);
       setCustomer(meRes.data.customer);
       setUpcoming(meRes.data.upcoming);

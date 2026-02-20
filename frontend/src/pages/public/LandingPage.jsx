@@ -77,10 +77,11 @@ export default function LandingPage() {
 
     try {
       const res = await api.post('/platform/signup', form);
-      // Auto-login: store token and user
+      // Store token and user (email not yet verified)
       localStorage.setItem('auth_token', res.data.token);
       localStorage.setItem('auth_user', JSON.stringify(res.data.user));
-      navigate('/admin/dashboard');
+      // Redirect to email verification page
+      navigate(`/verify-email?email=${encodeURIComponent(form.owner_email)}`);
     } catch (err) {
       setError(err.response?.data?.error || 'Something went wrong. Please try again.');
     } finally {

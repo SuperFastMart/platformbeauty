@@ -5,7 +5,7 @@ const path = require('path');
 const { migrate } = require('./scripts/migrate');
 const { seed } = require('./scripts/seed');
 
-const { generalLimiter, authLimiter, bookingLimiter } = require('./middleware/rateLimit');
+const { generalLimiter } = require('./middleware/rateLimit');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -44,7 +44,7 @@ app.use('/api/t/:tenant', generalLimiter, publicTenantRoutes);
 
 // --- Customer auth routes (tenant-scoped, public + authenticated) ---
 const customerAuthRoutes = require('./routes/customerAuth');
-app.use('/api/t/:tenant/auth', authLimiter, customerAuthRoutes);
+app.use('/api/t/:tenant/auth', customerAuthRoutes);
 
 // --- Sprint 3: Loyalty, Discount Codes, Reports ---
 const { adminRouter: loyaltyAdminRoutes, publicRouter: loyaltyPublicRoutes } = require('./routes/loyalty');
