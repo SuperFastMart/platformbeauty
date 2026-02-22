@@ -96,7 +96,7 @@ export default function LandingPage() {
         <Container maxWidth="lg">
           <Toolbar disableGutters sx={{ justifyContent: 'space-between' }}>
             <Typography variant="h5" fontWeight={800} sx={{ color: PRIMARY, letterSpacing: -0.5 }}>
-              PlatformBeauty
+              Boukd
             </Typography>
             <Box display="flex" gap={1.5} alignItems="center">
               <Button
@@ -375,7 +375,7 @@ export default function LandingPage() {
               </Typography>
               <Typography variant="body1" color="text.secondary" lineHeight={1.8} mb={3}>
                 Whether you're a nail technician, hairstylist, makeup artist, barber, or spa owner —
-                PlatformBeauty gives you a professional booking system that works for your business.
+                Boukd gives you a professional booking system that works for your business.
               </Typography>
               {[
                 'Hair salons & barbers',
@@ -396,7 +396,7 @@ export default function LandingPage() {
                 <CardContent sx={{ p: 0 }}>
                   <Box sx={{ bgcolor: PRIMARY, color: 'white', px: 3, py: 2 }}>
                     <Typography fontWeight={700}>Your Booking Page</Typography>
-                    <Typography variant="caption" sx={{ opacity: 0.8 }}>platformbeauty.com/t/your-business</Typography>
+                    <Typography variant="caption" sx={{ opacity: 0.8 }}>boukd.com/t/your-business</Typography>
                   </Box>
                   <Box sx={{ p: 3 }}>
                     {['Gel Nails — Full Set', 'Lash Lift & Tint', 'Eyebrow Lamination'].map((service, i) => (
@@ -437,7 +437,7 @@ export default function LandingPage() {
             <Grid container spacing={3} justifyContent="center">
               {plans.map((plan, i) => {
                 const planFeatures = typeof plan.features === 'string' ? JSON.parse(plan.features) : (plan.features || []);
-                const isPopular = plan.tier === 'professional';
+                const isPopular = plan.tier === 'pro';
                 return (
                   <Grid item xs={12} sm={6} md={3} key={plan.tier}>
                     <Card sx={{
@@ -506,7 +506,7 @@ export default function LandingPage() {
                 Ready to grow your business?
               </Typography>
               <Typography variant="h6" fontWeight={400} sx={{ opacity: 0.9, mb: 4, maxWidth: 500, mx: 'auto' }}>
-                Join PlatformBeauty today and start taking bookings online. No upfront costs.
+                Join Boukd today and start taking bookings online. No upfront costs.
               </Typography>
               <Button
                 variant="contained"
@@ -552,7 +552,7 @@ export default function LandingPage() {
                         onChange={e => setForm(f => ({ ...f, slug: e.target.value.toLowerCase().replace(/[^a-z0-9]/g, '') }))}
                         margin="normal"
                         InputProps={{
-                          startAdornment: <InputAdornment position="start">platformbeauty.com/t/</InputAdornment>,
+                          startAdornment: <InputAdornment position="start">boukd.com/t/</InputAdornment>,
                           endAdornment: form.slug.length >= 3 && (
                             <InputAdornment position="end">
                               {slugChecking ? (
@@ -651,9 +651,9 @@ export default function LandingPage() {
         <Container maxWidth="lg">
           <Box display="flex" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={2}>
             <Box>
-              <Typography variant="h6" fontWeight={700} sx={{ color: GOLD }}>PlatformBeauty</Typography>
+              <Typography variant="h6" fontWeight={700} sx={{ color: GOLD }}>Boukd</Typography>
               <Typography variant="caption" sx={{ opacity: 0.6 }}>
-                The booking platform for beauty professionals
+                The booking platform built for you
               </Typography>
             </Box>
             <Box display="flex" gap={{ xs: 1, sm: 3 }}>
@@ -667,7 +667,7 @@ export default function LandingPage() {
           </Box>
           <Divider sx={{ my: 2, borderColor: 'rgba(255,255,255,0.1)' }} />
           <Typography variant="caption" sx={{ opacity: 0.4 }}>
-            &copy; {new Date().getFullYear()} PlatformBeauty. All rights reserved.
+            &copy; {new Date().getFullYear()} Boukd. All rights reserved.
           </Typography>
         </Container>
       </Box>

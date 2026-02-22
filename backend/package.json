@@ -1,7 +1,7 @@
 {
-  "name": "booking-platform-backend",
+  "name": "boukd-backend",
   "version": "1.0.0",
-  "description": "Multi-tenant beauty booking platform - API server",
+  "description": "Boukd - Multi-tenant booking platform API",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

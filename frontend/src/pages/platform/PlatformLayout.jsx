@@ -74,7 +74,7 @@ export default function PlatformLayout() {
       <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
         <Toolbar>
           <Typography variant="h6" noWrap sx={{ flexGrow: 1 }}>
-            Booking Platform Admin
+            Boukd Admin
           </Typography>
           <IconButton color="inherit" onClick={e => setAnchorEl(e.currentTarget)} sx={{ mr: 1 }}>
             <Badge badgeContent={unreadCount} color="error">

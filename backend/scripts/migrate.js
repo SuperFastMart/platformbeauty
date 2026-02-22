@@ -610,6 +610,42 @@ const migrations = [
   },
 
   {
+    name: '040_update_subscription_tiers',
+    sql: `
+      -- Update Free tier: 5 services, 50 bookings
+      UPDATE subscription_plans SET
+        max_services = 5, max_bookings_per_month = 50,
+        features = '["Up to 5 services","Up to 50 bookings/month","Basic booking page","Email notifications"]',
+        updated_at = NOW()
+      WHERE tier = 'free';
+
+      -- Rename Starter → Growth, new pricing
+      UPDATE subscription_plans SET
+        name = 'Growth', tier = 'growth', price_monthly = 12.99,
+        max_services = NULL, max_bookings_per_month = NULL, sms_enabled = FALSE,
+        features = '["Unlimited services","Unlimited bookings","Custom branding & fonts","Email notifications","Customer management","Discount codes","Reports & analytics"]',
+        display_order = 1, stripe_product_id = NULL, stripe_price_id = NULL,
+        updated_at = NOW()
+      WHERE tier = 'starter';
+
+      -- Rename Professional → Pro, new pricing
+      UPDATE subscription_plans SET
+        name = 'Pro', tier = 'pro', price_monthly = 24.99,
+        features = '["Everything in Growth","SMS notifications","Loyalty programme","Review collection","Priority support","Calendar feed"]',
+        display_order = 2, stripe_product_id = NULL, stripe_price_id = NULL,
+        updated_at = NOW()
+      WHERE tier = 'professional';
+
+      -- Deactivate Enterprise tier
+      UPDATE subscription_plans SET is_active = FALSE, updated_at = NOW() WHERE tier = 'enterprise';
+
+      -- Migrate existing tenants to new tier names
+      UPDATE tenants SET subscription_tier = 'growth' WHERE subscription_tier = 'starter';
+      UPDATE tenants SET subscription_tier = 'pro' WHERE subscription_tier IN ('professional', 'enterprise');
+    `
+  },
+
+  {
     name: '039_alter_tenant_users_verification_mfa',
     sql: `
       ALTER TABLE tenant_users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE;

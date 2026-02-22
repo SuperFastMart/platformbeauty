@@ -225,7 +225,7 @@ platformRouter.post('/sync-stripe', asyncHandler(async (req, res) => {
     // Create product if needed
     if (!productId) {
       const product = await stripe.products.create({
-        name: `PlatformBeauty - ${plan.name}`,
+        name: `Boukd - ${plan.name}`,
         description: `${plan.name} subscription plan`,
         metadata: { plan_tier: plan.tier },
       });

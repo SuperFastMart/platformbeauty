@@ -5,7 +5,7 @@ const { getOne, getAll, run } = require('../config/database');
 const asyncHandler = (fn) => (req, res, next) =>
   Promise.resolve(fn(req, res, next)).catch(next);
 
-const PLATFORM_ADMIN_EMAIL = process.env.PLATFORM_ADMIN_EMAIL || 'admin@bookingplatform.com';
+const PLATFORM_ADMIN_EMAIL = process.env.PLATFORM_ADMIN_EMAIL || 'admin@boukd.com';
 
 // Simple email helper for support notifications (no tenant context needed)
 async function sendSupportEmail(to, subject, htmlBody) {
@@ -23,7 +23,7 @@ async function sendSupportEmail(to, subject, htmlBody) {
         'content-type': 'application/json',
       },
       body: JSON.stringify({
-        sender: { name: 'Booking Platform', email: process.env.BREVO_FROM_EMAIL || 'noreply@bookingplatform.com' },
+        sender: { name: 'Boukd', email: process.env.BREVO_FROM_EMAIL || 'noreply@boukd.com' },
         to: [{ email: to }],
         subject,
         htmlContent: `
@@ -271,7 +271,7 @@ platformRouter.post('/:id/messages', asyncHandler(async (req, res) => {
 
   const message = await getOne(
     `INSERT INTO ticket_messages (ticket_id, content, sender_type, sender_name, sender_email)
-     VALUES ($1, $2, 'platform', 'Booking Platform Support', $3) RETURNING *`,
+     VALUES ($1, $2, 'platform', 'Boukd Support', $3) RETURNING *`,
     [ticket.id, content, PLATFORM_ADMIN_EMAIL]
   );
 

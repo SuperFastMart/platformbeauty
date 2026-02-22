@@ -6,15 +6,15 @@ async function seed() {
   console.log('Seeding database...');
 
   // 1. Create platform admin
-  const existingAdmin = await getOne('SELECT id FROM platform_admins WHERE email = $1', ['admin@bookingplatform.com']);
+  const existingAdmin = await getOne('SELECT id FROM platform_admins WHERE email = $1', ['admin@boukd.com']);
 
   if (!existingAdmin) {
     const adminPassword = await bcrypt.hash('admin123', 10);
     await run(
       'INSERT INTO platform_admins (email, password, name, role) VALUES ($1, $2, $3, $4)',
-      ['admin@bookingplatform.com', adminPassword, 'Platform Admin', 'admin']
+      ['admin@boukd.com', adminPassword, 'Platform Admin', 'admin']
     );
-    console.log('  ✓ Platform admin created (admin@bookingplatform.com / admin123)');
+    console.log('  ✓ Platform admin created (admin@boukd.com / admin123)');
   } else {
     console.log('  - Platform admin already exists');
   }

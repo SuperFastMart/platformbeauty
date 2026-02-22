@@ -186,7 +186,7 @@ router.post('/mfa/setup', asyncHandler(async (req, res) => {
 
   const secret = new Secret({ size: 20 });
   const totp = new TOTP({
-    issuer: 'PlatformBeauty',
+    issuer: 'Boukd',
     label: user.email,
     algorithm: 'SHA1',
     digits: 6,

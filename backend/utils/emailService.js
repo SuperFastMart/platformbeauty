@@ -6,7 +6,7 @@ const BREVO_SMS_URL = 'https://api.brevo.com/v3/transactionalSMS/sms';
 // Branded HTML email template
 function wrapInTemplate(content, tenant) {
   const color = tenant.primary_color || '#8B2635';
-  const name = tenant.name || 'Booking Platform';
+  const name = tenant.name || 'Boukd';
   return `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -20,7 +20,7 @@ function wrapInTemplate(content, tenant) {
         <tr><td style="padding:32px;">${content}</td></tr>
         <tr><td style="padding:16px 32px;background:#fafafa;border-top:1px solid #eee;">
           <p style="margin:0;font-size:12px;color:#999;text-align:center;">
-            Sent by ${name} via Booking Platform
+            Sent by ${name} via Boukd
           </p>
         </td></tr>
       </table>
@@ -50,8 +50,8 @@ async function sendEmail({ to, toName, subject, html, tenant, emailType, booking
   }
 
   try {
-    const fromName = `${tenant.name} via Booking Platform`;
-    const fromEmail = process.env.BREVO_FROM_EMAIL || 'noreply@bookingplatform.com';
+    const fromName = `${tenant.name} via Boukd`;
+    const fromEmail = process.env.BREVO_FROM_EMAIL || 'noreply@boukd.com';
 
     const response = await fetch(BREVO_API_URL, {
       method: 'POST',
@@ -122,7 +122,7 @@ function generateBookingICS(booking, tenant) {
 
   return `BEGIN:VCALENDAR
 VERSION:2.0
-PRODID:-//BookingPlatform//EN
+PRODID:-//Boukd//EN
 BEGIN:VEVENT
 DTSTART:${dtStart}
 DTEND:${dtEnd}
@@ -139,7 +139,7 @@ END:VCALENDAR`;
 // ============================================
 
 async function sendBookingPendingNotification(booking, tenant) {
-  const platformUrl = process.env.PLATFORM_URL || 'https://platformbeauty-production.up.railway.app';
+  const platformUrl = process.env.PLATFORM_URL || 'https://boukd.com';
   const date = booking.date.toISOString ? booking.date.toISOString().split('T')[0] : String(booking.date).split('T')[0];
   const html = `
     <h2 style="margin:0 0 16px;color:#333;">Booking Request Received</h2>
@@ -170,7 +170,7 @@ async function sendBookingPendingNotification(booking, tenant) {
 }
 
 async function sendBookingApprovedNotification(booking, tenant) {
-  const platformUrl = process.env.PLATFORM_URL || 'https://platformbeauty-production.up.railway.app';
+  const platformUrl = process.env.PLATFORM_URL || 'https://boukd.com';
   const date = booking.date.toISOString ? booking.date.toISOString().split('T')[0] : String(booking.date).split('T')[0];
   const html = `
     <h2 style="margin:0 0 16px;color:#2e7d32;">Booking Confirmed!</h2>
@@ -200,7 +200,7 @@ async function sendBookingApprovedNotification(booking, tenant) {
 }
 
 async function sendBookingRejectedNotification(booking, tenant, reason, alternative) {
-  const platformUrl = process.env.PLATFORM_URL || 'https://platformbeauty-production.up.railway.app';
+  const platformUrl = process.env.PLATFORM_URL || 'https://boukd.com';
   let html = `
     <h2 style="margin:0 0 16px;color:#d32f2f;">Booking Update</h2>
     <p style="color:#555;">Hi ${booking.customer_name},</p>
@@ -281,7 +281,7 @@ async function sendAdminNewBookingNotification(booking, tenant) {
 }
 
 async function sendMagicLinkEmail(customer, tenant, token) {
-  const platformUrl = process.env.PLATFORM_URL || 'https://platformbeauty-production.up.railway.app';
+  const platformUrl = process.env.PLATFORM_URL || 'https://boukd.com';
   const link = `${platformUrl}/t/${tenant.slug}/portal/verify?token=${token}`;
   const html = `
     <h2 style="margin:0 0 16px;color:#333;">Sign In to Your Account</h2>
@@ -306,7 +306,7 @@ async function sendMagicLinkEmail(customer, tenant, token) {
 }
 
 async function sendPasswordResetEmail(customer, tenant, token) {
-  const platformUrl = process.env.PLATFORM_URL || 'https://platformbeauty-production.up.railway.app';
+  const platformUrl = process.env.PLATFORM_URL || 'https://boukd.com';
   const link = `${platformUrl}/t/${tenant.slug}/portal/login?reset=${token}`;
   const html = `
     <h2 style="margin:0 0 16px;color:#333;">Reset Your Password</h2>
@@ -409,7 +409,7 @@ async function sendRequestRejectedNotification(request, booking, tenant) {
 // Platform-level email (for signup verification, etc.)
 async function sendPlatformEmail({ to, toName, subject, html }) {
   const apiKey = process.env.BREVO_API_KEY;
-  const platformName = 'PlatformBeauty';
+  const platformName = 'Boukd';
   const platformColor = '#8B2635';
 
   if (!apiKey) {
@@ -418,7 +418,7 @@ async function sendPlatformEmail({ to, toName, subject, html }) {
   }
 
   try {
-    const fromEmail = process.env.BREVO_FROM_EMAIL || 'noreply@bookingplatform.com';
+    const fromEmail = process.env.BREVO_FROM_EMAIL || 'noreply@boukd.com';
     const wrappedHtml = wrapInTemplate(html, { name: platformName, primary_color: platformColor });
 
     const response = await fetch(BREVO_API_URL, {
@@ -446,7 +446,7 @@ async function sendPlatformEmail({ to, toName, subject, html }) {
 }
 
 async function sendVerificationEmail(email, name, token) {
-  const platformUrl = process.env.PLATFORM_URL || 'https://platformbeauty-production.up.railway.app';
+  const platformUrl = process.env.PLATFORM_URL || 'https://boukd.com';
   const link = `${platformUrl}/verify-email?token=${token}`;
   const html = `
     <h2 style="margin:0 0 16px;color:#333;">Verify Your Email</h2>
@@ -460,7 +460,7 @@ async function sendVerificationEmail(email, name, token) {
     <p style="color:#999;font-size:13px;">This link expires in 24 hours. If you didn't create an account, you can safely ignore this email.</p>
     <p style="color:#ccc;font-size:11px;margin-top:20px;">Or copy this link: ${link}</p>`;
 
-  return sendPlatformEmail({ to: email, toName: name, subject: 'Verify your email - PlatformBeauty', html });
+  return sendPlatformEmail({ to: email, toName: name, subject: 'Verify your email - Boukd', html });
 }
 
 module.exports = {
