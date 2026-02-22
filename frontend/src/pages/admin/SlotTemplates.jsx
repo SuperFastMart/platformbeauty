@@ -288,17 +288,21 @@ export default function SlotTemplates() {
                 </Button>
                 {day.open && (
                   <>
-                    <TextField size="small" type="time" value={day.start} sx={{ width: 120 }}
+                    <TextField size="small" type="time" value={day.start} sx={{ width: { xs: 100, sm: 120 } }}
                       onChange={e => setQuickSetup(qs => qs.map((d, i) => i === idx ? { ...d, start: e.target.value } : d))}
                       InputLabelProps={{ shrink: true }} />
                     <Typography variant="body2">to</Typography>
-                    <TextField size="small" type="time" value={day.end} sx={{ width: 120 }}
+                    <TextField size="small" type="time" value={day.end} sx={{ width: { xs: 100, sm: 120 } }}
                       onChange={e => setQuickSetup(qs => qs.map((d, i) => i === idx ? { ...d, end: e.target.value } : d))}
                       InputLabelProps={{ shrink: true }} />
-                    <TextField size="small" type="number" value={day.duration} sx={{ width: 80 }}
-                      inputProps={{ min: 5, max: 120 }}
-                      onChange={e => setQuickSetup(qs => qs.map((d, i) => i === idx ? { ...d, duration: parseInt(e.target.value) || 30 } : d))} />
-                    <Typography variant="caption" color="text.secondary">min slots</Typography>
+                    {!isMobile && (
+                      <>
+                        <TextField size="small" type="number" value={day.duration} sx={{ width: 80 }}
+                          inputProps={{ min: 5, max: 120 }}
+                          onChange={e => setQuickSetup(qs => qs.map((d, i) => i === idx ? { ...d, duration: parseInt(e.target.value) || 30 } : d))} />
+                        <Typography variant="caption" color="text.secondary">min slots</Typography>
+                      </>
+                    )}
                   </>
                 )}
                 {!day.open && <Typography variant="body2" color="text.secondary">Closed</Typography>}

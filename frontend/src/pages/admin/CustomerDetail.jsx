@@ -4,7 +4,7 @@ import {
   Box, Typography, Card, CardContent, Chip, Button, TextField,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
   Grid, Alert, Snackbar, Dialog, DialogTitle, DialogContent, DialogActions,
-  IconButton
+  IconButton, useMediaQuery, useTheme
 } from '@mui/material';
 import { ArrowBack, Delete, PersonOutline } from '@mui/icons-material';
 import dayjs from 'dayjs';
@@ -28,6 +28,8 @@ export default function CustomerDetail() {
   const [notes, setNotes] = useState('');
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [deleteDialog, setDeleteDialog] = useState(false);
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   useEffect(() => {
     api.get(`/admin/customers/${id}`)
@@ -154,6 +156,23 @@ export default function CustomerDetail() {
       {bookings.length === 0 ? (
         <Typography color="text.secondary">No bookings</Typography>
       ) : (
+        isMobile ? bookings.map(b => (
+          <Card key={b.id} variant="outlined" sx={{ mb: 1 }}>
+            <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+              <Box display="flex" justifyContent="space-between" alignItems="center">
+                <Typography fontWeight={500}>{dayjs(b.date).format('D MMM YYYY')}</Typography>
+                <Chip label={b.status} color={statusColors[b.status] || 'default'} size="small" />
+              </Box>
+              <Typography variant="body2" color="text.secondary" mt={0.3}>
+                {b.start_time?.slice(0, 5)} - {b.end_time?.slice(0, 5)}
+              </Typography>
+              <Typography variant="body2" mt={0.3}>{b.service_names}</Typography>
+              <Typography variant="body2" fontWeight={600} mt={0.3}>
+                £{parseFloat(b.total_price).toFixed(2)}
+              </Typography>
+            </CardContent>
+          </Card>
+        )) : (
         <TableContainer component={Paper} variant="outlined">
           <Table size="small">
             <TableHead>
@@ -180,6 +199,7 @@ export default function CustomerDetail() {
             </TableBody>
           </Table>
         </TableContainer>
+        )
       )}
 
       {/* Delete */}

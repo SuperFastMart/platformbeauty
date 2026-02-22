@@ -156,7 +156,7 @@ export default function Messages() {
       <Grid container spacing={2}>
         {/* Conversations sidebar */}
         <Grid item xs={12} md={4}>
-          <Card sx={{ height: 500, overflow: 'auto' }}>
+          <Card sx={{ height: { xs: 300, md: 500 }, overflow: 'auto' }}>
             <CardContent sx={{ p: 0 }}>
               {conversations.length === 0 ? (
                 <Box p={3}>
@@ -196,7 +196,7 @@ export default function Messages() {
 
         {/* Message thread */}
         <Grid item xs={12} md={8}>
-          <Card sx={{ height: 500, display: 'flex', flexDirection: 'column' }}>
+          <Card sx={{ height: { xs: 350, md: 500 }, display: 'flex', flexDirection: 'column' }}>
             {!selectedCustomerId ? (
               <CardContent sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Typography color="text.secondary">Select a conversation or click "New Message" to get started</Typography>

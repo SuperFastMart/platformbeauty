@@ -202,10 +202,10 @@ export default function Bookings() {
           onChange={(e, v) => v && setStatusFilter(v)}
           size="small"
         >
-          <ToggleButton value="all">All</ToggleButton>
-          <ToggleButton value="pending">Pending</ToggleButton>
-          <ToggleButton value="confirmed">Confirmed</ToggleButton>
-          <ToggleButton value="rejected">Rejected</ToggleButton>
+          <ToggleButton value="all" sx={{ px: { xs: 1, sm: 2 } }}>All</ToggleButton>
+          <ToggleButton value="pending" sx={{ px: { xs: 1, sm: 2 } }}>Pending</ToggleButton>
+          <ToggleButton value="confirmed" sx={{ px: { xs: 1, sm: 2 } }}>Confirmed</ToggleButton>
+          <ToggleButton value="rejected" sx={{ px: { xs: 1, sm: 2 } }}>Rejected</ToggleButton>
         </ToggleButtonGroup>
         <Button variant="text" size="small" onClick={() => { setDate(''); setStatusFilter('all'); }}>
           Clear Filters

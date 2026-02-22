@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Box, Typography, Stepper, Step, StepLabel, StepContent, Button,
   TextField, Card, CardContent, Alert, Chip, CircularProgress,
-  IconButton, Switch, FormControlLabel
+  IconButton, Switch, FormControlLabel, useMediaQuery, useTheme
 } from '@mui/material';
 import {
   ContentCut, Info, Palette, Payment, Schedule,
@@ -27,6 +27,8 @@ export default function SetupWizard() {
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   // Step 1: Services
   const [serviceList, setServiceList] = useState([{ name: '', duration: 30, price: '', category: '' }]);
@@ -226,9 +228,10 @@ export default function SetupWizard() {
           {serviceList.map((s, i) => (
             <Card key={i} variant="outlined" sx={{ mb: 1.5 }}>
               <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
-                <Box display="flex" gap={1.5} flexWrap="wrap" alignItems="center">
+                <Box display="flex" gap={1.5} flexWrap="wrap" alignItems="center"
+                  sx={{ flexDirection: { xs: 'column', sm: 'row' }, '& > *': { width: { xs: '100%', sm: 'auto' } } }}>
                   <TextField
-                    label="Service name" size="small" required sx={{ flex: 2, minWidth: 150 }}
+                    label="Service name" size="small" required sx={{ flex: { sm: 2 }, minWidth: { sm: 150 } }}
                     value={s.name}
                     onChange={e => {
                       const list = [...serviceList];
@@ -236,41 +239,45 @@ export default function SetupWizard() {
                       setServiceList(list);
                     }}
                   />
-                  <TextField
-                    label="Duration (min)" size="small" type="number" sx={{ width: 110 }}
-                    inputProps={{ min: 5, max: 480 }}
-                    value={s.duration}
-                    onChange={e => {
-                      const list = [...serviceList];
-                      list[i].duration = e.target.value;
-                      setServiceList(list);
-                    }}
-                  />
-                  <TextField
-                    label="Price" size="small" type="number" sx={{ width: 90 }}
-                    inputProps={{ min: 0, step: 0.01 }}
-                    value={s.price}
-                    onChange={e => {
-                      const list = [...serviceList];
-                      list[i].price = e.target.value;
-                      setServiceList(list);
-                    }}
-                  />
-                  <TextField
-                    label="Category" size="small" sx={{ flex: 1, minWidth: 120 }}
-                    value={s.category}
-                    placeholder="e.g. Hair, Nails"
-                    onChange={e => {
-                      const list = [...serviceList];
-                      list[i].category = e.target.value;
-                      setServiceList(list);
-                    }}
-                  />
-                  {serviceList.length > 1 && (
-                    <IconButton size="small" onClick={() => setServiceList(serviceList.filter((_, j) => j !== i))}>
-                      <Delete fontSize="small" />
-                    </IconButton>
-                  )}
+                  <Box display="flex" gap={1.5} sx={{ width: { xs: '100%', sm: 'auto' } }}>
+                    <TextField
+                      label="Duration (min)" size="small" type="number" sx={{ flex: { xs: 1 }, width: { sm: 110 } }}
+                      inputProps={{ min: 5, max: 480 }}
+                      value={s.duration}
+                      onChange={e => {
+                        const list = [...serviceList];
+                        list[i].duration = e.target.value;
+                        setServiceList(list);
+                      }}
+                    />
+                    <TextField
+                      label="Price" size="small" type="number" sx={{ flex: { xs: 1 }, width: { sm: 90 } }}
+                      inputProps={{ min: 0, step: 0.01 }}
+                      value={s.price}
+                      onChange={e => {
+                        const list = [...serviceList];
+                        list[i].price = e.target.value;
+                        setServiceList(list);
+                      }}
+                    />
+                  </Box>
+                  <Box display="flex" gap={1.5} alignItems="center" sx={{ width: { xs: '100%', sm: 'auto' }, flex: { sm: 1 } }}>
+                    <TextField
+                      label="Category" size="small" sx={{ flex: 1, minWidth: { sm: 120 } }}
+                      value={s.category}
+                      placeholder="e.g. Hair, Nails"
+                      onChange={e => {
+                        const list = [...serviceList];
+                        list[i].category = e.target.value;
+                        setServiceList(list);
+                      }}
+                    />
+                    {serviceList.length > 1 && (
+                      <IconButton size="small" onClick={() => setServiceList(serviceList.filter((_, j) => j !== i))}>
+                        <Delete fontSize="small" />
+                      </IconButton>
+                    )}
+                  </Box>
                 </Box>
               </CardContent>
             </Card>
@@ -407,8 +414,8 @@ export default function SetupWizard() {
           </Typography>
           {days.map((day, i) => (
             <Box
-              key={day.name} display="flex" alignItems="center" gap={1.5} py={0.75}
-              sx={{ borderBottom: '1px solid', borderColor: 'divider' }}
+              key={day.name} display="flex" alignItems="center" gap={1} py={0.75}
+              sx={{ borderBottom: '1px solid', borderColor: 'divider', flexWrap: 'wrap' }}
             >
               <FormControlLabel
                 control={
@@ -418,28 +425,30 @@ export default function SetupWizard() {
                     size="small"
                   />
                 }
-                label={<Typography variant="body2" sx={{ width: 80 }}>{day.name}</Typography>}
+                label={<Typography variant="body2" sx={{ width: { xs: 60, sm: 80 } }}>{isMobile ? day.name.slice(0, 3) : day.name}</Typography>}
                 sx={{ mr: 0 }}
               />
               {day.open ? (
                 <>
                   <TextField
-                    type="time" size="small" sx={{ width: 120 }}
+                    type="time" size="small" sx={{ width: { xs: 100, sm: 120 } }}
                     value={day.start}
                     onChange={e => setDays(d => d.map((dd, j) => j === i ? { ...dd, start: e.target.value } : dd))}
                   />
                   <Typography variant="body2">to</Typography>
                   <TextField
-                    type="time" size="small" sx={{ width: 120 }}
+                    type="time" size="small" sx={{ width: { xs: 100, sm: 120 } }}
                     value={day.end}
                     onChange={e => setDays(d => d.map((dd, j) => j === i ? { ...dd, end: e.target.value } : dd))}
                   />
-                  <TextField
-                    type="number" size="small" label="Slot min" sx={{ width: 80 }}
-                    inputProps={{ min: 5, max: 120 }}
-                    value={day.duration}
-                    onChange={e => setDays(d => d.map((dd, j) => j === i ? { ...dd, duration: e.target.value } : dd))}
-                  />
+                  {!isMobile && (
+                    <TextField
+                      type="number" size="small" label="Slot min" sx={{ width: 80 }}
+                      inputProps={{ min: 5, max: 120 }}
+                      value={day.duration}
+                      onChange={e => setDays(d => d.map((dd, j) => j === i ? { ...dd, duration: e.target.value } : dd))}
+                    />
+                  )}
                 </>
               ) : (
                 <Chip label="Closed" size="small" variant="outlined" />

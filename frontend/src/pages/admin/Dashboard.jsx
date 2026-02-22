@@ -32,14 +32,15 @@ function StatCard({ title, value, icon, color, onClick, subtitle }) {
 }
 
 // Simple SVG bar chart
-function BarChart({ data, labelKey, valueKey, color = '#8B2635', height = 160 }) {
+function BarChart({ data, labelKey, valueKey, color = '#8B2635', height = 160, compact = false }) {
   if (!data || data.length === 0) return <Typography color="text.secondary" variant="body2">No data yet</Typography>;
   const maxVal = Math.max(...data.map(d => parseFloat(d[valueKey]) || 0), 1);
-  const barWidth = Math.max(Math.floor(600 / data.length) - 4, 6);
+  const baseWidth = compact ? 300 : 600;
+  const barWidth = Math.max(Math.floor(baseWidth / data.length) - 4, 6);
 
   return (
     <Box sx={{ overflowX: 'auto' }}>
-      <svg width={Math.max(data.length * (barWidth + 4), 300)} height={height + 30} style={{ display: 'block' }}>
+      <svg width={Math.max(data.length * (barWidth + 4), compact ? 200 : 300)} height={height + 30} style={{ display: 'block' }}>
         {data.map((d, i) => {
           const val = parseFloat(d[valueKey]) || 0;
           const barH = Math.max((val / maxVal) * height, 1);
@@ -273,6 +274,7 @@ export default function Dashboard() {
                     labelKey="date"
                     valueKey="count"
                     color="#8B2635"
+                    compact={isMobile}
                   />
                 </CardContent>
               </Card>
@@ -304,6 +306,7 @@ export default function Dashboard() {
                     labelKey="date"
                     valueKey="revenue"
                     color="#2e7d32"
+                    compact={isMobile}
                   />
                 </CardContent>
               </Card>

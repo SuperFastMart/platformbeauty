@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import {
   Box, Typography, Card, CardContent, Button, Table, TableHead, TableRow,
-  TableCell, TableBody, Chip, Dialog, DialogTitle, DialogContent, DialogActions,
-  TextField, MenuItem, Snackbar, Alert, IconButton
+  TableCell, TableBody, TableContainer, Chip, Dialog, DialogTitle, DialogContent, DialogActions,
+  TextField, MenuItem, Snackbar, Alert, IconButton, useMediaQuery, useTheme
 } from '@mui/material';
 import { Add, Edit, Delete, Casino } from '@mui/icons-material';
 import dayjs from 'dayjs';
@@ -18,6 +18,8 @@ export default function DiscountCodes() {
     max_uses: '', min_spend: '', category: '', expires_at: '', active: true,
   });
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   const fetchCodes = () => {
     setLoading(true);
@@ -117,58 +119,91 @@ export default function DiscountCodes() {
           ) : codes.length === 0 ? (
             <Typography color="text.secondary">No discount codes yet</Typography>
           ) : (
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Code</TableCell>
-                  <TableCell>Discount</TableCell>
-                  <TableCell>Uses</TableCell>
-                  <TableCell>Min Spend</TableCell>
-                  <TableCell>Category</TableCell>
-                  <TableCell>Expires</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell align="right">Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {codes.map(c => (
-                  <TableRow key={c.id}>
-                    <TableCell>
+            isMobile ? codes.map(c => (
+              <Card key={c.id} variant="outlined" sx={{ mb: 1 }}>
+                <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+                  <Box display="flex" justifyContent="space-between" alignItems="flex-start">
+                    <Box>
                       <Typography fontWeight={600} fontFamily="monospace">{c.code}</Typography>
                       {c.description && (
-                        <Typography variant="caption" color="text.secondary" display="block">{c.description}</Typography>
+                        <Typography variant="caption" color="text.secondary">{c.description}</Typography>
                       )}
-                    </TableCell>
-                    <TableCell>
-                      {c.discount_type === 'percentage'
-                        ? `${parseFloat(c.discount_value)}%`
-                        : `£${parseFloat(c.discount_value).toFixed(2)}`}
-                    </TableCell>
-                    <TableCell>
-                      {c.uses_count}{c.max_uses ? ` / ${c.max_uses}` : ''}
-                    </TableCell>
-                    <TableCell>
-                      {parseFloat(c.min_spend) > 0 ? `£${parseFloat(c.min_spend).toFixed(2)}` : '—'}
-                    </TableCell>
-                    <TableCell>{c.category || '—'}</TableCell>
-                    <TableCell>
-                      {c.expires_at ? dayjs(c.expires_at).format('D MMM YYYY') : '—'}
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={c.active ? 'Active' : 'Inactive'}
-                        size="small"
-                        color={c.active ? 'success' : 'default'}
-                      />
-                    </TableCell>
-                    <TableCell align="right">
-                      <IconButton size="small" onClick={() => openEdit(c)}><Edit fontSize="small" /></IconButton>
-                      <IconButton size="small" color="error" onClick={() => handleDelete(c.id)}><Delete fontSize="small" /></IconButton>
-                    </TableCell>
+                    </Box>
+                    <Box display="flex" gap={0.5} ml={1}>
+                      <Chip label={c.active ? 'Active' : 'Inactive'} size="small" color={c.active ? 'success' : 'default'} />
+                    </Box>
+                  </Box>
+                  <Box display="flex" gap={1} mt={1} flexWrap="wrap" alignItems="center">
+                    <Chip label={c.discount_type === 'percentage' ? `${parseFloat(c.discount_value)}%` : `£${parseFloat(c.discount_value).toFixed(2)} off`} size="small" variant="outlined" />
+                    <Typography variant="caption" color="text.secondary">
+                      {c.uses_count}{c.max_uses ? ` / ${c.max_uses}` : ''} uses
+                    </Typography>
+                    {parseFloat(c.min_spend) > 0 && (
+                      <Typography variant="caption" color="text.secondary">Min £{parseFloat(c.min_spend).toFixed(2)}</Typography>
+                    )}
+                    {c.category && <Chip label={c.category} size="small" sx={{ height: 20, fontSize: 11 }} />}
+                    {c.expires_at && (
+                      <Typography variant="caption" color="text.secondary">Expires {dayjs(c.expires_at).format('D MMM YY')}</Typography>
+                    )}
+                  </Box>
+                  <Box display="flex" justifyContent="flex-end" mt={0.5}>
+                    <IconButton size="small" onClick={() => openEdit(c)}><Edit fontSize="small" /></IconButton>
+                    <IconButton size="small" color="error" onClick={() => handleDelete(c.id)}><Delete fontSize="small" /></IconButton>
+                  </Box>
+                </CardContent>
+              </Card>
+            )) : (
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Code</TableCell>
+                    <TableCell>Discount</TableCell>
+                    <TableCell>Uses</TableCell>
+                    <TableCell>Min Spend</TableCell>
+                    <TableCell>Category</TableCell>
+                    <TableCell>Expires</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell align="right">Actions</TableCell>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHead>
+                <TableBody>
+                  {codes.map(c => (
+                    <TableRow key={c.id}>
+                      <TableCell>
+                        <Typography fontWeight={600} fontFamily="monospace">{c.code}</Typography>
+                        {c.description && (
+                          <Typography variant="caption" color="text.secondary" display="block">{c.description}</Typography>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {c.discount_type === 'percentage'
+                          ? `${parseFloat(c.discount_value)}%`
+                          : `£${parseFloat(c.discount_value).toFixed(2)}`}
+                      </TableCell>
+                      <TableCell>
+                        {c.uses_count}{c.max_uses ? ` / ${c.max_uses}` : ''}
+                      </TableCell>
+                      <TableCell>
+                        {parseFloat(c.min_spend) > 0 ? `£${parseFloat(c.min_spend).toFixed(2)}` : '—'}
+                      </TableCell>
+                      <TableCell>{c.category || '—'}</TableCell>
+                      <TableCell>
+                        {c.expires_at ? dayjs(c.expires_at).format('D MMM YYYY') : '—'}
+                      </TableCell>
+                      <TableCell>
+                        <Chip label={c.active ? 'Active' : 'Inactive'} size="small" color={c.active ? 'success' : 'default'} />
+                      </TableCell>
+                      <TableCell align="right">
+                        <IconButton size="small" onClick={() => openEdit(c)}><Edit fontSize="small" /></IconButton>
+                        <IconButton size="small" color="error" onClick={() => handleDelete(c.id)}><Delete fontSize="small" /></IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+            )
           )}
         </CardContent>
       </Card>

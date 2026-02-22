@@ -2,7 +2,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Box, Typography, Card, CardContent, TextField, Button, Tabs, Tab,
-  Snackbar, Alert, CircularProgress, InputAdornment, Chip, Switch, FormControlLabel, Grid, MenuItem
+  Snackbar, Alert, CircularProgress, InputAdornment, Chip, Switch, FormControlLabel, Grid, MenuItem,
+  useMediaQuery, useTheme
 } from '@mui/material';
 import { Save, CreditCard, Store, Palette, Info, Schedule, Code, ContentCopy, Share, Delete, Add, DragIndicator, Gavel, Subscriptions, OpenInNew, CheckCircle, Security, Lock, LockOpen } from '@mui/icons-material';
 import api from '../../api/client';
@@ -419,6 +420,8 @@ export default function Settings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   const [settings, setSettings] = useState({
     name: '',
@@ -627,8 +630,8 @@ export default function Settings() {
               Displayed on your public booking page. These are for display only and don't affect slot availability.
             </Typography>
             {Object.entries(siteSettings.business_hours || defaultHours).map(([day, hours]) => (
-              <Box key={day} display="flex" alignItems="center" gap={2} mb={1.5}>
-                <Typography sx={{ width: 100, textTransform: 'capitalize' }} fontWeight={500}>
+              <Box key={day} display="flex" alignItems="center" gap={{ xs: 1, sm: 2 }} mb={1.5} flexWrap="wrap">
+                <Typography sx={{ width: { xs: 70, sm: 100 }, textTransform: 'capitalize' }} fontWeight={500}>
                   {day}
                 </Typography>
                 <FormControlLabel
@@ -661,7 +664,7 @@ export default function Settings() {
                         },
                       }))}
                       InputLabelProps={{ shrink: true }}
-                      sx={{ width: 140 }}
+                      sx={{ width: { xs: 120, sm: 140 } }}
                     />
                     <TextField
                       type="time" size="small" label="Close"
@@ -674,7 +677,7 @@ export default function Settings() {
                         },
                       }))}
                       InputLabelProps={{ shrink: true }}
-                      sx={{ width: 140 }}
+                      sx={{ width: { xs: 120, sm: 140 } }}
                     />
                   </>
                 )}
@@ -862,8 +865,8 @@ export default function Settings() {
 
             {(siteSettings.social_embeds || []).map((embed, idx) => (
               <Card key={idx} variant="outlined" sx={{ mb: 2, p: 2 }}>
-                <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={1}>
-                  <Box display="flex" alignItems="center" gap={1} flex={1}>
+                <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
+                  <Box display="flex" alignItems="center" gap={1} flex={1} sx={{ minWidth: 0, flexWrap: 'wrap' }}>
                     <DragIndicator sx={{ color: 'text.disabled', cursor: 'grab' }} />
                     <TextField
                       size="small" label="Label" placeholder="e.g. Instagram Feed"
@@ -873,7 +876,7 @@ export default function Settings() {
                         updated[idx] = { ...updated[idx], label: e.target.value };
                         setSiteSettings(s => ({ ...s, social_embeds: updated }));
                       }}
-                      sx={{ width: 200 }}
+                      sx={{ width: { xs: '100%', sm: 200 } }}
                     />
                     <FormControlLabel
                       control={

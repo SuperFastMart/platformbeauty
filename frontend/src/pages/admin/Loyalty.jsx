@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import {
   Box, Typography, Card, CardContent, Grid, Switch, TextField, Button,
   Table, TableHead, TableRow, TableCell, TableBody, Chip, Dialog,
-  DialogTitle, DialogContent, DialogActions, Snackbar, Alert, FormControlLabel
+  DialogTitle, DialogContent, DialogActions, Snackbar, Alert, FormControlLabel,
+  useMediaQuery, useTheme
 } from '@mui/material';
 import api from '../../api/client';
 
@@ -12,6 +13,8 @@ export default function Loyalty() {
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   // Adjust dialog
   const [adjustDialog, setAdjustDialog] = useState(false);
@@ -156,6 +159,31 @@ export default function Loyalty() {
           {customers.length === 0 ? (
             <Typography color="text.secondary">No customers yet</Typography>
           ) : (
+            isMobile ? customers.map(c => {
+              const stampData = Array.isArray(c.stamp_data) ? c.stamp_data : [];
+              const hasStamps = stampData.some(s => s.stamps > 0);
+              return (
+                <Card key={c.id} variant="outlined" sx={{ mb: 1 }}>
+                  <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+                    <Box display="flex" justifyContent="space-between" alignItems="center">
+                      <Typography fontWeight={500}>{c.name}</Typography>
+                      <Button size="small" onClick={() => { setAdjustCustomer(c); setAdjustCategory(''); setAdjustAmount(''); setAdjustReason(''); setAdjustDialog(true); }}>
+                        Adjust
+                      </Button>
+                    </Box>
+                    <Typography variant="caption" color="text.secondary">{c.email}</Typography>
+                    <Box display="flex" gap={0.5} flexWrap="wrap" mt={0.5}>
+                      {hasStamps ? stampData.filter(s => s.stamps > 0).map(s => (
+                        <Chip key={s.category} label={`${s.category}: ${s.stamps}/${config.stamps_needed}`} size="small"
+                          color={s.stamps >= config.stamps_needed ? 'success' : 'default'} />
+                      )) : (
+                        <Typography variant="body2" color="text.secondary">No stamps</Typography>
+                      )}
+                    </Box>
+                  </CardContent>
+                </Card>
+              );
+            }) : (
             <Table size="small">
               <TableHead>
                 <TableRow>
@@ -175,28 +203,14 @@ export default function Loyalty() {
                       <TableCell>{c.email}</TableCell>
                       <TableCell>
                         {hasStamps ? stampData.filter(s => s.stamps > 0).map(s => (
-                          <Chip
-                            key={s.category}
-                            label={`${s.category}: ${s.stamps}/${config.stamps_needed}`}
-                            size="small"
-                            color={s.stamps >= config.stamps_needed ? 'success' : 'default'}
-                            sx={{ mr: 0.5, mb: 0.5 }}
-                          />
+                          <Chip key={s.category} label={`${s.category}: ${s.stamps}/${config.stamps_needed}`} size="small"
+                            color={s.stamps >= config.stamps_needed ? 'success' : 'default'} sx={{ mr: 0.5, mb: 0.5 }} />
                         )) : (
                           <Typography variant="body2" color="text.secondary">No stamps</Typography>
                         )}
                       </TableCell>
                       <TableCell align="right">
-                        <Button
-                          size="small"
-                          onClick={() => {
-                            setAdjustCustomer(c);
-                            setAdjustCategory('');
-                            setAdjustAmount('');
-                            setAdjustReason('');
-                            setAdjustDialog(true);
-                          }}
-                        >
+                        <Button size="small" onClick={() => { setAdjustCustomer(c); setAdjustCategory(''); setAdjustAmount(''); setAdjustReason(''); setAdjustDialog(true); }}>
                           Adjust
                         </Button>
                       </TableCell>
@@ -205,6 +219,7 @@ export default function Loyalty() {
                 })}
               </TableBody>
             </Table>
+            )
           )}
         </CardContent>
       </Card>
