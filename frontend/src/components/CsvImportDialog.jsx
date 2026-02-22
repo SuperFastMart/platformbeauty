@@ -210,7 +210,9 @@ export default function CsvImportDialog({ open, onClose, onComplete, existingSer
                 borderColor: 'divider',
                 borderRadius: 2,
                 p: 4,
-                textAlign: 'center',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
                 cursor: 'pointer',
                 '&:hover': { borderColor: 'primary.main', bgcolor: 'action.hover' },
               }}
@@ -219,7 +221,7 @@ export default function CsvImportDialog({ open, onClose, onComplete, existingSer
               <input type="file" accept=".csv" hidden onChange={handleFile} />
               <CloudUpload sx={{ fontSize: 48, color: 'text.secondary', mb: 1 }} />
               <Typography variant="body1" fontWeight={600}>
-                Click to upload or drag your CSV file here
+                Click to upload your CSV file
               </Typography>
               <Typography variant="caption" color="text.secondary">
                 Supports Boukd template and Fresha exports
