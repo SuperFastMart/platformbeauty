@@ -45,11 +45,6 @@ export default function AdminLayout() {
   const [showMfaBanner, setShowMfaBanner] = useState(false);
   const [supportUnread, setSupportUnread] = useState(0);
 
-  // Close mobile drawer on route change
-  useEffect(() => {
-    setMobileOpen(false);
-  }, [location.pathname]);
-
   // Poll support unread count
   useEffect(() => {
     const fetchUnread = () => {
@@ -168,19 +163,37 @@ export default function AdminLayout() {
         </Toolbar>
       </AppBar>
 
-      {/* Mobile: Temporary Drawer */}
+      {/* Mobile: Custom drawer (no MUI Modal) */}
       {isMobile ? (
-        <Drawer
-          variant="temporary"
-          open={mobileOpen}
-          onClose={() => setMobileOpen(false)}
-          ModalProps={{ keepMounted: true }}
-          sx={{
-            '& .MuiDrawer-paper': { width: DRAWER_WIDTH, boxSizing: 'border-box' },
-          }}
-        >
-          {drawerContent}
-        </Drawer>
+        <>
+          <Box
+            onClick={() => setMobileOpen(false)}
+            sx={{
+              position: 'fixed',
+              top: 0, left: 0, right: 0, bottom: 0,
+              bgcolor: 'rgba(0,0,0,0.5)',
+              zIndex: (theme) => theme.zIndex.drawer,
+              opacity: mobileOpen ? 1 : 0,
+              pointerEvents: mobileOpen ? 'auto' : 'none',
+              transition: 'opacity 225ms ease',
+            }}
+          />
+          <Box
+            sx={{
+              position: 'fixed',
+              top: 0, left: 0, bottom: 0,
+              width: DRAWER_WIDTH,
+              bgcolor: 'background.paper',
+              zIndex: (theme) => theme.zIndex.drawer + 0.5,
+              transform: mobileOpen ? 'translateX(0)' : 'translateX(-100%)',
+              transition: 'transform 225ms cubic-bezier(0, 0, 0.2, 1)',
+              overflowY: 'auto',
+              boxShadow: mobileOpen ? 8 : 0,
+            }}
+          >
+            {drawerContent}
+          </Box>
+        </>
       ) : (
         <Drawer
           variant="permanent"
