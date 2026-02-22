@@ -98,8 +98,22 @@ async function sendEmail({ to, toName, subject, html, tenant, emailType, booking
 // Send SMS via Brevo
 async function sendSMS(phone, message, tenant) {
   const apiKey = process.env.BREVO_API_KEY;
-  if (!apiKey || !tenant.sms_enabled) {
-    console.log(`[SMS] Skipped: ${!apiKey ? 'no API key' : 'SMS disabled for tenant'}`);
+  if (!apiKey) {
+    console.log('[SMS] Skipped: no API key');
+    return { success: false };
+  }
+
+  // Check SMS eligibility: tenant-level flag OR plan-level flag
+  let smsEnabled = tenant.sms_enabled;
+  if (!smsEnabled) {
+    const plan = await getOne(
+      'SELECT sms_enabled FROM subscription_plans WHERE tier = $1 AND is_active = TRUE',
+      [tenant.subscription_tier || 'free']
+    );
+    smsEnabled = plan?.sms_enabled;
+  }
+  if (!smsEnabled) {
+    console.log('[SMS] Skipped: SMS disabled for tenant plan');
     return { success: false };
   }
 

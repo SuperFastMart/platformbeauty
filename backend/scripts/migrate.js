@@ -660,6 +660,13 @@ const migrations = [
     `
   },
 
+  {
+    name: '041_fix_customers_stripe_column',
+    sql: `
+      ALTER TABLE customers ADD COLUMN IF NOT EXISTS stripe_payment_method_id TEXT;
+    `
+  },
+
   // ============================================
   // MIGRATION TRACKING
   // ============================================
