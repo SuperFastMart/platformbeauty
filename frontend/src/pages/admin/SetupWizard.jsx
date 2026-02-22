@@ -11,16 +11,15 @@ import {
 } from '@mui/icons-material';
 import api from '../../api/client';
 
-const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-const DAY_DEFAULTS = {
-  Monday: { open: true, start: '09:00', end: '17:00', duration: 30 },
-  Tuesday: { open: true, start: '09:00', end: '17:00', duration: 30 },
-  Wednesday: { open: true, start: '09:00', end: '17:00', duration: 30 },
-  Thursday: { open: true, start: '09:00', end: '17:00', duration: 30 },
-  Friday: { open: true, start: '09:00', end: '17:00', duration: 30 },
-  Saturday: { open: true, start: '09:00', end: '15:00', duration: 30 },
-  Sunday: { open: false, start: '10:00', end: '16:00', duration: 30 },
-};
+const DAYS_CONFIG = [
+  { name: 'Monday', num: 1, open: true, start: '09:00', end: '17:00', duration: 30 },
+  { name: 'Tuesday', num: 2, open: true, start: '09:00', end: '17:00', duration: 30 },
+  { name: 'Wednesday', num: 3, open: true, start: '09:00', end: '17:00', duration: 30 },
+  { name: 'Thursday', num: 4, open: true, start: '09:00', end: '17:00', duration: 30 },
+  { name: 'Friday', num: 5, open: true, start: '09:00', end: '17:00', duration: 30 },
+  { name: 'Saturday', num: 6, open: true, start: '09:00', end: '15:00', duration: 30 },
+  { name: 'Sunday', num: 0, open: false, start: '10:00', end: '16:00', duration: 30 },
+];
 
 export default function SetupWizard() {
   const navigate = useNavigate();
@@ -45,7 +44,7 @@ export default function SetupWizard() {
   const [stripeSecret, setStripeSecret] = useState('');
 
   // Step 5: Availability
-  const [days, setDays] = useState(DAY_DEFAULTS);
+  const [days, setDays] = useState(DAYS_CONFIG.map(d => ({ ...d })));
 
   useEffect(() => {
     api.get('/admin/setup-status')
@@ -143,27 +142,26 @@ export default function SetupWizard() {
 
   // Step 5: Save availability
   const saveAvailability = async () => {
-    const openDays = DAYS.filter(d => days[d].open);
+    const openDays = days.filter(d => d.open);
     if (openDays.length === 0) return;
     setSaving(true);
     try {
       for (const day of openDays) {
-        const cfg = days[day];
         await api.post('/admin/slot-templates', {
-          name: day,
-          day_of_week: day,
-          start_time: cfg.start,
-          end_time: cfg.end,
-          slot_duration: parseInt(cfg.duration),
+          name: `${day.name} Schedule`,
+          day_of_week: day.num,
+          start_time: day.start,
+          end_time: day.end,
+          slot_duration: parseInt(day.duration),
         });
       }
       // Generate 2 weeks of slots
       const today = new Date();
       const twoWeeks = new Date(today);
       twoWeeks.setDate(twoWeeks.getDate() + 14);
-      await api.post('/admin/generate-slots', {
-        start_date: today.toISOString().split('T')[0],
-        end_date: twoWeeks.toISOString().split('T')[0],
+      await api.post('/admin/slot-templates/generate', {
+        startDate: today.toISOString().split('T')[0],
+        endDate: twoWeeks.toISOString().split('T')[0],
       });
       await refreshStatus();
       setActiveStep(5);
@@ -407,40 +405,40 @@ export default function SetupWizard() {
           <Typography variant="body2" color="text.secondary" mb={2}>
             Set your working hours. We'll generate bookable time slots for the next 2 weeks automatically.
           </Typography>
-          {DAYS.map(day => (
+          {days.map((day, i) => (
             <Box
-              key={day} display="flex" alignItems="center" gap={1.5} py={0.75}
+              key={day.name} display="flex" alignItems="center" gap={1.5} py={0.75}
               sx={{ borderBottom: '1px solid', borderColor: 'divider' }}
             >
               <FormControlLabel
                 control={
                   <Switch
-                    checked={days[day].open}
-                    onChange={e => setDays(d => ({ ...d, [day]: { ...d[day], open: e.target.checked } }))}
+                    checked={day.open}
+                    onChange={e => setDays(d => d.map((dd, j) => j === i ? { ...dd, open: e.target.checked } : dd))}
                     size="small"
                   />
                 }
-                label={<Typography variant="body2" sx={{ width: 80 }}>{day}</Typography>}
+                label={<Typography variant="body2" sx={{ width: 80 }}>{day.name}</Typography>}
                 sx={{ mr: 0 }}
               />
-              {days[day].open ? (
+              {day.open ? (
                 <>
                   <TextField
                     type="time" size="small" sx={{ width: 120 }}
-                    value={days[day].start}
-                    onChange={e => setDays(d => ({ ...d, [day]: { ...d[day], start: e.target.value } }))}
+                    value={day.start}
+                    onChange={e => setDays(d => d.map((dd, j) => j === i ? { ...dd, start: e.target.value } : dd))}
                   />
                   <Typography variant="body2">to</Typography>
                   <TextField
                     type="time" size="small" sx={{ width: 120 }}
-                    value={days[day].end}
-                    onChange={e => setDays(d => ({ ...d, [day]: { ...d[day], end: e.target.value } }))}
+                    value={day.end}
+                    onChange={e => setDays(d => d.map((dd, j) => j === i ? { ...dd, end: e.target.value } : dd))}
                   />
                   <TextField
                     type="number" size="small" label="Slot min" sx={{ width: 80 }}
                     inputProps={{ min: 5, max: 120 }}
-                    value={days[day].duration}
-                    onChange={e => setDays(d => ({ ...d, [day]: { ...d[day], duration: e.target.value } }))}
+                    value={day.duration}
+                    onChange={e => setDays(d => d.map((dd, j) => j === i ? { ...dd, duration: e.target.value } : dd))}
                   />
                 </>
               ) : (
@@ -451,7 +449,7 @@ export default function SetupWizard() {
           <Box display="flex" gap={1} mt={2}>
             <Button
               variant="contained" onClick={saveAvailability}
-              disabled={saving || !DAYS.some(d => days[d].open)}
+              disabled={saving || !days.some(d => d.open)}
             >
               {saving ? 'Saving...' : 'Save & Generate Slots'}
             </Button>
