@@ -13,6 +13,7 @@ import api from '../../api/client';
 
 const PRIMARY = '#8B2635';
 const GOLD = '#D4A853';
+const HEADING_FONT = '"Poppins", sans-serif';
 
 const features = [
   { icon: <CalendarMonth sx={{ fontSize: 40 }} />, title: 'Smart Booking', desc: 'Let customers book 24/7 with your custom booking page. Service categories, time slots, and instant confirmations.' },
@@ -95,9 +96,13 @@ export default function LandingPage() {
       <AppBar position="static" elevation={0} sx={{ bgcolor: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(8px)', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
         <Container maxWidth="lg">
           <Toolbar disableGutters sx={{ justifyContent: 'space-between' }}>
-            <Typography variant="h5" fontWeight={800} sx={{ color: PRIMARY, letterSpacing: -0.5 }}>
-              Boukd
-            </Typography>
+            <Box
+              component="img"
+              src="/boukd-logo.png"
+              alt="Boukd"
+              sx={{ height: { xs: 32, md: 38 }, cursor: 'pointer' }}
+              onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+            />
             <Box display="flex" gap={1.5} alignItems="center">
               <Button
                 color="inherit"
@@ -164,6 +169,7 @@ export default function LandingPage() {
           <Grid container spacing={4} alignItems="center">
             <Grid item xs={12} md={7}>
               <Typography variant="h2" fontWeight={800} sx={{
+                fontFamily: HEADING_FONT,
                 fontSize: { xs: '2.2rem', md: '3.2rem' },
                 lineHeight: 1.2,
                 mb: 2,
@@ -247,19 +253,19 @@ export default function LandingPage() {
         <Container maxWidth="lg">
           <Grid container spacing={3} justifyContent="center" textAlign="center">
             <Grid item xs={6} md={3}>
-              <Typography variant="h4" fontWeight={800} color={PRIMARY}>24/7</Typography>
+              <Typography variant="h4" fontWeight={800} color={PRIMARY} sx={{ fontFamily: HEADING_FONT }}>24/7</Typography>
               <Typography variant="body2" color="text.secondary">Online Booking</Typography>
             </Grid>
             <Grid item xs={6} md={3}>
-              <Typography variant="h4" fontWeight={800} color={PRIMARY}>100%</Typography>
+              <Typography variant="h4" fontWeight={800} color={PRIMARY} sx={{ fontFamily: HEADING_FONT }}>100%</Typography>
               <Typography variant="body2" color="text.secondary">Customisable</Typography>
             </Grid>
             <Grid item xs={6} md={3}>
-              <Typography variant="h4" fontWeight={800} color={PRIMARY}>0%</Typography>
+              <Typography variant="h4" fontWeight={800} color={PRIMARY} sx={{ fontFamily: HEADING_FONT }}>0%</Typography>
               <Typography variant="body2" color="text.secondary">Commission Fees</Typography>
             </Grid>
             <Grid item xs={6} md={3}>
-              <Typography variant="h4" fontWeight={800} color={PRIMARY}>14 days</Typography>
+              <Typography variant="h4" fontWeight={800} color={PRIMARY} sx={{ fontFamily: HEADING_FONT }}>14 days</Typography>
               <Typography variant="body2" color="text.secondary">Free Trial</Typography>
             </Grid>
           </Grid>
@@ -271,7 +277,7 @@ export default function LandingPage() {
         <Container maxWidth="lg">
           <Box textAlign="center" mb={6}>
             <Chip label="FEATURES" size="small" sx={{ bgcolor: `${PRIMARY}15`, color: PRIMARY, fontWeight: 700, mb: 2 }} />
-            <Typography variant="h3" fontWeight={800} sx={{ fontSize: { xs: '1.8rem', md: '2.5rem' }, mb: 1.5 }}>
+            <Typography variant="h3" fontWeight={800} sx={{ fontFamily: HEADING_FONT, fontSize: { xs: '1.8rem', md: '2.5rem' }, mb: 1.5 }}>
               Everything you need to run your business
             </Typography>
             <Typography variant="h6" color="text.secondary" fontWeight={400} maxWidth={600} mx="auto">
@@ -303,7 +309,7 @@ export default function LandingPage() {
         <Container maxWidth="lg">
           <Box textAlign="center" mb={6}>
             <Chip label="HOW IT WORKS" size="small" sx={{ bgcolor: `${GOLD}25`, color: '#8a7020', fontWeight: 700, mb: 2 }} />
-            <Typography variant="h3" fontWeight={800} sx={{ fontSize: { xs: '1.8rem', md: '2.5rem' }, mb: 1.5 }}>
+            <Typography variant="h3" fontWeight={800} sx={{ fontFamily: HEADING_FONT, fontSize: { xs: '1.8rem', md: '2.5rem' }, mb: 1.5 }}>
               Up and running in three simple steps
             </Typography>
           </Box>
@@ -331,7 +337,7 @@ export default function LandingPage() {
         <Container maxWidth="md">
           <Box textAlign="center" mb={6}>
             <Chip label="YOUR JOURNEY" size="small" sx={{ bgcolor: `${PRIMARY}15`, color: PRIMARY, fontWeight: 700, mb: 2 }} />
-            <Typography variant="h3" fontWeight={800} sx={{ fontSize: { xs: '1.8rem', md: '2.5rem' }, mb: 1.5 }}>
+            <Typography variant="h3" fontWeight={800} sx={{ fontFamily: HEADING_FONT, fontSize: { xs: '1.8rem', md: '2.5rem' }, mb: 1.5 }}>
               From sign-up to fully booked
             </Typography>
           </Box>
@@ -370,7 +376,7 @@ export default function LandingPage() {
           <Grid container spacing={6} alignItems="center">
             <Grid item xs={12} md={6}>
               <Chip label="BUILT FOR YOU" size="small" sx={{ bgcolor: `${PRIMARY}15`, color: PRIMARY, fontWeight: 700, mb: 2 }} />
-              <Typography variant="h3" fontWeight={800} sx={{ fontSize: { xs: '1.8rem', md: '2.2rem' }, mb: 2 }}>
+              <Typography variant="h3" fontWeight={800} sx={{ fontFamily: HEADING_FONT, fontSize: { xs: '1.8rem', md: '2.2rem' }, mb: 2 }}>
                 Designed for beauty, wellness, and service professionals
               </Typography>
               <Typography variant="body1" color="text.secondary" lineHeight={1.8} mb={3}>
@@ -427,7 +433,7 @@ export default function LandingPage() {
           <Container maxWidth="lg">
             <Box textAlign="center" mb={6}>
               <Chip label="PRICING" size="small" sx={{ bgcolor: `${GOLD}25`, color: '#8a7020', fontWeight: 700, mb: 2 }} />
-              <Typography variant="h3" fontWeight={800} sx={{ fontSize: { xs: '1.8rem', md: '2.5rem' }, mb: 1.5 }}>
+              <Typography variant="h3" fontWeight={800} sx={{ fontFamily: HEADING_FONT, fontSize: { xs: '1.8rem', md: '2.5rem' }, mb: 1.5 }}>
                 Simple, transparent pricing
               </Typography>
               <Typography variant="h6" color="text.secondary" fontWeight={400} maxWidth={500} mx="auto">
@@ -502,7 +508,7 @@ export default function LandingPage() {
         <Container maxWidth="lg">
           {!showSignup ? (
             <Box textAlign="center">
-              <Typography variant="h3" fontWeight={800} sx={{ fontSize: { xs: '1.8rem', md: '2.5rem' }, mb: 2 }}>
+              <Typography variant="h3" fontWeight={800} sx={{ fontFamily: HEADING_FONT, fontSize: { xs: '1.8rem', md: '2.5rem' }, mb: 2 }}>
                 Ready to grow your business?
               </Typography>
               <Typography variant="h6" fontWeight={400} sx={{ opacity: 0.9, mb: 4, maxWidth: 500, mx: 'auto' }}>
@@ -526,7 +532,7 @@ export default function LandingPage() {
             <Grid container spacing={4} justifyContent="center">
               <Grid item xs={12} md={6}>
                 <Box mb={3}>
-                  <Typography variant="h4" fontWeight={800} sx={{ fontSize: { xs: '1.6rem', md: '2rem' }, mb: 1 }}>
+                  <Typography variant="h4" fontWeight={800} sx={{ fontFamily: HEADING_FONT, fontSize: { xs: '1.6rem', md: '2rem' }, mb: 1 }}>
                     Create your account
                   </Typography>
                   <Typography variant="body1" color="text.secondary">
@@ -651,7 +657,12 @@ export default function LandingPage() {
         <Container maxWidth="lg">
           <Box display="flex" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={2}>
             <Box>
-              <Typography variant="h6" fontWeight={700} sx={{ color: GOLD }}>Boukd</Typography>
+              <Box
+                component="img"
+                src="/boukd-logo.png"
+                alt="Boukd"
+                sx={{ height: 30, display: 'block', mb: 0.5, filter: 'brightness(1.3)' }}
+              />
               <Typography variant="caption" sx={{ opacity: 0.6 }}>
                 The booking platform built for you
               </Typography>
