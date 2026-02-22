@@ -107,7 +107,7 @@ export default function AdminLayout() {
 
   const handleNavClick = (path) => {
     setMobileOpen(false);
-    navigate(path);
+    setTimeout(() => navigate(path), 150);
   };
 
   const drawerContent = (
