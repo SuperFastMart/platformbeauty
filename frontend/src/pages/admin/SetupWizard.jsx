@@ -150,6 +150,7 @@ export default function SetupWizard() {
       for (const day of openDays) {
         const cfg = days[day];
         await api.post('/admin/slot-templates', {
+          name: day,
           day_of_week: day,
           start_time: cfg.start,
           end_time: cfg.end,
