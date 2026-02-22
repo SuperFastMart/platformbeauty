@@ -101,21 +101,21 @@ export default function LandingPage() {
             <Box display="flex" gap={1.5} alignItems="center">
               <Button
                 color="inherit"
-                sx={{ color: 'text.secondary', fontWeight: 500 }}
+                sx={{ color: 'text.secondary', fontWeight: 500, display: { xs: 'none', md: 'inline-flex' } }}
                 onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })}
               >
                 Features
               </Button>
               <Button
                 color="inherit"
-                sx={{ color: 'text.secondary', fontWeight: 500 }}
+                sx={{ color: 'text.secondary', fontWeight: 500, display: { xs: 'none', md: 'inline-flex' } }}
                 onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })}
               >
                 How It Works
               </Button>
               <Button
                 color="inherit"
-                sx={{ color: 'text.secondary', fontWeight: 500 }}
+                sx={{ color: 'text.secondary', fontWeight: 500, display: { xs: 'none', md: 'inline-flex' } }}
                 onClick={() => document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' })}
               >
                 Pricing
@@ -137,7 +137,7 @@ export default function LandingPage() {
                   setTimeout(() => document.getElementById('signup')?.scrollIntoView({ behavior: 'smooth' }), 100);
                 }}
               >
-                Get Started Free
+                Get Started
               </Button>
             </Box>
           </Toolbar>
@@ -203,7 +203,7 @@ export default function LandingPage() {
                   See Features
                 </Button>
               </Box>
-              <Box display="flex" gap={3} mt={4}>
+              <Box display="flex" gap={{ xs: 1.5, md: 3 }} mt={4} flexWrap="wrap">
                 <Box display="flex" alignItems="center" gap={0.5}>
                   <CheckCircle sx={{ fontSize: 18, color: GOLD }} />
                   <Typography variant="body2" sx={{ opacity: 0.85 }}>14-day free trial</Typography>
@@ -656,7 +656,7 @@ export default function LandingPage() {
                 The booking platform for beauty professionals
               </Typography>
             </Box>
-            <Box display="flex" gap={3}>
+            <Box display="flex" gap={{ xs: 1, sm: 3 }}>
               <Button color="inherit" size="small" sx={{ opacity: 0.7 }} onClick={() => navigate('/admin/login')}>
                 Tenant Login
               </Button>
