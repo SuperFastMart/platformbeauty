@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   Box, AppBar, Toolbar, Typography, Drawer, SwipeableDrawer, List,
-  ListItemButton, ListItemIcon, ListItemText, Button, Chip,
+  ListItemButton, ListItemIcon, ListItemText, Button, Chip, Badge,
   IconButton, useMediaQuery, useTheme, Alert
 } from '@mui/material';
 import {
@@ -43,6 +43,33 @@ export default function AdminLayout() {
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [mobileOpen, setMobileOpen] = useState(false);
   const [showMfaBanner, setShowMfaBanner] = useState(false);
+  const [supportUnread, setSupportUnread] = useState(0);
+
+  // Poll support unread count
+  useEffect(() => {
+    const fetchUnread = () => {
+      api.get('/admin/support/unread-count')
+        .then(r => setSupportUnread(r.data.count))
+        .catch(() => {});
+    };
+    fetchUnread();
+    const interval = setInterval(fetchUnread, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Check setup wizard status for new tenants
+  useEffect(() => {
+    if (isImpersonating) return;
+    if (location.pathname === '/admin/setup') return;
+    api.get('/admin/setup-status')
+      .then(r => {
+        const { hasServices, hasAbout, hasBranding, hasTemplates, dismissed } = r.data;
+        if (!dismissed && (!hasServices || !hasAbout || !hasBranding || !hasTemplates)) {
+          navigate('/admin/setup', { replace: true });
+        }
+      })
+      .catch(() => {});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Check MFA status for subtle suggestion
   useEffect(() => {
@@ -89,7 +116,11 @@ export default function AdminLayout() {
             onClick={() => handleNavClick(item.path)}
             sx={{ minHeight: 48 }}
           >
-            <ListItemIcon>{item.icon}</ListItemIcon>
+            <ListItemIcon>
+              {item.label === 'Support' && supportUnread > 0
+                ? <Badge variant="dot" color="error">{item.icon}</Badge>
+                : item.icon}
+            </ListItemIcon>
             <ListItemText primary={item.label} />
           </ListItemButton>
         ))}

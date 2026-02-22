@@ -64,11 +64,23 @@ export default function TenantPublicLayout() {
     );
   }
 
+  // Detect light colors to ensure contrast
+  const isLightColor = (hex) => {
+    if (!hex || hex.length < 7) return false;
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.7;
+  };
+
+  const primaryColor = tenant.primary_color || '#8B2635';
+  const lightPrimary = isLightColor(primaryColor);
+
   // Create a tenant-specific theme based on their primary color
   const tenantTheme = createTheme({
     palette: {
-      primary: { main: tenant.primary_color || '#8B2635' },
-      secondary: { main: '#D4A853' },
+      primary: { main: lightPrimary ? '#333333' : primaryColor },
+      secondary: { main: lightPrimary ? primaryColor : '#D4A853' },
       background: { default: '#fafafa' },
     },
     typography: {

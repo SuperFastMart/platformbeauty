@@ -5,11 +5,20 @@ import {
   MenuItem, Snackbar, Alert, Divider, Grid, LinearProgress,
   useMediaQuery, useTheme
 } from '@mui/material';
-import { Add, Edit, Delete, AutoFixHigh, Visibility, Close } from '@mui/icons-material';
+import { Add, Edit, Delete, AutoFixHigh, Visibility, Close, CheckCircle } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import api from '../../api/client';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const QUICK_SETUP_DEFAULTS = [
+  { day: 1, label: 'Mon', open: true, start: '09:00', end: '17:00', duration: 30 },
+  { day: 2, label: 'Tue', open: true, start: '09:00', end: '17:00', duration: 30 },
+  { day: 3, label: 'Wed', open: true, start: '09:00', end: '17:00', duration: 30 },
+  { day: 4, label: 'Thu', open: true, start: '09:00', end: '17:00', duration: 30 },
+  { day: 5, label: 'Fri', open: true, start: '09:00', end: '17:00', duration: 30 },
+  { day: 6, label: 'Sat', open: true, start: '09:00', end: '15:00', duration: 30 },
+  { day: 0, label: 'Sun', open: false, start: '10:00', end: '16:00', duration: 30 },
+];
 
 const emptyTemplate = { name: '', day_of_week: 1, start_time: '09:00', end_time: '17:00', slot_duration: 30 };
 
@@ -32,6 +41,9 @@ export default function SlotTemplates() {
   const [selectedDaySlots, setSelectedDaySlots] = useState(null);
   const [selectedDayDate, setSelectedDayDate] = useState(null);
   const [dayLoading, setDayLoading] = useState(false);
+
+  const [quickSetup, setQuickSetup] = useState(QUICK_SETUP_DEFAULTS.map(d => ({ ...d })));
+  const [quickSetupSaving, setQuickSetupSaving] = useState(false);
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -119,6 +131,34 @@ export default function SlotTemplates() {
       setSelectedDaySlots([]);
     } finally {
       setDayLoading(false);
+    }
+  };
+
+  const handleQuickSetup = async () => {
+    setQuickSetupSaving(true);
+    try {
+      const openDays = quickSetup.filter(d => d.open);
+      for (const day of openDays) {
+        await api.post('/admin/slot-templates', {
+          name: `${DAYS[day.day]} Schedule`,
+          day_of_week: day.day,
+          start_time: day.start,
+          end_time: day.end,
+          slot_duration: day.duration,
+        });
+      }
+      // Generate 2 weeks of slots
+      await api.post('/admin/slot-templates/generate', {
+        startDate: dayjs().format('YYYY-MM-DD'),
+        endDate: dayjs().add(14, 'day').format('YYYY-MM-DD'),
+      });
+      setSnackbar({ open: true, message: `Templates created and slots generated for the next 2 weeks!`, severity: 'success' });
+      fetchTemplates();
+      fetchOverview();
+    } catch (err) {
+      setSnackbar({ open: true, message: err.response?.data?.error || 'Error during quick setup', severity: 'error' });
+    } finally {
+      setQuickSetupSaving(false);
     }
   };
 
@@ -229,15 +269,61 @@ export default function SlotTemplates() {
         </CardContent>
       </Card>
 
+      {/* Quick Setup — shown when no templates exist */}
+      {!loading && templates.length === 0 && (
+        <Card sx={{ mb: 3, border: '2px solid', borderColor: 'primary.main' }}>
+          <CardContent>
+            <Typography variant="h6" fontWeight={600} mb={1}>Quick Setup</Typography>
+            <Typography variant="body2" color="text.secondary" mb={2}>
+              Set your working hours and we'll create your availability automatically. You can customise later.
+            </Typography>
+            {quickSetup.map((day, idx) => (
+              <Box key={day.day} display="flex" alignItems="center" gap={1} mb={1} flexWrap="wrap">
+                <Button
+                  size="small" variant={day.open ? 'contained' : 'outlined'}
+                  sx={{ minWidth: 70, textTransform: 'none' }}
+                  onClick={() => setQuickSetup(qs => qs.map((d, i) => i === idx ? { ...d, open: !d.open } : d))}
+                >
+                  {day.label}
+                </Button>
+                {day.open && (
+                  <>
+                    <TextField size="small" type="time" value={day.start} sx={{ width: 120 }}
+                      onChange={e => setQuickSetup(qs => qs.map((d, i) => i === idx ? { ...d, start: e.target.value } : d))}
+                      InputLabelProps={{ shrink: true }} />
+                    <Typography variant="body2">to</Typography>
+                    <TextField size="small" type="time" value={day.end} sx={{ width: 120 }}
+                      onChange={e => setQuickSetup(qs => qs.map((d, i) => i === idx ? { ...d, end: e.target.value } : d))}
+                      InputLabelProps={{ shrink: true }} />
+                    <TextField size="small" type="number" value={day.duration} sx={{ width: 80 }}
+                      inputProps={{ min: 5, max: 120 }}
+                      onChange={e => setQuickSetup(qs => qs.map((d, i) => i === idx ? { ...d, duration: parseInt(e.target.value) || 30 } : d))} />
+                    <Typography variant="caption" color="text.secondary">min slots</Typography>
+                  </>
+                )}
+                {!day.open && <Typography variant="body2" color="text.secondary">Closed</Typography>}
+              </Box>
+            ))}
+            <Button variant="contained" sx={{ mt: 2 }} onClick={handleQuickSetup} disabled={quickSetupSaving}
+              startIcon={quickSetupSaving ? null : <CheckCircle />}>
+              {quickSetupSaving ? 'Setting up...' : 'Save & Generate Slots'}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Weekly Templates */}
-      <Typography variant="h6" fontWeight={600} mb={2}>Weekly Schedule Templates</Typography>
+      <Typography variant="h6" fontWeight={600} mb={1}>Weekly Schedule Templates</Typography>
+      <Typography variant="body2" color="text.secondary" mb={2}>
+        Templates define your working pattern. After creating or changing templates, click "Generate Slots" to create bookable time slots.
+      </Typography>
       {loading ? (
         <Typography>Loading...</Typography>
       ) : templates.length === 0 ? (
         <Card>
           <CardContent>
             <Typography color="text.secondary">
-              No slot templates yet. Create templates to define your weekly availability, then generate time slots.
+              No slot templates yet. Use Quick Setup above, or create templates manually.
             </Typography>
           </CardContent>
         </Card>
@@ -378,6 +464,11 @@ export default function SlotTemplates() {
           <Typography variant="body2" color="text.secondary" mb={2}>
             Generate available time slots from your templates for a date range.
           </Typography>
+          <Box display="flex" gap={1} mb={2} flexWrap="wrap">
+            <Button size="small" variant="outlined" onClick={() => setGenerateForm({ startDate: dayjs().format('YYYY-MM-DD'), endDate: dayjs().add(14, 'day').format('YYYY-MM-DD') })}>Next 2 weeks</Button>
+            <Button size="small" variant="outlined" onClick={() => setGenerateForm({ startDate: dayjs().format('YYYY-MM-DD'), endDate: dayjs().add(1, 'month').format('YYYY-MM-DD') })}>Next month</Button>
+            <Button size="small" variant="outlined" onClick={() => setGenerateForm({ startDate: dayjs().format('YYYY-MM-DD'), endDate: dayjs().add(3, 'month').format('YYYY-MM-DD') })}>Next 3 months</Button>
+          </Box>
           <Box display="flex" gap={2}>
             <TextField fullWidth label="Start Date" type="date" margin="normal"
               value={generateForm.startDate}

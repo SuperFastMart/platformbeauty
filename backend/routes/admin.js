@@ -297,11 +297,20 @@ router.post('/services', asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'Name, duration, and price are required' });
   }
 
+  const numDuration = parseInt(duration);
+  const numPrice = parseFloat(price);
+  if (isNaN(numDuration) || numDuration < 5 || numDuration > 480) {
+    return res.status(400).json({ error: 'Duration must be between 5 and 480 minutes' });
+  }
+  if (isNaN(numPrice) || numPrice < 0 || numPrice > 10000) {
+    return res.status(400).json({ error: 'Price must be between 0 and 10,000' });
+  }
+
   const service = await getOne(
     `INSERT INTO services (tenant_id, name, description, duration, price, category, display_order)
      VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING *`,
-    [req.tenantId, name, description || null, duration, price, category || null, display_order || 0]
+    [req.tenantId, name, description || null, numDuration, numPrice, category || null, display_order || 0]
   );
 
   res.status(201).json(service);
@@ -310,6 +319,19 @@ router.post('/services', asyncHandler(async (req, res) => {
 // PUT /api/admin/services/:id
 router.put('/services/:id', asyncHandler(async (req, res) => {
   const { name, description, duration, price, category, display_order, active } = req.body;
+
+  if (duration !== undefined) {
+    const numDuration = parseInt(duration);
+    if (isNaN(numDuration) || numDuration < 5 || numDuration > 480) {
+      return res.status(400).json({ error: 'Duration must be between 5 and 480 minutes' });
+    }
+  }
+  if (price !== undefined) {
+    const numPrice = parseFloat(price);
+    if (isNaN(numPrice) || numPrice < 0 || numPrice > 10000) {
+      return res.status(400).json({ error: 'Price must be between 0 and 10,000' });
+    }
+  }
 
   const service = await getOne(
     `UPDATE services SET
@@ -857,6 +879,33 @@ router.get('/customers', asyncHandler(async (req, res) => {
   res.json(customers);
 }));
 
+// POST /api/admin/customers — create a customer
+router.post('/customers', asyncHandler(async (req, res) => {
+  const { name, email, phone } = req.body;
+  if (!name || !email) {
+    return res.status(400).json({ error: 'Name and email are required' });
+  }
+  if (phone) {
+    const cleanPhone = phone.replace(/[\s\-\(\)]/g, '');
+    if (!/^\+?[0-9]{7,15}$/.test(cleanPhone)) {
+      return res.status(400).json({ error: 'Invalid phone number format' });
+    }
+  }
+  try {
+    const customer = await getOne(
+      `INSERT INTO customers (tenant_id, name, email, phone)
+       VALUES ($1, $2, $3, $4) RETURNING *`,
+      [req.tenantId, name, email, phone || null]
+    );
+    res.status(201).json(customer);
+  } catch (err) {
+    if (err.code === '23505') {
+      return res.status(409).json({ error: 'A customer with this email already exists' });
+    }
+    throw err;
+  }
+}));
+
 // GET /api/admin/customers/search
 router.get('/customers/search', asyncHandler(async (req, res) => {
   const { q } = req.query;
@@ -934,7 +983,7 @@ router.put('/customers/:id/notes', asyncHandler(async (req, res) => {
   res.json(customer);
 }));
 
-// DELETE /api/admin/customers/:id (GDPR delete)
+// DELETE /api/admin/customers/:id (GDPR delete — anonymize bookings, preserve revenue)
 router.delete('/customers/:id', asyncHandler(async (req, res) => {
   const customer = await getOne(
     'SELECT id, email FROM customers WHERE id = $1 AND tenant_id = $2',
@@ -945,25 +994,32 @@ router.delete('/customers/:id', asyncHandler(async (req, res) => {
     return res.status(404).json({ error: 'Customer not found' });
   }
 
-  // Cascading delete: booking_requests, email_logs, payments, bookings, customer
+  // Delete personal data records (no financial value)
   await run('DELETE FROM booking_requests WHERE customer_id = $1 AND tenant_id = $2', [customer.id, req.tenantId]);
   await run('DELETE FROM email_logs WHERE customer_id = $1 AND tenant_id = $2', [customer.id, req.tenantId]);
+  await run('DELETE FROM messages WHERE customer_id = $1 AND tenant_id = $2', [customer.id, req.tenantId]);
 
-  // Get booking IDs for this customer to delete payments
-  const bookings = await getAll(
-    'SELECT id FROM bookings WHERE customer_email = $1 AND tenant_id = $2',
+  // Anonymize bookings (preserve for revenue reporting)
+  await run(
+    `UPDATE bookings SET
+      customer_name = 'Deleted Customer',
+      customer_email = 'deleted@removed.local',
+      customer_phone = NULL,
+      customer_id = NULL,
+      notes = NULL
+    WHERE customer_email = $1 AND tenant_id = $2`,
     [customer.email, req.tenantId]
   );
-  if (bookings.length > 0) {
-    const bookingIds = bookings.map(b => b.id);
-    const placeholders = bookingIds.map((_, i) => `$${i + 1}`).join(',');
-    await run(`DELETE FROM payments WHERE booking_id IN (${placeholders})`, bookingIds);
-  }
+  // Payments are left intact — they reference booking_id, not customer directly
 
-  await run('DELETE FROM bookings WHERE customer_email = $1 AND tenant_id = $2', [customer.email, req.tenantId]);
+  // Delete customer record
   await run('DELETE FROM customers WHERE id = $1 AND tenant_id = $2', [customer.id, req.tenantId]);
 
-  res.json({ message: 'Customer and all associated data deleted' });
+  // Activity log
+  const { logActivity } = require('../utils/activityLog');
+  logActivity(req.tenantId, 'tenant_admin', req.user.id, req.user.email, 'customer_gdpr_deleted', { customer_id: customer.id }).catch(() => {});
+
+  res.json({ message: 'Customer data deleted. Revenue records preserved with anonymized data.' });
 }));
 
 // ============================================
@@ -1030,6 +1086,70 @@ router.get('/slots/day', asyncHandler(async (req, res) => {
 // ADMIN BOOKING CREATION
 // ============================================
 
+// GET /api/admin/next-available — find next available slot for given services
+router.get('/next-available', asyncHandler(async (req, res) => {
+  const { serviceIds, from } = req.query;
+  if (!serviceIds) return res.status(400).json({ error: 'serviceIds required' });
+
+  const ids = serviceIds.split(',').map(Number).filter(Boolean);
+  if (!ids.length) return res.status(400).json({ error: 'Invalid serviceIds' });
+
+  const placeholders = ids.map((_, i) => `$${i + 2}`).join(',');
+  const services = await getAll(
+    `SELECT duration FROM services WHERE id IN (${placeholders}) AND tenant_id = $1 AND active = TRUE`,
+    [req.tenantId, ...ids]
+  );
+  if (!services.length) return res.status(400).json({ error: 'No valid services found' });
+
+  const totalDuration = services.reduce((sum, s) => sum + s.duration, 0);
+
+  const sampleSlot = await getOne(
+    `SELECT start_time, end_time FROM time_slots
+     WHERE tenant_id = $1 AND date >= CURRENT_DATE AND is_available = TRUE
+     ORDER BY date, start_time LIMIT 1`,
+    [req.tenantId]
+  );
+  let slotMinutes = 30;
+  if (sampleSlot && sampleSlot.start_time && sampleSlot.end_time) {
+    const st = sampleSlot.start_time.split(':').map(Number);
+    const et = sampleSlot.end_time.split(':').map(Number);
+    slotMinutes = (et[0] * 60 + et[1]) - (st[0] * 60 + st[1]);
+    if (slotMinutes <= 0) slotMinutes = 30;
+  }
+  const slotsNeeded = Math.ceil(totalDuration / slotMinutes);
+  const startDate = from || new Date().toISOString().split('T')[0];
+
+  for (let dayOffset = 0; dayOffset < 30; dayOffset++) {
+    const checkDate = new Date(startDate);
+    checkDate.setDate(checkDate.getDate() + dayOffset);
+    const dateStr = checkDate.toISOString().split('T')[0];
+    const today = new Date().toISOString().split('T')[0];
+    if (dateStr < today) continue;
+
+    const slots = await getAll(
+      `SELECT id, start_time, end_time FROM time_slots
+       WHERE tenant_id = $1 AND date = $2 AND is_available = TRUE
+       ORDER BY start_time`,
+      [req.tenantId, dateStr]
+    );
+
+    for (let i = 0; i <= slots.length - slotsNeeded; i++) {
+      let consecutive = true;
+      for (let j = 1; j < slotsNeeded; j++) {
+        if (slots[i + j - 1].end_time !== slots[i + j].start_time) {
+          consecutive = false;
+          break;
+        }
+      }
+      if (consecutive) {
+        return res.json({ found: true, date: dateStr, time: slots[i].start_time.slice(0, 5) });
+      }
+    }
+  }
+
+  res.json({ found: false });
+}));
+
 // POST /api/admin/bookings/admin-create
 router.post('/bookings/admin-create', asyncHandler(async (req, res) => {
   const { customerId, customerName, customerEmail, customerPhone, serviceIds, date, startTime, notes } = req.body;
@@ -1040,6 +1160,13 @@ router.post('/bookings/admin-create', asyncHandler(async (req, res) => {
 
   if (!customerId && (!customerName || !customerEmail)) {
     return res.status(400).json({ error: 'Either customerId or customerName + customerEmail required' });
+  }
+
+  if (customerPhone) {
+    const cleanPhone = customerPhone.replace(/[\s\-\(\)]/g, '');
+    if (!/^\+?[0-9]{7,15}$/.test(cleanPhone)) {
+      return res.status(400).json({ error: 'Invalid phone number format' });
+    }
   }
 
   // Resolve customer
@@ -1106,6 +1233,13 @@ router.post('/bookings/admin-create-recurring', asyncHandler(async (req, res) =>
 
   if (!serviceIds?.length || !dates?.length) {
     return res.status(400).json({ error: 'serviceIds and dates are required' });
+  }
+
+  if (customerPhone) {
+    const cleanPhone = customerPhone.replace(/[\s\-\(\)]/g, '');
+    if (!/^\+?[0-9]{7,15}$/.test(cleanPhone)) {
+      return res.status(400).json({ error: 'Invalid phone number format' });
+    }
   }
 
   let customer;
@@ -1363,6 +1497,13 @@ router.put('/settings', asyncHandler(async (req, res) => {
     stripe_publishable_key, stripe_secret_key,
   } = req.body;
 
+  // Validate URL fields
+  if (logo_url) {
+    const { validateUrl } = require('../utils/urlValidator');
+    const check = validateUrl(logo_url);
+    if (!check.valid) return res.status(400).json({ error: `Logo URL: ${check.error}` });
+  }
+
   // Build dynamic update
   const updates = [];
   const params = [];
@@ -1460,6 +1601,39 @@ router.post('/impersonate/customer/:customerId', asyncHandler(async (req, res) =
     },
     tenantSlug: tenant?.slug,
   });
+}));
+
+// ── Setup Status (onboarding wizard) ──
+router.get('/setup-status', asyncHandler(async (req, res) => {
+  const [services, about, branding, templates, dismissed] = await Promise.all([
+    getOne('SELECT COUNT(*)::int AS cnt FROM services WHERE tenant_id = $1 AND active = true', [req.tenantId]),
+    getOne(`SELECT setting_value FROM tenant_settings WHERE tenant_id = $1 AND setting_key = 'about_text'`, [req.tenantId]),
+    getOne(`SELECT setting_value FROM tenant_settings WHERE tenant_id = $1 AND setting_key = 'primary_color'`, [req.tenantId]),
+    getOne('SELECT COUNT(*)::int AS cnt FROM slot_templates WHERE tenant_id = $1', [req.tenantId]),
+    getOne(`SELECT setting_value FROM tenant_settings WHERE tenant_id = $1 AND setting_key = 'setup_wizard_dismissed'`, [req.tenantId]),
+  ]);
+
+  const tenant = await getOne('SELECT stripe_publishable_key, stripe_secret_key FROM tenants WHERE id = $1', [req.tenantId]);
+
+  res.json({
+    hasServices: (services?.cnt || 0) > 0,
+    hasAbout: !!(about?.setting_value),
+    hasBranding: !!(branding?.setting_value),
+    hasStripe: !!(tenant?.stripe_publishable_key && tenant?.stripe_secret_key),
+    hasTemplates: (templates?.cnt || 0) > 0,
+    dismissed: dismissed?.setting_value === 'true',
+  });
+}));
+
+router.post('/setup-status/dismiss', asyncHandler(async (req, res) => {
+  await run(
+    `INSERT INTO tenant_settings (tenant_id, setting_key, setting_value, updated_at)
+     VALUES ($1, 'setup_wizard_dismissed', 'true', NOW())
+     ON CONFLICT (tenant_id, setting_key) DO UPDATE SET
+       setting_value = 'true', updated_at = NOW()`,
+    [req.tenantId]
+  );
+  res.json({ ok: true });
 }));
 
 module.exports = router;

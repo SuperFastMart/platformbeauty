@@ -57,6 +57,7 @@ export default function BookingFlow() {
   const [selectedSlot, setSelectedSlot] = useState(null);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [customerForm, setCustomerForm] = useState({ name: '', email: '', phone: '', notes: '' });
+  const [phoneError, setPhoneError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [bookingResult, setBookingResult] = useState(null);
   const [error, setError] = useState('');
@@ -333,7 +334,10 @@ export default function BookingFlow() {
       {/* Step 0: Services — Accordion by category */}
       {activeStep === 0 && (
         <Box>
-          <Typography variant="h6" fontWeight={600} mb={2}>Select Services</Typography>
+          <Typography variant="h6" fontWeight={600} mb={0.5}>Select Services</Typography>
+          <Typography variant="body2" color="text.secondary" mb={2}>
+            Choose the treatments you'd like. You can select multiple services for one appointment.
+          </Typography>
           <Box sx={{
             '& .MuiAccordion-root': {
               boxShadow: 'none',
@@ -502,7 +506,7 @@ export default function BookingFlow() {
                 bottom: 0,
                 left: 0,
                 right: 0,
-                bgcolor: 'white',
+                bgcolor: 'background.paper',
                 borderTop: '2px solid',
                 borderColor: 'success.main',
                 boxShadow: '0 -4px 20px rgba(0,0,0,0.15)',
@@ -540,8 +544,13 @@ export default function BookingFlow() {
       {/* Step 1: Date — Calendar Grid */}
       {activeStep === 1 && (
         <Box>
-          <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-            <Typography variant="h6" fontWeight={600}>Choose a Date</Typography>
+          <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+            <Box>
+              <Typography variant="h6" fontWeight={600}>Choose a Date</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Select your preferred date. Grey dates are unavailable.
+              </Typography>
+            </Box>
             <Button
               variant="outlined"
               size="small"
@@ -729,7 +738,11 @@ export default function BookingFlow() {
       {/* Step 3: Details */}
       {activeStep === 3 && (
         <Box>
-          <Typography variant="h6" fontWeight={600} mb={2}>Your Details</Typography>
+          <Typography variant="h6" fontWeight={600} mb={0.5}>Your Details</Typography>
+          <Typography variant="body2" color="text.secondary" mb={2}>
+            We use your details to confirm your booking and send appointment reminders.
+            Your information is kept private and only shared with the business.
+          </Typography>
           <TextField fullWidth label="Full Name" margin="normal" required
             value={customerForm.name}
             onChange={e => setCustomerForm(f => ({ ...f, name: e.target.value }))} />
@@ -738,7 +751,14 @@ export default function BookingFlow() {
             onChange={e => setCustomerForm(f => ({ ...f, email: e.target.value }))} />
           <TextField fullWidth label="Phone" margin="normal"
             value={customerForm.phone}
-            onChange={e => setCustomerForm(f => ({ ...f, phone: e.target.value }))} />
+            onChange={e => { setCustomerForm(f => ({ ...f, phone: e.target.value })); setPhoneError(''); }}
+            onBlur={() => {
+              if (customerForm.phone) {
+                const clean = customerForm.phone.replace(/[\s\-\(\)]/g, '');
+                if (!/^\+?[0-9]{7,15}$/.test(clean)) setPhoneError('Enter a valid phone number (7-15 digits)');
+              }
+            }}
+            error={!!phoneError} helperText={phoneError} />
           <TextField fullWidth label="Notes (optional)" margin="normal" multiline rows={2}
             value={customerForm.notes}
             onChange={e => setCustomerForm(f => ({ ...f, notes: e.target.value }))} />
@@ -789,7 +809,10 @@ export default function BookingFlow() {
       {/* Step 4: Confirm */}
       {activeStep === 4 && (
         <Box>
-          <Typography variant="h6" fontWeight={600} mb={2}>Confirm Your Booking</Typography>
+          <Typography variant="h6" fontWeight={600} mb={0.5}>Confirm Your Booking</Typography>
+          <Typography variant="body2" color="text.secondary" mb={2}>
+            Please review your booking details before confirming.
+          </Typography>
           <Card>
             <CardContent>
               <Typography variant="subtitle2" color="text.secondary">Services</Typography>

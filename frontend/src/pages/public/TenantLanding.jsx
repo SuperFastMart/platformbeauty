@@ -452,7 +452,7 @@ export default function TenantLanding() {
       {/* Sticky bottom bar when services selected */}
       {selected.length > 0 && (
         <Box
-          position="sticky" bottom={0} bgcolor="white" p={2} mx={-2}
+          position="sticky" bottom={0} bgcolor="background.paper" p={2} mx={-2}
           boxShadow="0 -2px 10px rgba(0,0,0,0.1)" borderRadius="12px 12px 0 0"
           zIndex={10}
         >

@@ -170,6 +170,13 @@ router.post('/bookings', bookingLimiter, asyncHandler(async (req, res) => {
     });
   }
 
+  if (customerPhone) {
+    const cleanPhone = customerPhone.replace(/[\s\-\(\)]/g, '');
+    if (!/^\+?[0-9]{7,15}$/.test(cleanPhone)) {
+      return res.status(400).json({ error: 'Invalid phone number format' });
+    }
+  }
+
   // Validate and fetch services
   const placeholders = serviceIds.map((_, i) => `$${i + 2}`).join(',');
   const services = await getAll(

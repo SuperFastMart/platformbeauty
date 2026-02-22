@@ -97,6 +97,24 @@ adminRouter.post('/', asyncHandler(async (req, res) => {
   res.status(201).json(ticket);
 }));
 
+// GET /unread-count — count tickets with unread platform replies
+adminRouter.get('/unread-count', asyncHandler(async (req, res) => {
+  const result = await getOne(
+    `SELECT COUNT(DISTINCT st.id) as count
+     FROM support_tickets st
+     WHERE st.tenant_id = $1
+       AND st.status IN ('open', 'in_progress')
+       AND EXISTS (
+         SELECT 1 FROM ticket_messages tm
+         WHERE tm.ticket_id = st.id
+         AND tm.sender_type = 'platform'
+         AND tm.id = (SELECT MAX(id) FROM ticket_messages WHERE ticket_id = st.id)
+       )`,
+    [req.tenantId]
+  );
+  res.json({ count: parseInt(result.count) });
+}));
+
 // GET / — list tenant's tickets
 adminRouter.get('/', asyncHandler(async (req, res) => {
   const tickets = await getAll(
@@ -160,6 +178,25 @@ adminRouter.post('/:id/messages', asyncHandler(async (req, res) => {
   );
 
   res.status(201).json(message);
+}));
+
+// PUT /:id/status — tenant admin can resolve their own tickets
+adminRouter.put('/:id/status', asyncHandler(async (req, res) => {
+  const { status } = req.body;
+  if (status !== 'resolved') {
+    return res.status(400).json({ error: 'You can only mark tickets as resolved' });
+  }
+  const ticket = await getOne(
+    'SELECT * FROM support_tickets WHERE id = $1 AND tenant_id = $2',
+    [req.params.id, req.tenantId]
+  );
+  if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
+
+  await run(
+    `UPDATE support_tickets SET status = 'resolved', resolved_at = NOW(), updated_at = NOW() WHERE id = $1`,
+    [ticket.id]
+  );
+  res.json({ success: true, status: 'resolved' });
 }));
 
 // ============================================

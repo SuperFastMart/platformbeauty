@@ -3,6 +3,7 @@ const publicRouter = require('express').Router({ mergeParams: true });
 const { getOne, getAll, run } = require('../config/database');
 const { tenantAuth } = require('../middleware/auth');
 const { resolveTenant } = require('../middleware/auth');
+const { validateUrl, sanitizeEmbedCode } = require('../utils/urlValidator');
 
 const asyncHandler = (fn) => (req, res, next) =>
   Promise.resolve(fn(req, res, next)).catch(next);
@@ -35,7 +36,22 @@ adminRouter.get('/', asyncHandler(async (req, res) => {
 // PUT /api/admin/site-settings/:key — update single setting
 adminRouter.put('/:key', asyncHandler(async (req, res) => {
   const { value } = req.body;
-  const stringValue = typeof value === 'object' ? JSON.stringify(value) : String(value || '');
+  const key = req.params.key;
+
+  // Validate URL fields
+  const urlKeys = ['about_profile_image_url', 'about_map_embed_url', 'header_logo_url'];
+  if (urlKeys.includes(key) && value) {
+    const check = validateUrl(value);
+    if (!check.valid) return res.status(400).json({ error: `${key}: ${check.error}` });
+  }
+
+  // Sanitize embed code
+  let processedValue = value;
+  if (key === 'social_embeds' && Array.isArray(value)) {
+    processedValue = value.map(embed => ({ ...embed, code: sanitizeEmbedCode(embed.code) }));
+  }
+
+  const stringValue = typeof processedValue === 'object' ? JSON.stringify(processedValue) : String(processedValue || '');
 
   await run(
     `INSERT INTO tenant_settings (tenant_id, setting_key, setting_value, updated_at)
@@ -43,7 +59,7 @@ adminRouter.put('/:key', asyncHandler(async (req, res) => {
      ON CONFLICT (tenant_id, setting_key) DO UPDATE SET
        setting_value = EXCLUDED.setting_value,
        updated_at = NOW()`,
-    [req.tenantId, req.params.key, stringValue]
+    [req.tenantId, key, stringValue]
   );
 
   res.json({ success: true });
@@ -52,9 +68,22 @@ adminRouter.put('/:key', asyncHandler(async (req, res) => {
 // PUT /api/admin/site-settings — bulk update multiple settings
 adminRouter.put('/', asyncHandler(async (req, res) => {
   const settings = req.body;
+  const urlKeys = ['about_profile_image_url', 'about_map_embed_url', 'header_logo_url'];
 
   for (const [key, value] of Object.entries(settings)) {
-    const stringValue = typeof value === 'object' ? JSON.stringify(value) : String(value || '');
+    // Validate URL fields
+    if (urlKeys.includes(key) && value) {
+      const check = validateUrl(value);
+      if (!check.valid) return res.status(400).json({ error: `${key}: ${check.error}` });
+    }
+
+    // Sanitize embed code
+    let processedValue = value;
+    if (key === 'social_embeds' && Array.isArray(value)) {
+      processedValue = value.map(embed => ({ ...embed, code: sanitizeEmbedCode(embed.code) }));
+    }
+
+    const stringValue = typeof processedValue === 'object' ? JSON.stringify(processedValue) : String(processedValue || '');
     await run(
       `INSERT INTO tenant_settings (tenant_id, setting_key, setting_value, updated_at)
        VALUES ($1, $2, $3, NOW())

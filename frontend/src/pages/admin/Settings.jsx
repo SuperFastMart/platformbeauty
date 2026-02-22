@@ -794,9 +794,13 @@ export default function Settings() {
 
       {/* Payments / Stripe */}
       <TabPanel value={tab} index={4}>
+        <Alert severity="info" sx={{ mb: 2 }}>
+          This configures how your <strong>clients</strong> pay for services. Your own platform subscription
+          is managed in the <strong>Subscription</strong> tab.
+        </Alert>
         <Card>
           <CardContent>
-            <Typography variant="subtitle1" fontWeight={600} mb={1}>Stripe Integration</Typography>
+            <Typography variant="subtitle1" fontWeight={600} mb={1}>Client Payment Processing</Typography>
             <Typography variant="body2" color="text.secondary" mb={3}>
               Connect your Stripe account to accept card payments, save cards on file, and charge no-show fees.
               You can find your API keys in the{' '}
@@ -843,25 +847,6 @@ export default function Settings() {
           </CardContent>
         </Card>
 
-        <Card sx={{ mt: 2 }}>
-          <CardContent>
-            <Typography variant="subtitle1" fontWeight={600} mb={1}>Subscription</Typography>
-            <Box display="flex" gap={2} alignItems="center">
-              <Chip
-                label={settings.subscription_tier || 'basic'}
-                color="primary" size="small"
-              />
-              <Chip
-                label={settings.subscription_status || 'trial'}
-                color={settings.subscription_status === 'active' ? 'success' : 'warning'}
-                size="small" variant="outlined"
-              />
-            </Box>
-            <Typography variant="body2" color="text.secondary" mt={1}>
-              Your subscription is managed by the platform. Contact support to upgrade.
-            </Typography>
-          </CardContent>
-        </Card>
       </TabPanel>
 
       {/* Social Embeds */}

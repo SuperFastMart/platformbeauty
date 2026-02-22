@@ -4,7 +4,7 @@ import {
   Box, Typography, Button, Card, CardContent, Chip, TextField, CircularProgress,
   Snackbar, Alert, IconButton
 } from '@mui/material';
-import { ArrowBack, Send } from '@mui/icons-material';
+import { ArrowBack, Send, CheckCircle } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import api from '../../api/client';
 
@@ -108,6 +108,24 @@ export default function SupportTicketDetail() {
         ))}
         <div ref={messagesEndRef} />
       </Box>
+
+      {/* Resolve button */}
+      {(ticket.status === 'open' || ticket.status === 'in_progress') && (
+        <Box display="flex" justifyContent="flex-end" mb={2}>
+          <Button variant="outlined" color="success" startIcon={<CheckCircle />}
+            onClick={async () => {
+              try {
+                await api.put(`/admin/support/${id}/status`, { status: 'resolved' });
+                fetchTicket();
+                setSnackbar({ open: true, message: 'Ticket marked as resolved', severity: 'success' });
+              } catch {
+                setSnackbar({ open: true, message: 'Failed to resolve ticket', severity: 'error' });
+              }
+            }}>
+            Mark as Resolved
+          </Button>
+        </Box>
+      )}
 
       {/* Reply box */}
       {ticket.status !== 'closed' && (

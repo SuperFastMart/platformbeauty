@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import {
   Box, Typography, TextField, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, Paper, IconButton, Chip, InputAdornment,
-  Card, CardContent, CardActionArea, Grid, useMediaQuery, useTheme
+  Card, CardContent, CardActionArea, Grid, useMediaQuery, useTheme,
+  Button, Dialog, DialogTitle, DialogContent, DialogActions, Snackbar, Alert
 } from '@mui/material';
-import { Search, ChevronRight } from '@mui/icons-material';
+import { Search, ChevronRight, Add } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import api from '../../api/client';
 
@@ -14,15 +15,22 @@ export default function Customers() {
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [form, setForm] = useState({ name: '', email: '', phone: '' });
+  const [formError, setFormError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
-  useEffect(() => {
+  const fetchCustomers = () => {
     api.get('/admin/customers')
       .then(({ data }) => setCustomers(data))
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, []);
+  };
+
+  useEffect(() => { fetchCustomers(); }, []);
 
   const filtered = search
     ? customers.filter(c =>
@@ -32,11 +40,43 @@ export default function Customers() {
       )
     : customers;
 
+  const handleCreateCustomer = async () => {
+    if (!form.name || !form.email) {
+      setFormError('Name and email are required');
+      return;
+    }
+    if (form.phone) {
+      const clean = form.phone.replace(/[\s\-\(\)]/g, '');
+      if (!/^\+?[0-9]{7,15}$/.test(clean)) {
+        setFormError('Enter a valid phone number (7-15 digits)');
+        return;
+      }
+    }
+    setSubmitting(true);
+    setFormError('');
+    try {
+      await api.post('/admin/customers', form);
+      setSnackbar({ open: true, message: 'Customer created', severity: 'success' });
+      setDialogOpen(false);
+      setForm({ name: '', email: '', phone: '' });
+      fetchCustomers();
+    } catch (err) {
+      setFormError(err.response?.data?.error || 'Failed to create customer');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <Box>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Typography variant="h5" fontWeight={600}>Customers</Typography>
-        <Chip label={`${customers.length} total`} size="small" />
+        <Box display="flex" alignItems="center" gap={1}>
+          <Chip label={`${customers.length} total`} size="small" />
+          <Button variant="contained" size="small" startIcon={<Add />} onClick={() => setDialogOpen(true)}>
+            Add Customer
+          </Button>
+        </Box>
       </Box>
 
       <TextField
@@ -137,6 +177,31 @@ export default function Customers() {
           </Table>
         </TableContainer>
       )}
+
+      {/* Add Customer Dialog */}
+      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Add Customer</DialogTitle>
+        <DialogContent>
+          {formError && <Alert severity="error" sx={{ mb: 2 }}>{formError}</Alert>}
+          <TextField fullWidth label="Name" margin="normal" required
+            value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+          <TextField fullWidth label="Email" type="email" margin="normal" required
+            value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
+          <TextField fullWidth label="Phone" margin="normal"
+            value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
+            helperText="Optional — 7 to 15 digits" />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
+          <Button variant="contained" onClick={handleCreateCustomer} disabled={submitting}>
+            {submitting ? 'Creating...' : 'Create'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar(s => ({ ...s, open: false }))}>
+        <Alert severity={snackbar.severity} onClose={() => setSnackbar(s => ({ ...s, open: false }))}>{snackbar.message}</Alert>
+      </Snackbar>
     </Box>
   );
 }

@@ -28,6 +28,7 @@ export default function AdminBookingCreate() {
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [newCustomer, setNewCustomer] = useState({ name: '', email: '', phone: '' });
   const [isNewCustomer, setIsNewCustomer] = useState(false);
+  const [phoneError, setPhoneError] = useState('');
 
   // Services
   const [services, setServices] = useState([]);
@@ -44,6 +45,9 @@ export default function AdminBookingCreate() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+
+  // Next available
+  const [findingNext, setFindingNext] = useState(false);
 
   // Recurring
   const [isRecurring, setIsRecurring] = useState(false);
@@ -79,6 +83,25 @@ export default function AdminBookingCreate() {
   const totalDuration = selectedServices.reduce((sum, s) => sum + s.duration, 0);
   const dateOptions = Array.from({ length: 30 }, (_, i) => dayjs().add(i, 'day'));
 
+  const handleFindNext = async () => {
+    if (!selectedServiceIds.length) return;
+    setFindingNext(true);
+    setError('');
+    try {
+      const { data } = await api.get(`/admin/next-available?serviceIds=${selectedServiceIds.join(',')}`);
+      if (data.found) {
+        setSelectedDate(data.date);
+        setSelectedSlot(data.time);
+      } else {
+        setError('No available slots found in the next 30 days');
+      }
+    } catch {
+      setError('Failed to find available slots');
+    } finally {
+      setFindingNext(false);
+    }
+  };
+
   const customerName = isNewCustomer ? newCustomer.name : selectedCustomer?.name;
   const customerEmail = isNewCustomer ? newCustomer.email : selectedCustomer?.email;
   const customerPhone = isNewCustomer ? newCustomer.phone : selectedCustomer?.phone;
@@ -112,7 +135,7 @@ export default function AdminBookingCreate() {
 
   const canProceed = () => {
     switch (activeStep) {
-      case 0: return isNewCustomer ? (newCustomer.name && newCustomer.email) : !!selectedCustomer;
+      case 0: return isNewCustomer ? (newCustomer.name && newCustomer.email && !phoneError) : !!selectedCustomer;
       case 1: return selectedServiceIds.length > 0;
       case 2: {
         if (!isRecurring) return !!selectedDate && !!selectedSlot;
@@ -197,7 +220,15 @@ export default function AdminBookingCreate() {
               <TextField fullWidth label="Email" type="email" margin="normal" required
                 value={newCustomer.email} onChange={e => setNewCustomer(f => ({ ...f, email: e.target.value }))} />
               <TextField fullWidth label="Phone" margin="normal"
-                value={newCustomer.phone} onChange={e => setNewCustomer(f => ({ ...f, phone: e.target.value }))} />
+                value={newCustomer.phone}
+                onChange={e => { setNewCustomer(f => ({ ...f, phone: e.target.value })); setPhoneError(''); }}
+                onBlur={() => {
+                  if (newCustomer.phone) {
+                    const clean = newCustomer.phone.replace(/[\s\-\(\)]/g, '');
+                    if (!/^\+?[0-9]{7,15}$/.test(clean)) setPhoneError('Enter a valid phone number (7-15 digits)');
+                  }
+                }}
+                error={!!phoneError} helperText={phoneError} />
             </Box>
           ) : (
             <Autocomplete
@@ -255,12 +286,19 @@ export default function AdminBookingCreate() {
       {/* Step 2: Date & Time */}
       {activeStep === 2 && (
         <Box>
-          <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+          <Box display="flex" justifyContent="space-between" alignItems="center" mb={2} flexWrap="wrap" gap={1}>
             <Typography variant="h6" fontWeight={600}>Choose Date & Time</Typography>
-            <FormControlLabel
-              control={<Checkbox checked={isRecurring} onChange={e => { setIsRecurring(e.target.checked); setRecurringDates([]); }} />}
-              label="Recurring"
-            />
+            <Box display="flex" alignItems="center" gap={1}>
+              <Button variant="outlined" size="small" onClick={handleFindNext}
+                disabled={findingNext || !selectedServiceIds.length}
+                startIcon={findingNext ? <CircularProgress size={16} /> : null}>
+                {findingNext ? 'Searching...' : 'Find Next Available'}
+              </Button>
+              <FormControlLabel
+                control={<Checkbox checked={isRecurring} onChange={e => { setIsRecurring(e.target.checked); setRecurringDates([]); }} />}
+                label="Recurring"
+              />
+            </Box>
           </Box>
 
           {isRecurring && (

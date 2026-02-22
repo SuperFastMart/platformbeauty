@@ -57,6 +57,16 @@ export default function Services() {
   };
 
   const handleSave = async () => {
+    const dur = parseInt(form.duration);
+    const prc = parseFloat(form.price);
+    if (isNaN(dur) || dur < 5 || dur > 480) {
+      setSnackbar({ open: true, message: 'Duration must be between 5 and 480 minutes', severity: 'error' });
+      return;
+    }
+    if (isNaN(prc) || prc < 0 || prc > 10000) {
+      setSnackbar({ open: true, message: 'Price must be between 0 and 10,000', severity: 'error' });
+      return;
+    }
     try {
       if (editing) {
         await api.put(`/admin/services/${editing.id}`, form);
@@ -287,11 +297,12 @@ export default function Services() {
           <Box display="flex" gap={2}>
             <TextField
               label="Duration (min)" type="number" margin="normal" required sx={{ flex: 1 }}
+              inputProps={{ min: 5, max: 480 }} helperText="5–480 minutes"
               value={form.duration} onChange={e => setForm(f => ({ ...f, duration: parseInt(e.target.value) || 0 }))}
             />
             <TextField
               label="Price (£)" type="number" margin="normal" required sx={{ flex: 1 }}
-              inputProps={{ step: 0.01 }}
+              inputProps={{ min: 0, max: 10000, step: 0.01 }}
               value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))}
             />
           </Box>
