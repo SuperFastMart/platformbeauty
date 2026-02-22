@@ -28,7 +28,7 @@ function wrapInTemplate(content, tenant) {
         <tr><td style="padding:32px;">${content}</td></tr>
         <tr><td style="padding:20px 32px;background:#fafafa;border-top:1px solid #eee;text-align:center;">
           <a href="https://boukd.com" style="text-decoration:none;display:inline-block;" target="_blank">
-            <img src="${boukdLogoUrl}" alt="Boukd" style="height:22px;display:inline-block;vertical-align:middle;opacity:0.6;" />
+            <img src="${boukdLogoUrl}" alt="Boukd" style="height:36px;display:inline-block;vertical-align:middle;opacity:0.6;" />
           </a>
           <p style="margin:6px 0 0;font-size:11px;color:#bbb;">
             Powered by <a href="https://boukd.com" style="color:#bbb;text-decoration:none;">Boukd</a> — the booking platform built for you

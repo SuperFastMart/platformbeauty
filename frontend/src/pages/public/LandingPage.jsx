@@ -100,7 +100,7 @@ export default function LandingPage() {
               component="img"
               src="/boukd-logo.png"
               alt="Boukd"
-              sx={{ height: { xs: 56, md: 72 }, cursor: 'pointer' }}
+              sx={{ height: { xs: 56, md: 120 }, cursor: 'pointer' }}
               onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
             />
             <Box display="flex" gap={1.5} alignItems="center">
@@ -661,7 +661,7 @@ export default function LandingPage() {
                 component="img"
                 src="/boukd-logo.png"
                 alt="Boukd"
-                sx={{ height: 56, display: 'block', mb: 0.5, filter: 'brightness(1.3)' }}
+                sx={{ height: 100, display: 'block', mb: 0.5, filter: 'brightness(1.3)' }}
               />
               <Typography variant="caption" sx={{ opacity: 0.6 }}>
                 The booking platform built for you
