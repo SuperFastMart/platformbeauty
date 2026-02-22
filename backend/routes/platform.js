@@ -554,20 +554,42 @@ router.delete('/tenants/:id', platformAuth, asyncHandler(async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    // Cascading deletes via foreign key constraints, but be explicit for safety
-    await client.query('DELETE FROM ticket_messages WHERE ticket_id IN (SELECT id FROM support_tickets WHERE tenant_id = $1)', [req.params.id]);
-    await client.query('DELETE FROM support_tickets WHERE tenant_id = $1', [req.params.id]);
-    await client.query('DELETE FROM platform_notifications WHERE tenant_id = $1', [req.params.id]);
-    await client.query('DELETE FROM activity_log WHERE tenant_id = $1', [req.params.id]);
-    await client.query('DELETE FROM payments WHERE tenant_id = $1', [req.params.id]);
-    await client.query('DELETE FROM bookings WHERE tenant_id = $1', [req.params.id]);
-    await client.query('DELETE FROM time_slots WHERE tenant_id = $1', [req.params.id]);
-    await client.query('DELETE FROM slot_templates WHERE tenant_id = $1', [req.params.id]);
-    await client.query('DELETE FROM customers WHERE tenant_id = $1', [req.params.id]);
-    await client.query('DELETE FROM services WHERE tenant_id = $1', [req.params.id]);
-    await client.query('DELETE FROM tenant_settings WHERE tenant_id = $1', [req.params.id]);
-    await client.query('DELETE FROM tenant_users WHERE tenant_id = $1', [req.params.id]);
-    await client.query('DELETE FROM tenants WHERE id = $1', [req.params.id]);
+    const tid = [req.params.id];
+    // Support
+    await client.query('DELETE FROM ticket_messages WHERE ticket_id IN (SELECT id FROM support_tickets WHERE tenant_id = $1)', tid);
+    await client.query('DELETE FROM support_tickets WHERE tenant_id = $1', tid);
+    await client.query('DELETE FROM platform_notifications WHERE tenant_id = $1', tid);
+    // Activity & impersonation
+    await client.query('DELETE FROM activity_log WHERE tenant_id = $1', tid);
+    await client.query('DELETE FROM impersonation_sessions WHERE target_tenant_id = $1', tid);
+    // Loyalty (depends on customers)
+    await client.query('DELETE FROM redeemed_rewards WHERE tenant_id = $1', tid);
+    await client.query('DELETE FROM loyalty_transactions WHERE tenant_id = $1', tid);
+    await client.query('DELETE FROM customer_category_stamps WHERE tenant_id = $1', tid);
+    await client.query('DELETE FROM loyalty_rewards WHERE tenant_id = $1', tid);
+    await client.query('DELETE FROM loyalty_config WHERE tenant_id = $1', tid);
+    // Reviews, messages, discounts
+    await client.query('DELETE FROM reviews WHERE tenant_id = $1', tid);
+    await client.query('DELETE FROM messages WHERE tenant_id = $1', tid);
+    await client.query('DELETE FROM message_templates WHERE tenant_id = $1', tid);
+    await client.query('DELETE FROM discount_code_uses WHERE tenant_id = $1', tid);
+    await client.query('DELETE FROM discount_codes WHERE tenant_id = $1', tid);
+    // Email logs & booking requests (depend on bookings)
+    await client.query('DELETE FROM email_logs WHERE tenant_id = $1', tid);
+    await client.query('DELETE FROM booking_requests WHERE booking_id IN (SELECT id FROM bookings WHERE tenant_id = $1)', tid);
+    // Payments & bookings
+    await client.query('DELETE FROM payments WHERE tenant_id = $1', tid);
+    await client.query('DELETE FROM bookings WHERE tenant_id = $1', tid);
+    // Availability
+    await client.query('DELETE FROM time_slots WHERE tenant_id = $1', tid);
+    await client.query('DELETE FROM slot_exceptions WHERE tenant_id = $1', tid);
+    await client.query('DELETE FROM slot_templates WHERE tenant_id = $1', tid);
+    // Core tenant data
+    await client.query('DELETE FROM customers WHERE tenant_id = $1', tid);
+    await client.query('DELETE FROM services WHERE tenant_id = $1', tid);
+    await client.query('DELETE FROM tenant_settings WHERE tenant_id = $1', tid);
+    await client.query('DELETE FROM tenant_users WHERE tenant_id = $1', tid);
+    await client.query('DELETE FROM tenants WHERE id = $1', tid);
     await client.query('COMMIT');
     res.json({ success: true, deleted: tenant.name });
   } catch (err) {
