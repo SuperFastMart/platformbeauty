@@ -6,7 +6,7 @@ import {
   ToggleButtonGroup, ToggleButton, CircularProgress
 } from '@mui/material';
 import {
-  CalendarMonth, PendingActions, AttachMoney, People,
+  CalendarMonth, PendingActions, CurrencyPound, People,
   AccessTime, Add, Visibility
 } from '@mui/icons-material';
 import dayjs from 'dayjs';
@@ -14,15 +14,15 @@ import api from '../../api/client';
 
 function StatCard({ title, value, icon, color, onClick, subtitle }) {
   return (
-    <Card sx={{ cursor: onClick ? 'pointer' : 'default' }} onClick={onClick}>
-      <CardContent>
+    <Card sx={{ cursor: onClick ? 'pointer' : 'default', overflow: 'hidden' }} onClick={onClick}>
+      <CardContent sx={{ p: { xs: 1.5, sm: 2 }, '&:last-child': { pb: { xs: 1.5, sm: 2 } } }}>
         <Box display="flex" justifyContent="space-between" alignItems="center">
-          <Box>
-            <Typography variant="body2" color="text.secondary">{title}</Typography>
-            <Typography variant="h4" fontWeight={600}>{value}</Typography>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="body2" color="text.secondary" noWrap>{title}</Typography>
+            <Typography variant="h5" fontWeight={600} noWrap>{value}</Typography>
             {subtitle && <Typography variant="caption" color="text.secondary">{subtitle}</Typography>}
           </Box>
-          <Box sx={{ color, opacity: 0.7, fontSize: 48 }}>
+          <Box sx={{ color, opacity: 0.7, fontSize: { xs: 32, sm: 48 }, flexShrink: 0, ml: 1 }}>
             {icon}
           </Box>
         </Box>
@@ -161,7 +161,7 @@ export default function Dashboard() {
           <StatCard
             title="Week Revenue"
             value={`£${stats.weekRevenue.toFixed(2)}`}
-            icon={<AttachMoney fontSize="inherit" />}
+            icon={<CurrencyPound fontSize="inherit" />}
             color="success.main"
           />
         </Grid>
