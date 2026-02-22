@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
-  Box, AppBar, Toolbar, Typography, Drawer, SwipeableDrawer, List,
+  Box, AppBar, Toolbar, Typography, Drawer, List,
   ListItemButton, ListItemIcon, ListItemText, Button, Chip, Badge,
   IconButton, useMediaQuery, useTheme, Alert
 } from '@mui/material';
@@ -106,8 +106,8 @@ export default function AdminLayout() {
   };
 
   const handleNavClick = (path) => {
+    setMobileOpen(false);
     navigate(path);
-    if (isMobile) setMobileOpen(false);
   };
 
   const drawerContent = (
@@ -168,18 +168,19 @@ export default function AdminLayout() {
         </Toolbar>
       </AppBar>
 
-      {/* Mobile: SwipeableDrawer */}
+      {/* Mobile: Temporary Drawer */}
       {isMobile ? (
-        <SwipeableDrawer
+        <Drawer
+          variant="temporary"
           open={mobileOpen}
           onClose={() => setMobileOpen(false)}
-          onOpen={() => setMobileOpen(true)}
+          ModalProps={{ keepMounted: false }}
           sx={{
             '& .MuiDrawer-paper': { width: DRAWER_WIDTH, boxSizing: 'border-box' },
           }}
         >
           {drawerContent}
-        </SwipeableDrawer>
+        </Drawer>
       ) : (
         <Drawer
           variant="permanent"
