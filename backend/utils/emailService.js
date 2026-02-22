@@ -7,6 +7,14 @@ const BREVO_SMS_URL = 'https://api.brevo.com/v3/transactionalSMS/sms';
 function wrapInTemplate(content, tenant) {
   const color = tenant.primary_color || '#8B2635';
   const name = tenant.name || 'Boukd';
+  const platformUrl = process.env.PLATFORM_URL || 'https://boukd.com';
+  const boukdLogoUrl = `${platformUrl}/boukd-logo.png`;
+
+  // Header: show tenant logo if available, otherwise text
+  const headerContent = tenant.logo_url
+    ? `<img src="${tenant.logo_url}" alt="${name}" style="max-height:44px;max-width:200px;display:block;" />`
+    : `<h1 style="margin:0;color:#fff;font-size:22px;font-weight:600;">${name}</h1>`;
+
   return `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -15,12 +23,15 @@ function wrapInTemplate(content, tenant) {
     <tr><td align="center">
       <table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
         <tr><td style="background:${color};padding:24px 32px;">
-          <h1 style="margin:0;color:#fff;font-size:22px;font-weight:600;">${name}</h1>
+          ${headerContent}
         </td></tr>
         <tr><td style="padding:32px;">${content}</td></tr>
-        <tr><td style="padding:16px 32px;background:#fafafa;border-top:1px solid #eee;">
-          <p style="margin:0;font-size:12px;color:#999;text-align:center;">
-            Sent by ${name} via Boukd
+        <tr><td style="padding:20px 32px;background:#fafafa;border-top:1px solid #eee;text-align:center;">
+          <a href="https://boukd.com" style="text-decoration:none;display:inline-block;" target="_blank">
+            <img src="${boukdLogoUrl}" alt="Boukd" style="height:22px;display:inline-block;vertical-align:middle;opacity:0.6;" />
+          </a>
+          <p style="margin:6px 0 0;font-size:11px;color:#bbb;">
+            Powered by <a href="https://boukd.com" style="color:#bbb;text-decoration:none;">Boukd</a> — the booking platform built for you
           </p>
         </td></tr>
       </table>
