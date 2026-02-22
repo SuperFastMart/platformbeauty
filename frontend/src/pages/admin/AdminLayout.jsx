@@ -184,7 +184,7 @@ export default function AdminLayout() {
               top: 0, left: 0, bottom: 0,
               width: DRAWER_WIDTH,
               bgcolor: 'background.paper',
-              zIndex: (theme) => theme.zIndex.drawer + 0.5,
+              zIndex: (theme) => theme.zIndex.drawer + 2,
               transform: mobileOpen ? 'translateX(0)' : 'translateX(-100%)',
               transition: 'transform 225ms cubic-bezier(0, 0, 0.2, 1)',
               overflowY: 'auto',
