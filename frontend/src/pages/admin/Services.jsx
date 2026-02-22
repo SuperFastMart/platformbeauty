@@ -5,8 +5,9 @@ import {
   DialogContent, DialogActions, TextField, Snackbar, Alert, Card, CardContent,
   MenuItem, Divider, useMediaQuery, useTheme
 } from '@mui/material';
-import { Add, Edit, Delete, ArrowUpward, ArrowDownward, DragIndicator } from '@mui/icons-material';
+import { Add, Edit, Delete, ArrowUpward, ArrowDownward, DragIndicator, Upload } from '@mui/icons-material';
 import api from '../../api/client';
+import CsvImportDialog from '../../components/CsvImportDialog';
 
 const emptyService = { name: '', description: '', duration: 30, price: '', category: '', display_order: 0 };
 
@@ -20,6 +21,7 @@ export default function Services() {
   const [categoryOrder, setCategoryOrder] = useState([]);
   const [orderChanged, setOrderChanged] = useState(false);
   const [newCategoryMode, setNewCategoryMode] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
@@ -139,11 +141,16 @@ export default function Services() {
 
   return (
     <Box>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3} flexWrap="wrap" gap={1}>
         <Typography variant="h5" fontWeight={600}>Services</Typography>
-        <Button variant="contained" startIcon={<Add />} onClick={() => handleOpen()}>
-          Add Service
-        </Button>
+        <Box display="flex" gap={1}>
+          <Button variant="outlined" startIcon={<Upload />} onClick={() => setImportOpen(true)}>
+            Import CSV
+          </Button>
+          <Button variant="contained" startIcon={<Add />} onClick={() => handleOpen()}>
+            Add Service
+          </Button>
+        </Box>
       </Box>
 
       {/* Category Order */}
@@ -366,6 +373,13 @@ export default function Services() {
       <Snackbar open={snackbar.open} autoHideDuration={3000} onClose={() => setSnackbar(s => ({ ...s, open: false }))}>
         <Alert severity={snackbar.severity} variant="filled">{snackbar.message}</Alert>
       </Snackbar>
+
+      <CsvImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onComplete={() => { setImportOpen(false); fetchServices(); }}
+        existingServices={services}
+      />
     </Box>
   );
 }

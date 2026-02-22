@@ -2,7 +2,7 @@ const router = require('express').Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
-const { getOne, getAll, run } = require('../config/database');
+const { pool, getOne, getAll, run } = require('../config/database');
 const { tenantAuth } = require('../middleware/auth');
 const {
   sendBookingApprovedNotification, sendBookingRejectedNotification,
@@ -386,6 +386,98 @@ router.delete('/services/:id', asyncHandler(async (req, res) => {
   }
 
   res.json({ message: 'Service deactivated' });
+}));
+
+// POST /api/admin/services/import — bulk import services from CSV
+router.post('/services/import', asyncHandler(async (req, res) => {
+  const { services: rows } = req.body;
+
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return res.status(400).json({ error: 'No services provided' });
+  }
+  if (rows.length > 500) {
+    return res.status(400).json({ error: 'Maximum 500 services per import' });
+  }
+
+  // Check plan limits
+  const tenant = await getOne('SELECT subscription_tier FROM tenants WHERE id = $1', [req.tenantId]);
+  const plan = await getOne(
+    'SELECT max_services FROM subscription_plans WHERE tier = $1 AND is_active = TRUE',
+    [tenant?.subscription_tier || 'free']
+  );
+  const { count: existingCount } = await getOne(
+    'SELECT COUNT(*)::int AS count FROM services WHERE tenant_id = $1 AND active = TRUE',
+    [req.tenantId]
+  );
+
+  // Validate each row
+  const results = { imported: 0, skipped: 0, errors: [] };
+  const validRows = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const rowErrors = [];
+
+    if (!row.name || !String(row.name).trim()) rowErrors.push('Name is required');
+
+    const dur = parseInt(row.duration);
+    if (isNaN(dur) || dur < 5 || dur > 480) rowErrors.push('Duration must be 5-480 minutes');
+
+    const price = parseFloat(row.price);
+    if (isNaN(price) || price < 0 || price > 10000) rowErrors.push('Price must be 0-10,000');
+
+    if (rowErrors.length > 0) {
+      results.errors.push({ row: i + 1, name: row.name || '(empty)', errors: rowErrors });
+      results.skipped++;
+    } else {
+      validRows.push({
+        name: String(row.name).trim(),
+        description: row.description ? String(row.description).trim() : null,
+        duration: dur,
+        price,
+        category: row.category ? String(row.category).trim() : null,
+      });
+    }
+  }
+
+  // Enforce plan limit
+  const maxAllowed = plan?.max_services || null;
+  if (maxAllowed && (existingCount + validRows.length) > maxAllowed) {
+    const available = Math.max(0, maxAllowed - existingCount);
+    return res.status(403).json({
+      error: `Your plan allows ${maxAllowed} services. You have ${existingCount} and are importing ${validRows.length}. ${available} slot(s) available. Upgrade to add more.`,
+      code: 'PLAN_LIMIT_EXCEEDED',
+    });
+  }
+
+  // Insert in transaction
+  if (validRows.length > 0) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (const svc of validRows) {
+        await client.query(
+          `INSERT INTO services (tenant_id, name, description, duration, price, category, display_order)
+           VALUES ($1, $2, $3, $4, $5, $6, 0)`,
+          [req.tenantId, svc.name, svc.description, svc.duration, svc.price, svc.category]
+        );
+        results.imported++;
+      }
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  res.json({
+    message: `Imported ${results.imported} service(s). ${results.skipped} skipped.`,
+    imported: results.imported,
+    skipped: results.skipped,
+    errors: results.errors,
+  });
 }));
 
 // ============================================
