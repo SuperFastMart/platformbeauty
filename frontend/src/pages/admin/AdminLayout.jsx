@@ -107,7 +107,7 @@ export default function AdminLayout() {
 
   const handleNavClick = (path) => {
     setMobileOpen(false);
-    setTimeout(() => navigate(path), 150);
+    navigate(path);
   };
 
   const drawerContent = (
@@ -174,7 +174,7 @@ export default function AdminLayout() {
           variant="temporary"
           open={mobileOpen}
           onClose={() => setMobileOpen(false)}
-          ModalProps={{ keepMounted: false }}
+          ModalProps={{ keepMounted: true }}
           sx={{
             '& .MuiDrawer-paper': { width: DRAWER_WIDTH, boxSizing: 'border-box' },
           }}
