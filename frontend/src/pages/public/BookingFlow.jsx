@@ -371,7 +371,7 @@ export default function BookingFlow() {
             })().map(([category, services]) => {
               const selectedInCategory = services.filter(s => selectedIds.includes(s.id)).length;
               return (
-                <Accordion key={category} defaultExpanded={Object.keys(grouped).length <= 4}>
+                <Accordion key={category} defaultExpanded={false}>
                   <AccordionSummary
                     expandIcon={<ExpandMore />}
                     sx={{
