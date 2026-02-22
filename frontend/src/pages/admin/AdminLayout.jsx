@@ -45,6 +45,11 @@ export default function AdminLayout() {
   const [showMfaBanner, setShowMfaBanner] = useState(false);
   const [supportUnread, setSupportUnread] = useState(0);
 
+  // Close mobile drawer on route change
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [location.pathname]);
+
   // Poll support unread count
   useEffect(() => {
     const fetchUnread = () => {
