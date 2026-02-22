@@ -99,7 +99,7 @@ export default function TenantPublicLayout() {
   return (
     <TenantContext.Provider value={tenant}>
       <ThemeProvider theme={tenantTheme}>
-        <Box minHeight="100vh" bgcolor="background.default">
+        <Box minHeight="100vh" bgcolor="background.default" display="flex" flexDirection="column">
           <AppBar position="static" elevation={0}>
             <Toolbar>
               {siteSettings.header_display === 'logo' && siteSettings.header_logo_url ? (
@@ -141,7 +141,26 @@ export default function TenantPublicLayout() {
             </Toolbar>
           </AppBar>
 
-          <Outlet />
+          <Box sx={{ flex: 1 }}>
+            <Outlet />
+          </Box>
+
+          <Box
+            component="footer"
+            sx={{ py: 2, textAlign: 'center', borderTop: '1px solid', borderColor: 'divider' }}
+          >
+            <Typography
+              variant="caption"
+              color="text.disabled"
+              component="a"
+              href="https://boukd.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              sx={{ textDecoration: 'none', '&:hover': { color: 'text.secondary' } }}
+            >
+              Powered by Boukd
+            </Typography>
+          </Box>
         </Box>
       </ThemeProvider>
     </TenantContext.Provider>

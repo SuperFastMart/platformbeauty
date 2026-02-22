@@ -6,7 +6,7 @@ import {
   IconButton, Grid, useMediaQuery, useTheme,
   Accordion, AccordionSummary, AccordionDetails, FormControlLabel
 } from '@mui/material';
-import { ChevronLeft, ChevronRight, Search, ExpandMore, CheckCircle, Add, Gavel } from '@mui/icons-material';
+import { ChevronLeft, ChevronRight, Search, ExpandMore, CheckCircle, Add, Gavel, EventBusy, ReportProblem, Security, Article } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements } from '@stripe/react-stripe-js';
@@ -856,37 +856,35 @@ export default function BookingFlow() {
 
           {hasPolicies && (
             <Box mt={2}>
-              <Accordion variant="outlined" disableGutters sx={{ mb: 1 }}>
+              <Accordion
+                disableGutters
+                sx={{
+                  border: 'none', borderRadius: '12px !important',
+                  bgcolor: '#f8f9fa', '&:before': { display: 'none' }, boxShadow: 'none', mb: 1,
+                }}
+              >
                 <AccordionSummary expandIcon={<ExpandMore />}>
-                  <Typography variant="body2" fontWeight={500} display="flex" alignItems="center" gap={0.5}>
+                  <Typography variant="body2" fontWeight={600} display="flex" alignItems="center" gap={0.5}>
                     <Gavel fontSize="small" /> View Policies
                   </Typography>
                 </AccordionSummary>
                 <AccordionDetails sx={{ pt: 0 }}>
-                  {siteSettings.policy_cancellation && (
-                    <Box mb={2}>
-                      <Typography variant="subtitle2" fontWeight={600}>Cancellation Policy</Typography>
-                      <Typography variant="body2" color="text.secondary" whiteSpace="pre-line">{siteSettings.policy_cancellation}</Typography>
+                  {[
+                    { key: 'policy_cancellation', label: 'Cancellation Policy', icon: EventBusy, tint: '#FFF3E0' },
+                    { key: 'policy_noshow', label: 'No-Show Policy', icon: ReportProblem, tint: '#FBE9E7' },
+                    { key: 'policy_privacy', label: 'Privacy Policy', icon: Security, tint: '#E8F5E9' },
+                    { key: 'policy_terms', label: 'Terms & Conditions', icon: Article, tint: '#E3F2FD' },
+                  ].filter(p => siteSettings[p.key]).map(({ key, label, icon: Icon, tint }) => (
+                    <Box key={key} mb={2} p={2} sx={{ bgcolor: tint, borderRadius: 2 }}>
+                      <Box display="flex" alignItems="center" gap={1} mb={0.5}>
+                        <Icon sx={{ fontSize: 18, opacity: 0.7 }} />
+                        <Typography variant="subtitle2" fontWeight={600}>{label}</Typography>
+                      </Box>
+                      <Typography variant="body2" color="text.secondary" whiteSpace="pre-line" lineHeight={1.6}>
+                        {siteSettings[key]}
+                      </Typography>
                     </Box>
-                  )}
-                  {siteSettings.policy_noshow && (
-                    <Box mb={2}>
-                      <Typography variant="subtitle2" fontWeight={600}>No-Show Policy</Typography>
-                      <Typography variant="body2" color="text.secondary" whiteSpace="pre-line">{siteSettings.policy_noshow}</Typography>
-                    </Box>
-                  )}
-                  {siteSettings.policy_privacy && (
-                    <Box mb={2}>
-                      <Typography variant="subtitle2" fontWeight={600}>Privacy Policy</Typography>
-                      <Typography variant="body2" color="text.secondary" whiteSpace="pre-line">{siteSettings.policy_privacy}</Typography>
-                    </Box>
-                  )}
-                  {siteSettings.policy_terms && (
-                    <Box>
-                      <Typography variant="subtitle2" fontWeight={600}>Terms & Conditions</Typography>
-                      <Typography variant="body2" color="text.secondary" whiteSpace="pre-line">{siteSettings.policy_terms}</Typography>
-                    </Box>
-                  )}
+                  ))}
                 </AccordionDetails>
               </Accordion>
               <FormControlLabel

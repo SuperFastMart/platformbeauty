@@ -4,7 +4,7 @@ import {
   Box, Typography, Card, CardContent, Button, Checkbox, Chip, Divider, Container,
   Rating, Grid, Accordion, AccordionSummary, AccordionDetails
 } from '@mui/material';
-import { AccessTime, Schedule, Star, Place, Gavel, ExpandMore } from '@mui/icons-material';
+import { AccessTime, Schedule, Star, Place, Gavel, ExpandMore, EventBusy, ReportProblem, Security, Article } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import api from '../../api/client';
 import { useTenant } from './TenantPublicLayout';
@@ -398,54 +398,36 @@ export default function TenantLanding() {
           <Typography variant="h6" fontWeight={600} mb={2} display="flex" alignItems="center" gap={1}>
             <Gavel fontSize="small" /> Our Policies
           </Typography>
-          {siteSettings.policy_cancellation && (
-            <Accordion variant="outlined" disableGutters sx={{ mb: 1 }}>
-              <AccordionSummary expandIcon={<ExpandMore />}>
-                <Typography fontWeight={500}>Cancellation Policy</Typography>
-              </AccordionSummary>
-              <AccordionDetails>
-                <Typography variant="body2" color="text.secondary" whiteSpace="pre-line">
-                  {siteSettings.policy_cancellation}
-                </Typography>
-              </AccordionDetails>
-            </Accordion>
-          )}
-          {siteSettings.policy_noshow && (
-            <Accordion variant="outlined" disableGutters sx={{ mb: 1 }}>
-              <AccordionSummary expandIcon={<ExpandMore />}>
-                <Typography fontWeight={500}>No-Show Policy</Typography>
-              </AccordionSummary>
-              <AccordionDetails>
-                <Typography variant="body2" color="text.secondary" whiteSpace="pre-line">
-                  {siteSettings.policy_noshow}
-                </Typography>
-              </AccordionDetails>
-            </Accordion>
-          )}
-          {siteSettings.policy_privacy && (
-            <Accordion variant="outlined" disableGutters sx={{ mb: 1 }}>
-              <AccordionSummary expandIcon={<ExpandMore />}>
-                <Typography fontWeight={500}>Privacy Policy</Typography>
-              </AccordionSummary>
-              <AccordionDetails>
-                <Typography variant="body2" color="text.secondary" whiteSpace="pre-line">
-                  {siteSettings.policy_privacy}
-                </Typography>
-              </AccordionDetails>
-            </Accordion>
-          )}
-          {siteSettings.policy_terms && (
-            <Accordion variant="outlined" disableGutters>
-              <AccordionSummary expandIcon={<ExpandMore />}>
-                <Typography fontWeight={500}>Terms &amp; Conditions</Typography>
-              </AccordionSummary>
-              <AccordionDetails>
-                <Typography variant="body2" color="text.secondary" whiteSpace="pre-line">
-                  {siteSettings.policy_terms}
-                </Typography>
-              </AccordionDetails>
-            </Accordion>
-          )}
+          <Grid container spacing={2}>
+            {[
+              { key: 'policy_cancellation', label: 'Cancellation Policy', icon: EventBusy, tint: '#FFF3E0' },
+              { key: 'policy_noshow', label: 'No-Show Policy', icon: ReportProblem, tint: '#FBE9E7' },
+              { key: 'policy_privacy', label: 'Privacy Policy', icon: Security, tint: '#E8F5E9' },
+              { key: 'policy_terms', label: 'Terms & Conditions', icon: Article, tint: '#E3F2FD' },
+            ].filter(p => siteSettings[p.key]).map(({ key, label, icon: Icon, tint }) => (
+              <Grid item xs={12} sm={6} key={key}>
+                <Accordion
+                  disableGutters
+                  sx={{
+                    border: 'none', borderRadius: '12px !important',
+                    bgcolor: tint, '&:before': { display: 'none' }, boxShadow: 'none',
+                  }}
+                >
+                  <AccordionSummary expandIcon={<ExpandMore />}>
+                    <Box display="flex" alignItems="center" gap={1.5}>
+                      <Icon sx={{ fontSize: 20, opacity: 0.7 }} />
+                      <Typography fontWeight={600} variant="body1">{label}</Typography>
+                    </Box>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <Typography variant="body2" color="text.secondary" whiteSpace="pre-line" lineHeight={1.7}>
+                      {siteSettings[key]}
+                    </Typography>
+                  </AccordionDetails>
+                </Accordion>
+              </Grid>
+            ))}
+          </Grid>
         </Box>
       )}
 

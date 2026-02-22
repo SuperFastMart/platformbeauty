@@ -7,6 +7,7 @@ const { tenantAuth } = require('../middleware/auth');
 const {
   sendBookingApprovedNotification, sendBookingRejectedNotification,
   sendRequestApprovedNotification, sendRequestRejectedNotification,
+  sendBookingConfirmedSMS, sendBookingRejectedSMS,
 } = require('../utils/emailService');
 const { chargeNoShow, getCustomerPaymentMethods } = require('../utils/stripeService');
 const { awardStampForBooking } = require('./loyalty');
@@ -306,6 +307,25 @@ router.post('/services', asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'Price must be between 0 and 10,000' });
   }
 
+  // Enforce plan service limit
+  const tenant = await getOne('SELECT subscription_tier FROM tenants WHERE id = $1', [req.tenantId]);
+  const plan = await getOne(
+    'SELECT max_services FROM subscription_plans WHERE tier = $1 AND is_active = TRUE',
+    [tenant?.subscription_tier || 'free']
+  );
+  if (plan?.max_services) {
+    const { count } = await getOne(
+      'SELECT COUNT(*)::int AS count FROM services WHERE tenant_id = $1 AND active = TRUE',
+      [req.tenantId]
+    );
+    if (count >= plan.max_services) {
+      return res.status(403).json({
+        error: `Your plan allows up to ${plan.max_services} services. Upgrade to add more.`,
+        code: 'PLAN_LIMIT_REACHED',
+      });
+    }
+  }
+
   const service = await getOne(
     `INSERT INTO services (tenant_id, name, description, duration, price, category, display_order)
      VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -393,7 +413,12 @@ router.get('/bookings', asyncHandler(async (req, res) => {
     sql += ` AND b.status = $${params.length}`;
   }
 
-  sql += ' ORDER BY b.date DESC, b.start_time ASC';
+  // Default to today onwards when no date filters applied (upcoming first)
+  if (!date && !from && !to) {
+    sql += ' AND b.date >= CURRENT_DATE ORDER BY b.date ASC, b.start_time ASC';
+  } else {
+    sql += ' ORDER BY b.date DESC, b.start_time ASC';
+  }
 
   const bookings = await getAll(sql, params);
   res.json(bookings);
@@ -425,13 +450,15 @@ router.put('/bookings/:id/status', asyncHandler(async (req, res) => {
     );
   }
 
-  // Send email notifications
+  // Send email + SMS notifications
   const tenant = await getOne('SELECT * FROM tenants WHERE id = $1', [req.tenantId]);
   if (tenant) {
     if (status === 'confirmed') {
       sendBookingApprovedNotification(booking, tenant).catch(err => console.error('Email error:', err));
+      sendBookingConfirmedSMS(booking, tenant).catch(err => console.error('SMS error:', err));
     } else if (status === 'rejected') {
       sendBookingRejectedNotification(booking, tenant, reason, alternative).catch(err => console.error('Email error:', err));
+      sendBookingRejectedSMS(booking, tenant).catch(err => console.error('SMS error:', err));
     }
   }
 
@@ -1166,6 +1193,26 @@ router.post('/bookings/admin-create', asyncHandler(async (req, res) => {
     const cleanPhone = customerPhone.replace(/[\s\-\(\)]/g, '');
     if (!/^\+?[0-9]{7,15}$/.test(cleanPhone)) {
       return res.status(400).json({ error: 'Invalid phone number format' });
+    }
+  }
+
+  // Enforce plan booking limit
+  const tenantRecord = await getOne('SELECT subscription_tier FROM tenants WHERE id = $1', [req.tenantId]);
+  const plan = await getOne(
+    'SELECT max_bookings_per_month FROM subscription_plans WHERE tier = $1 AND is_active = TRUE',
+    [tenantRecord?.subscription_tier || 'free']
+  );
+  if (plan?.max_bookings_per_month) {
+    const { count } = await getOne(
+      `SELECT COUNT(*)::int AS count FROM bookings
+       WHERE tenant_id = $1 AND date_trunc('month', created_at) = date_trunc('month', CURRENT_DATE)`,
+      [req.tenantId]
+    );
+    if (count >= plan.max_bookings_per_month) {
+      return res.status(403).json({
+        error: `Your plan allows up to ${plan.max_bookings_per_month} bookings per month. Upgrade to increase your limit.`,
+        code: 'PLAN_LIMIT_REACHED',
+      });
     }
   }
 

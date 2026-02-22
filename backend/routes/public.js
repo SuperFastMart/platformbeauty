@@ -170,6 +170,26 @@ router.post('/bookings', bookingLimiter, asyncHandler(async (req, res) => {
     });
   }
 
+  // Enforce plan booking limit
+  const tenantRecord = await getOne('SELECT subscription_tier FROM tenants WHERE id = $1', [req.tenantId]);
+  const plan = await getOne(
+    'SELECT max_bookings_per_month FROM subscription_plans WHERE tier = $1 AND is_active = TRUE',
+    [tenantRecord?.subscription_tier || 'free']
+  );
+  if (plan?.max_bookings_per_month) {
+    const { count } = await getOne(
+      `SELECT COUNT(*)::int AS count FROM bookings
+       WHERE tenant_id = $1 AND date_trunc('month', created_at) = date_trunc('month', CURRENT_DATE)`,
+      [req.tenantId]
+    );
+    if (count >= plan.max_bookings_per_month) {
+      return res.status(403).json({
+        error: 'This business has reached their monthly booking limit. Please contact them directly.',
+        code: 'PLAN_LIMIT_REACHED',
+      });
+    }
+  }
+
   if (customerPhone) {
     const cleanPhone = customerPhone.replace(/[\s\-\(\)]/g, '');
     if (!/^\+?[0-9]{7,15}$/.test(cleanPhone)) {

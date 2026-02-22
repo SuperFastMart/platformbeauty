@@ -337,6 +337,19 @@ async function sendSMSReminder24h(booking, tenant) {
   return sendSMS(booking.customer_phone, message, tenant);
 }
 
+async function sendBookingConfirmedSMS(booking, tenant) {
+  if (!booking.customer_phone) return { success: false };
+  const date = booking.date.toISOString ? booking.date.toISOString().split('T')[0] : String(booking.date).split('T')[0];
+  const message = `Hi ${booking.customer_name}, your booking at ${tenant.name} on ${date} at ${booking.start_time.slice(0, 5)} is confirmed! See you then.`;
+  return sendSMS(booking.customer_phone, message, tenant);
+}
+
+async function sendBookingRejectedSMS(booking, tenant) {
+  if (!booking.customer_phone) return { success: false };
+  const message = `Hi ${booking.customer_name}, unfortunately your booking at ${tenant.name} could not be confirmed. Please visit our booking page to rebook.`;
+  return sendSMS(booking.customer_phone, message, tenant);
+}
+
 async function sendBookingRequestNotification(request, booking, tenant) {
   const typeLabel = request.request_type === 'cancel' ? 'Cancellation' : 'Amendment';
   const html = `
@@ -476,6 +489,8 @@ module.exports = {
   sendPasswordResetEmail,
   sendSMS,
   sendSMSReminder24h,
+  sendBookingConfirmedSMS,
+  sendBookingRejectedSMS,
   sendBookingRequestNotification,
   sendRequestApprovedNotification,
   sendRequestRejectedNotification,

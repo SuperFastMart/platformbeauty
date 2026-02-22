@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import {
   Box, Typography, Card, CardContent, TextField, Button, Tabs, Tab,
   Snackbar, Alert, CircularProgress, InputAdornment, Chip, Switch, FormControlLabel, Grid, MenuItem,
-  useMediaQuery, useTheme
+  useMediaQuery, useTheme, LinearProgress
 } from '@mui/material';
 import { Save, CreditCard, Store, Palette, Info, Schedule, Code, ContentCopy, Share, Delete, Add, DragIndicator, Gavel, Subscriptions, OpenInNew, CheckCircle, Security, Lock, LockOpen } from '@mui/icons-material';
 import api from '../../api/client';
@@ -148,6 +148,72 @@ function SubscriptionTab({ snackbar, setSnackbar }) {
           </Box>
         </CardContent>
       </Card>
+
+      {/* Usage This Month */}
+      {subData.usage && (
+        <Card sx={{ mb: 3 }}>
+          <CardContent>
+            <Typography variant="h6" fontWeight={700} mb={2}>Usage</Typography>
+            <Grid container spacing={3}>
+              <Grid item xs={12} sm={6}>
+                <Box mb={1} display="flex" justifyContent="space-between" alignItems="baseline">
+                  <Typography variant="body2" fontWeight={600}>Services</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {subData.usage.services}{subData.usage.max_services ? ` of ${subData.usage.max_services}` : ' (unlimited)'}
+                  </Typography>
+                </Box>
+                <LinearProgress
+                  variant="determinate"
+                  value={subData.usage.max_services ? Math.min((subData.usage.services / subData.usage.max_services) * 100, 100) : 0}
+                  sx={{
+                    height: 8, borderRadius: 4,
+                    bgcolor: '#f0f0f0',
+                    '& .MuiLinearProgress-bar': {
+                      borderRadius: 4,
+                      bgcolor: subData.usage.max_services && subData.usage.services >= subData.usage.max_services ? 'error.main' : 'primary.main',
+                    },
+                  }}
+                />
+                {subData.usage.max_services && subData.usage.services > subData.usage.max_services && (
+                  <Alert severity="warning" sx={{ mt: 1 }} variant="outlined">
+                    You have {subData.usage.services} services but your plan allows {subData.usage.max_services}. Existing services are kept, but you can't add new ones until you upgrade.
+                  </Alert>
+                )}
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Box mb={1} display="flex" justifyContent="space-between" alignItems="baseline">
+                  <Typography variant="body2" fontWeight={600}>Bookings This Month</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {subData.usage.bookings_this_month}{subData.usage.max_bookings_per_month ? ` of ${subData.usage.max_bookings_per_month}` : ' (unlimited)'}
+                  </Typography>
+                </Box>
+                <LinearProgress
+                  variant="determinate"
+                  value={subData.usage.max_bookings_per_month ? Math.min((subData.usage.bookings_this_month / subData.usage.max_bookings_per_month) * 100, 100) : 0}
+                  sx={{
+                    height: 8, borderRadius: 4,
+                    bgcolor: '#f0f0f0',
+                    '& .MuiLinearProgress-bar': {
+                      borderRadius: 4,
+                      bgcolor: subData.usage.max_bookings_per_month && subData.usage.bookings_this_month >= subData.usage.max_bookings_per_month ? 'error.main' : 'primary.main',
+                    },
+                  }}
+                />
+                {subData.usage.max_bookings_per_month && subData.usage.bookings_this_month >= subData.usage.max_bookings_per_month && (
+                  <Alert severity="error" sx={{ mt: 1 }} variant="outlined">
+                    You've reached your monthly booking limit. Upgrade your plan to accept more bookings.
+                  </Alert>
+                )}
+              </Grid>
+            </Grid>
+            {subData.current_tier === 'free' && (
+              <Alert severity="info" sx={{ mt: 2 }} variant="outlined">
+                Upgrade to Growth or Pro for unlimited services and bookings.
+              </Alert>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Plan Cards */}
       <Typography variant="h6" fontWeight={600} mb={2}>

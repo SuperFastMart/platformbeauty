@@ -3,9 +3,10 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box, Typography, Button, Card, CardContent, CircularProgress, Grid, Chip,
   Snackbar, Alert, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions,
-  Table, TableBody, TableCell, TableHead, TableRow, TableContainer, Paper
+  Table, TableBody, TableCell, TableHead, TableRow, TableContainer, Paper,
+  MenuItem, Select, FormControl, InputLabel
 } from '@mui/material';
-import { ArrowBack, Block, CheckCircle, Delete, PersonOutline } from '@mui/icons-material';
+import { ArrowBack, Block, CheckCircle, Delete, PersonOutline, SwapHoriz } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import api from '../../api/client';
 import { useAuth } from '../../contexts/AuthContext';
@@ -19,6 +20,8 @@ export default function PlatformTenantDetail() {
   const [error, setError] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [deleteDialog, setDeleteDialog] = useState(false);
+  const [tierDialog, setTierDialog] = useState(false);
+  const [selectedTier, setSelectedTier] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
 
   const fetchTenant = () => {
@@ -68,6 +71,24 @@ export default function PlatformTenantDetail() {
     } finally {
       setActionLoading(false);
       setDeleteDialog(false);
+    }
+  };
+
+  const handleChangeTier = async () => {
+    if (!selectedTier || selectedTier === (tenant.subscription_tier || 'free')) return;
+    setActionLoading(true);
+    try {
+      await api.put(`/platform/tenants/${id}`, {
+        subscription_tier: selectedTier,
+        subscription_status: 'active',
+      });
+      setSnackbar({ open: true, message: `Tenant moved to ${selectedTier} tier`, severity: 'success' });
+      setTierDialog(false);
+      fetchTenant();
+    } catch {
+      setSnackbar({ open: true, message: 'Failed to update tier', severity: 'error' });
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -124,6 +145,14 @@ export default function PlatformTenantDetail() {
                 disabled={actionLoading}
               >
                 Impersonate
+              </Button>
+              <Button
+                variant="outlined"
+                startIcon={<SwapHoriz />}
+                onClick={() => { setSelectedTier(tenant.subscription_tier || 'free'); setTierDialog(true); }}
+                disabled={actionLoading}
+              >
+                Change Tier
               </Button>
               <Button
                 variant="outlined"
@@ -200,6 +229,33 @@ export default function PlatformTenantDetail() {
           )}
         </CardContent>
       </Card>
+
+      {/* Change Tier Dialog */}
+      <Dialog open={tierDialog} onClose={() => setTierDialog(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Change Subscription Tier</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Override the subscription tier for <strong>{tenant.name}</strong>. This sets the tier directly without requiring a Stripe subscription.
+          </DialogContentText>
+          <FormControl fullWidth>
+            <InputLabel>Tier</InputLabel>
+            <Select value={selectedTier} onChange={(e) => setSelectedTier(e.target.value)} label="Tier">
+              <MenuItem value="free">Free</MenuItem>
+              <MenuItem value="growth">Growth</MenuItem>
+              <MenuItem value="pro">Pro</MenuItem>
+            </Select>
+          </FormControl>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setTierDialog(false)}>Cancel</Button>
+          <Button
+            variant="contained" onClick={handleChangeTier} disabled={actionLoading}
+            sx={{ bgcolor: '#8B2635', '&:hover': { bgcolor: '#6d1f2b' } }}
+          >
+            Update Tier
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Delete Confirmation */}
       <Dialog open={deleteDialog} onClose={() => setDeleteDialog(false)}>

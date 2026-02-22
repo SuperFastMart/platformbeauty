@@ -52,6 +52,17 @@ adminRouter.get('/', asyncHandler(async (req, res) => {
   // Check if trial has expired
   const trialExpired = tenant.subscription_status === 'trial' && tenant.trial_ends_at && new Date(tenant.trial_ends_at) < new Date();
 
+  // Usage counts
+  const serviceCount = await getOne(
+    'SELECT COUNT(*)::int AS count FROM services WHERE tenant_id = $1 AND active = TRUE',
+    [req.tenantId]
+  );
+  const bookingCount = await getOne(
+    `SELECT COUNT(*)::int AS count FROM bookings
+     WHERE tenant_id = $1 AND date_trunc('month', created_at) = date_trunc('month', CURRENT_DATE)`,
+    [req.tenantId]
+  );
+
   res.json({
     current_tier: tenant.subscription_tier || 'free',
     status: trialExpired ? 'trial_expired' : tenant.subscription_status,
@@ -60,6 +71,12 @@ adminRouter.get('/', asyncHandler(async (req, res) => {
     stripe_subscription_id: tenant.stripe_subscription_id,
     current_plan: currentPlan,
     plans,
+    usage: {
+      services: serviceCount?.count || 0,
+      max_services: currentPlan?.max_services || null,
+      bookings_this_month: bookingCount?.count || 0,
+      max_bookings_per_month: currentPlan?.max_bookings_per_month || null,
+    },
   });
 }));
 
