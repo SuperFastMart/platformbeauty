@@ -283,7 +283,7 @@ export default function TenantLanding() {
         })().map(([category, categoryServices]) => {
           const selectedInCategory = categoryServices.filter(s => selected.includes(s.id)).length;
           return (
-            <Accordion key={category} defaultExpanded={Object.keys(services).length <= 4}>
+            <Accordion key={category} defaultExpanded={false}>
               <AccordionSummary expandIcon={<ExpandMore />}>
                 <Box display="flex" alignItems="center" gap={1.5} width="100%">
                   <Typography fontWeight={600} flex={1}>{category}</Typography>

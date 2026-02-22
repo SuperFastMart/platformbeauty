@@ -233,7 +233,7 @@ export default function BookingWidget() {
               {Object.entries(grouped).map(([category, services]) => {
                 const selected = services.filter(s => selectedIds.includes(s.id)).length;
                 return (
-                  <Accordion key={category} defaultExpanded={Object.keys(grouped).length <= 4}>
+                  <Accordion key={category} defaultExpanded={false}>
                     <AccordionSummary expandIcon={<ExpandMore />}>
                       <Box display="flex" alignItems="center" gap={1} width="100%">
                         <Typography variant="body2" fontWeight={600} sx={{ flex: 1 }}>{category}</Typography>
