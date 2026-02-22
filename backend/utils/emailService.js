@@ -96,6 +96,19 @@ async function sendEmail({ to, toName, subject, html, tenant, emailType, booking
 }
 
 // Send SMS via Brevo
+// Normalize phone to international format for Brevo (e.g. 07521167675 → 447521167675)
+function normalizePhone(phone) {
+  // Strip spaces, dashes, parentheses
+  let cleaned = phone.replace(/[\s\-()]/g, '');
+  // Already international with + prefix
+  if (cleaned.startsWith('+')) return cleaned.slice(1);
+  // Already international without + (e.g. 447521...)
+  if (cleaned.startsWith('44') && cleaned.length >= 12) return cleaned;
+  // UK local format: 07xxx → 447xxx
+  if (cleaned.startsWith('0')) return '44' + cleaned.slice(1);
+  return cleaned;
+}
+
 async function sendSMS(phone, message, tenant) {
   const apiKey = process.env.BREVO_API_KEY;
   if (!apiKey) {
@@ -117,6 +130,9 @@ async function sendSMS(phone, message, tenant) {
     return { success: false };
   }
 
+  const recipient = normalizePhone(phone);
+  console.log(`[SMS] Sending to ${recipient} (original: ${phone}) for tenant ${tenant.name}`);
+
   try {
     const response = await fetch(BREVO_SMS_URL, {
       method: 'POST',
@@ -125,11 +141,12 @@ async function sendSMS(phone, message, tenant) {
         type: 'transactional',
         unicodeEnabled: true,
         sender: tenant.name.slice(0, 11),
-        recipient: phone,
+        recipient,
         content: message,
       }),
     });
     const result = await response.json();
+    console.log(`[SMS] Response: ${response.status}`, JSON.stringify(result));
     return { success: response.ok, result };
   } catch (err) {
     console.error('[SMS] Error:', err.message);
