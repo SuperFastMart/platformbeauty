@@ -297,6 +297,9 @@ platformRouter.post('/sync-stripe', asyncHandler(async (req, res) => {
         metadata: { plan_tier: plan.tier },
       });
       priceId = price.id;
+
+      // Set as product's default price so Stripe dashboard shows the current one clearly
+      await stripe.products.update(productId, { default_price: priceId });
     }
 
     // Update plan with Stripe IDs
