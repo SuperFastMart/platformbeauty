@@ -138,6 +138,7 @@ export default function PlatformSubscriptions() {
       <Typography variant="h6" fontWeight={600} mb={2}>Manage Plans</Typography>
       <Alert severity="info" sx={{ mb: 2 }}>
         Click "Sync to Stripe" to automatically create Stripe Products and Prices for all active paid plans.
+        If prices have changed, syncing will archive the old Stripe price and create a new one.
         You can also manually enter Stripe IDs if you've created them in the Stripe dashboard.
       </Alert>
 
