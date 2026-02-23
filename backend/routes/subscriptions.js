@@ -94,6 +94,14 @@ adminRouter.post('/checkout', asyncHandler(async (req, res) => {
 
   // Get or create Stripe customer for this tenant
   let stripeCustomerId = tenant.platform_stripe_customer_id;
+  if (stripeCustomerId) {
+    try {
+      await stripe.customers.retrieve(stripeCustomerId);
+    } catch {
+      console.log(`[Checkout] Customer ${stripeCustomerId} not found on Stripe, will recreate`);
+      stripeCustomerId = null;
+    }
+  }
   if (!stripeCustomerId) {
     const customer = await stripe.customers.create({
       email: tenant.owner_email,
