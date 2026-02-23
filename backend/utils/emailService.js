@@ -192,6 +192,10 @@ async function sendBookingPendingNotification(booking, tenant) {
       <p style="margin:4px 0;"><strong>Date:</strong> ${date}</p>
       <p style="margin:4px 0;"><strong>Time:</strong> ${booking.start_time.slice(0, 5)} - ${booking.end_time.slice(0, 5)}</p>
       <p style="margin:4px 0;"><strong>Total:</strong> £${parseFloat(booking.total_price).toFixed(2)}</p>
+      ${parseFloat(booking.deposit_amount) > 0 ? `
+      <p style="margin:4px 0;color:#1976d2;"><strong>Deposit paid:</strong> £${parseFloat(booking.deposit_amount).toFixed(2)}</p>
+      <p style="margin:4px 0;color:#555;"><strong>Remaining balance:</strong> £${(parseFloat(booking.total_price) - parseFloat(booking.deposit_amount)).toFixed(2)} (payable at appointment)</p>
+      ` : ''}
     </div>
     <p style="color:#555;">We'll send you another email once your booking is confirmed.</p>
     <p style="color:#555;">
@@ -223,6 +227,10 @@ async function sendBookingApprovedNotification(booking, tenant) {
       <p style="margin:4px 0;"><strong>Date:</strong> ${date}</p>
       <p style="margin:4px 0;"><strong>Time:</strong> ${booking.start_time.slice(0, 5)} - ${booking.end_time.slice(0, 5)}</p>
       <p style="margin:4px 0;"><strong>Total:</strong> £${parseFloat(booking.total_price).toFixed(2)}</p>
+      ${parseFloat(booking.deposit_amount) > 0 ? `
+      <p style="margin:4px 0;color:#1976d2;"><strong>Deposit paid:</strong> £${parseFloat(booking.deposit_amount).toFixed(2)}</p>
+      <p style="margin:4px 0;color:#555;"><strong>Remaining balance:</strong> £${(parseFloat(booking.total_price) - parseFloat(booking.deposit_amount)).toFixed(2)} (payable at appointment)</p>
+      ` : ''}
     </div>
     <p style="color:#555;">
       <a href="${platformUrl}/t/${tenant.slug}/portal/login" style="color:${tenant.primary_color || '#8B2635'};">
@@ -308,6 +316,9 @@ async function sendAdminNewBookingNotification(booking, tenant) {
       <p style="margin:4px 0;"><strong>Date:</strong> ${date}</p>
       <p style="margin:4px 0;"><strong>Time:</strong> ${booking.start_time.slice(0, 5)} - ${booking.end_time.slice(0, 5)}</p>
       <p style="margin:4px 0;"><strong>Total:</strong> £${parseFloat(booking.total_price).toFixed(2)}</p>
+      ${parseFloat(booking.deposit_amount) > 0 ? `
+      <p style="margin:4px 0;color:#1976d2;"><strong>Deposit collected:</strong> £${parseFloat(booking.deposit_amount).toFixed(2)}</p>
+      ` : ''}
     </div>
     <p style="color:#555;">Log in to the admin panel to approve or reject this booking.</p>`;
 

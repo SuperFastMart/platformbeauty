@@ -292,7 +292,7 @@ router.get('/services', asyncHandler(async (req, res) => {
 
 // POST /api/admin/services
 router.post('/services', asyncHandler(async (req, res) => {
-  const { name, description, duration, price, category, display_order } = req.body;
+  const { name, description, duration, price, category, display_order, deposit_enabled, deposit_type, deposit_value } = req.body;
 
   if (!name || !duration || !price) {
     return res.status(400).json({ error: 'Name, duration, and price are required' });
@@ -305,6 +305,20 @@ router.post('/services', asyncHandler(async (req, res) => {
   }
   if (isNaN(numPrice) || numPrice < 0 || numPrice > 10000) {
     return res.status(400).json({ error: 'Price must be between 0 and 10,000' });
+  }
+
+  // Validate deposit fields
+  if (deposit_enabled) {
+    const dVal = parseFloat(deposit_value);
+    if (isNaN(dVal) || dVal <= 0) {
+      return res.status(400).json({ error: 'Deposit value must be greater than 0' });
+    }
+    if (deposit_type === 'percentage' && dVal > 100) {
+      return res.status(400).json({ error: 'Deposit percentage cannot exceed 100%' });
+    }
+    if (deposit_type === 'fixed' && dVal > numPrice) {
+      return res.status(400).json({ error: 'Deposit amount cannot exceed the service price' });
+    }
   }
 
   // Enforce plan service limit
@@ -327,10 +341,11 @@ router.post('/services', asyncHandler(async (req, res) => {
   }
 
   const service = await getOne(
-    `INSERT INTO services (tenant_id, name, description, duration, price, category, display_order)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `INSERT INTO services (tenant_id, name, description, duration, price, category, display_order, deposit_enabled, deposit_type, deposit_value)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
      RETURNING *`,
-    [req.tenantId, name, description || null, numDuration, numPrice, category || null, display_order || 0]
+    [req.tenantId, name, description || null, numDuration, numPrice, category || null, display_order || 0,
+     deposit_enabled || false, deposit_type || 'fixed', deposit_enabled ? parseFloat(deposit_value) || 0 : 0]
   );
 
   res.status(201).json(service);
@@ -338,7 +353,7 @@ router.post('/services', asyncHandler(async (req, res) => {
 
 // PUT /api/admin/services/:id
 router.put('/services/:id', asyncHandler(async (req, res) => {
-  const { name, description, duration, price, category, display_order, active } = req.body;
+  const { name, description, duration, price, category, display_order, active, deposit_enabled, deposit_type, deposit_value } = req.body;
 
   if (duration !== undefined) {
     const numDuration = parseInt(duration);
@@ -353,6 +368,21 @@ router.put('/services/:id', asyncHandler(async (req, res) => {
     }
   }
 
+  // Validate deposit fields if provided
+  if (deposit_enabled !== undefined && deposit_enabled) {
+    const dVal = parseFloat(deposit_value);
+    if (isNaN(dVal) || dVal <= 0) {
+      return res.status(400).json({ error: 'Deposit value must be greater than 0' });
+    }
+    if (deposit_type === 'percentage' && dVal > 100) {
+      return res.status(400).json({ error: 'Deposit percentage cannot exceed 100%' });
+    }
+    const svcPrice = price !== undefined ? parseFloat(price) : null;
+    if (deposit_type === 'fixed' && svcPrice !== null && dVal > svcPrice) {
+      return res.status(400).json({ error: 'Deposit amount cannot exceed the service price' });
+    }
+  }
+
   const service = await getOne(
     `UPDATE services SET
       name = COALESCE($1, name),
@@ -361,10 +391,16 @@ router.put('/services/:id', asyncHandler(async (req, res) => {
       price = COALESCE($4, price),
       category = COALESCE($5, category),
       display_order = COALESCE($6, display_order),
-      active = COALESCE($7, active)
+      active = COALESCE($7, active),
+      deposit_enabled = COALESCE($10, deposit_enabled),
+      deposit_type = COALESCE($11, deposit_type),
+      deposit_value = COALESCE($12, deposit_value)
      WHERE id = $8 AND tenant_id = $9
      RETURNING *`,
-    [name, description, duration, price, category, display_order, active, req.params.id, req.tenantId]
+    [name, description, duration, price, category, display_order, active, req.params.id, req.tenantId,
+     deposit_enabled !== undefined ? deposit_enabled : null,
+     deposit_type !== undefined ? deposit_type : null,
+     deposit_value !== undefined ? parseFloat(deposit_value) : null]
   );
 
   if (!service) {
@@ -478,6 +514,106 @@ router.post('/services/import', asyncHandler(async (req, res) => {
     skipped: results.skipped,
     errors: results.errors,
   });
+}));
+
+// ============================================
+// INTAKE QUESTIONS
+// ============================================
+
+// GET /api/admin/services/:serviceId/intake-questions
+router.get('/services/:serviceId/intake-questions', asyncHandler(async (req, res) => {
+  const questions = await getAll(
+    'SELECT * FROM intake_questions WHERE tenant_id = $1 AND service_id = $2 ORDER BY display_order',
+    [req.tenantId, req.params.serviceId]
+  );
+  res.json(questions);
+}));
+
+// POST /api/admin/services/:serviceId/intake-questions
+router.post('/services/:serviceId/intake-questions', asyncHandler(async (req, res) => {
+  const { question_text, question_type, required, options } = req.body;
+
+  if (!question_text?.trim()) {
+    return res.status(400).json({ error: 'Question text is required' });
+  }
+  if (!['text', 'yes_no', 'checkbox'].includes(question_type)) {
+    return res.status(400).json({ error: 'Question type must be text, yes_no, or checkbox' });
+  }
+
+  // Get next display order
+  const last = await getOne(
+    'SELECT MAX(display_order) as max_order FROM intake_questions WHERE tenant_id = $1 AND service_id = $2',
+    [req.tenantId, req.params.serviceId]
+  );
+  const nextOrder = (last?.max_order || 0) + 1;
+
+  const question = await getOne(
+    `INSERT INTO intake_questions (tenant_id, service_id, question_text, question_type, required, display_order, options)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     RETURNING *`,
+    [req.tenantId, req.params.serviceId, question_text.trim(), question_type,
+     required || false, nextOrder, options ? JSON.stringify(options) : null]
+  );
+
+  res.status(201).json(question);
+}));
+
+// PUT /api/admin/intake-questions/:id
+router.put('/intake-questions/:id', asyncHandler(async (req, res) => {
+  const { question_text, question_type, required, options, active, display_order } = req.body;
+
+  if (question_type && !['text', 'yes_no', 'checkbox'].includes(question_type)) {
+    return res.status(400).json({ error: 'Question type must be text, yes_no, or checkbox' });
+  }
+
+  const question = await getOne(
+    `UPDATE intake_questions SET
+      question_text = COALESCE($1, question_text),
+      question_type = COALESCE($2, question_type),
+      required = COALESCE($3, required),
+      options = COALESCE($4, options),
+      active = COALESCE($5, active),
+      display_order = COALESCE($6, display_order)
+     WHERE id = $7 AND tenant_id = $8
+     RETURNING *`,
+    [question_text, question_type, required, options ? JSON.stringify(options) : null,
+     active, display_order, req.params.id, req.tenantId]
+  );
+
+  if (!question) {
+    return res.status(404).json({ error: 'Question not found' });
+  }
+  res.json(question);
+}));
+
+// DELETE /api/admin/intake-questions/:id (soft delete)
+router.delete('/intake-questions/:id', asyncHandler(async (req, res) => {
+  const question = await getOne(
+    'UPDATE intake_questions SET active = FALSE WHERE id = $1 AND tenant_id = $2 RETURNING id',
+    [req.params.id, req.tenantId]
+  );
+
+  if (!question) {
+    return res.status(404).json({ error: 'Question not found' });
+  }
+  res.json({ message: 'Question deactivated' });
+}));
+
+// PUT /api/admin/intake-questions/reorder
+router.put('/intake-questions-reorder', asyncHandler(async (req, res) => {
+  const { items } = req.body; // [{ id, display_order }]
+  if (!Array.isArray(items)) {
+    return res.status(400).json({ error: 'items array is required' });
+  }
+
+  for (const item of items) {
+    await run(
+      'UPDATE intake_questions SET display_order = $1 WHERE id = $2 AND tenant_id = $3',
+      [item.display_order, item.id, req.tenantId]
+    );
+  }
+
+  res.json({ message: 'Reorder complete' });
 }));
 
 // ============================================

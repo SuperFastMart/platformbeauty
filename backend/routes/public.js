@@ -4,7 +4,7 @@ const { resolveTenant } = require('../middleware/auth');
 const {
   sendBookingPendingNotification, sendAdminNewBookingNotification,
 } = require('../utils/emailService');
-const { createSetupIntent } = require('../utils/stripeService');
+const { createSetupIntent, createDepositIntent, verifyPaymentIntent } = require('../utils/stripeService');
 
 const asyncHandler = (fn) => (req, res, next) =>
   Promise.resolve(fn(req, res, next)).catch(next);
@@ -162,7 +162,7 @@ router.get('/next-available', asyncHandler(async (req, res) => {
 // POST /api/t/:tenant/bookings - create a booking
 const { bookingLimiter } = require('../middleware/rateLimit');
 router.post('/bookings', bookingLimiter, asyncHandler(async (req, res) => {
-  const { customerName, customerEmail, customerPhone, serviceIds, date, startTime, notes, discountCode } = req.body;
+  const { customerName, customerEmail, customerPhone, serviceIds, date, startTime, notes, discountCode, depositPaymentIntentId, intakeResponses } = req.body;
 
   if (!customerName || !customerEmail || !serviceIds?.length || !date || !startTime) {
     return res.status(400).json({
@@ -240,6 +240,36 @@ router.post('/bookings', bookingLimiter, asyncHandler(async (req, res) => {
 
   const totalPrice = subtotal - discountAmount;
 
+  // Calculate deposit amount from services
+  let depositAmount = 0;
+  let depositRequired = false;
+  for (const svc of services) {
+    if (svc.deposit_enabled) {
+      depositRequired = true;
+      if (svc.deposit_type === 'percentage') {
+        depositAmount += parseFloat(svc.price) * (parseFloat(svc.deposit_value) / 100);
+      } else {
+        depositAmount += parseFloat(svc.deposit_value);
+      }
+    }
+  }
+  depositAmount = Math.round(depositAmount * 100) / 100;
+
+  // If deposit required, verify payment was made
+  let depositStatus = 'none';
+  if (depositRequired && depositAmount > 0) {
+    if (depositPaymentIntentId) {
+      const pi = await verifyPaymentIntent(req.tenant, depositPaymentIntentId);
+      if (!pi || pi.status !== 'succeeded') {
+        return res.status(400).json({ error: 'Deposit payment has not been completed' });
+      }
+      depositStatus = 'paid';
+    } else {
+      // No deposit payment — only allowed for admin-created bookings (checked by caller)
+      depositStatus = 'pending';
+    }
+  }
+
   // Calculate end time
   const [hours, minutes] = startTime.split(':').map(Number);
   const endMinutes = hours * 60 + minutes + totalDuration;
@@ -275,12 +305,15 @@ router.post('/bookings', bookingLimiter, asyncHandler(async (req, res) => {
   const booking = await getOne(
     `INSERT INTO bookings (tenant_id, customer_name, customer_email, customer_phone,
        service_ids, service_names, date, start_time, end_time,
-       total_price, total_duration, status, notes, discount_code_id, discount_amount)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'pending', $12, $13, $14)
+       total_price, total_duration, status, notes, discount_code_id, discount_amount,
+       deposit_amount, deposit_status, deposit_payment_intent_id, intake_responses)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'pending', $12, $13, $14, $15, $16, $17, $18)
      RETURNING *`,
     [req.tenantId, customerName, customerEmail, customerPhone || null,
      serviceIds.join(','), serviceNames, date, startTime, endTime,
-     totalPrice, totalDuration, notes || null, discountCodeId, discountAmount]
+     totalPrice, totalDuration, notes || null, discountCodeId, discountAmount,
+     depositAmount, depositStatus, depositPaymentIntentId || null,
+     intakeResponses ? JSON.stringify(intakeResponses) : null]
   );
 
   // Mark time slots as unavailable
@@ -430,6 +463,80 @@ router.post('/bookings/:id/payment', asyncHandler(async (req, res) => {
     clientSecret: result.clientSecret,
     stripePublishableKey: req.tenant.stripe_publishable_key || null,
   });
+}));
+
+// POST /api/t/:tenant/deposit-intent — create a Stripe PaymentIntent for deposit
+router.post('/deposit-intent', asyncHandler(async (req, res) => {
+  const { serviceIds, customerEmail } = req.body;
+
+  if (!serviceIds?.length || !customerEmail) {
+    return res.status(400).json({ error: 'serviceIds and customerEmail are required' });
+  }
+
+  const placeholders = serviceIds.map((_, i) => `$${i + 2}`).join(',');
+  const services = await getAll(
+    `SELECT * FROM services WHERE id IN (${placeholders}) AND tenant_id = $1 AND active = TRUE`,
+    [req.tenantId, ...serviceIds]
+  );
+
+  let depositAmount = 0;
+  for (const svc of services) {
+    if (svc.deposit_enabled) {
+      if (svc.deposit_type === 'percentage') {
+        depositAmount += parseFloat(svc.price) * (parseFloat(svc.deposit_value) / 100);
+      } else {
+        depositAmount += parseFloat(svc.deposit_value);
+      }
+    }
+  }
+  depositAmount = Math.round(depositAmount * 100) / 100;
+
+  if (depositAmount <= 0) {
+    return res.json({ required: false, depositAmount: 0 });
+  }
+
+  const serviceNames = services.filter(s => s.deposit_enabled).map(s => s.name).join(', ');
+  const result = await createDepositIntent(req.tenant, depositAmount, customerEmail, {
+    services: serviceNames,
+  });
+
+  if (!result) {
+    return res.json({ required: true, depositAmount, available: false });
+  }
+
+  res.json({
+    required: true,
+    depositAmount,
+    available: true,
+    clientSecret: result.clientSecret,
+    paymentIntentId: result.paymentIntentId,
+    stripePublishableKey: req.tenant.stripe_publishable_key || null,
+  });
+}));
+
+// GET /api/t/:tenant/intake-questions — fetch active intake questions for given services
+router.get('/intake-questions', asyncHandler(async (req, res) => {
+  const serviceIdsParam = req.query.serviceIds;
+  if (!serviceIdsParam) {
+    return res.json([]);
+  }
+
+  const serviceIds = serviceIdsParam.split(',').map(Number).filter(n => !isNaN(n));
+  if (serviceIds.length === 0) {
+    return res.json([]);
+  }
+
+  const placeholders = serviceIds.map((_, i) => `$${i + 2}`).join(',');
+  const questions = await getAll(
+    `SELECT iq.*, s.name as service_name
+     FROM intake_questions iq
+     JOIN services s ON s.id = iq.service_id AND s.tenant_id = iq.tenant_id
+     WHERE iq.tenant_id = $1 AND iq.service_id IN (${placeholders}) AND iq.active = TRUE
+     ORDER BY iq.service_id, iq.display_order`,
+    [req.tenantId, ...serviceIds]
+  );
+
+  res.json(questions);
 }));
 
 module.exports = router;
