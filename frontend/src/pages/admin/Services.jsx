@@ -5,10 +5,11 @@ import {
   DialogContent, DialogActions, TextField, Snackbar, Alert, Card, CardContent,
   MenuItem, Divider, useMediaQuery, useTheme, FormControlLabel, Switch, ToggleButtonGroup, ToggleButton
 } from '@mui/material';
-import { Add, Edit, Delete, ArrowUpward, ArrowDownward, DragIndicator, Upload, QuestionAnswer } from '@mui/icons-material';
+import { Add, Edit, Delete, ArrowUpward, ArrowDownward, DragIndicator, Upload, QuestionAnswer, AttachFile } from '@mui/icons-material';
 import api from '../../api/client';
 import CsvImportDialog from '../../components/CsvImportDialog';
 import IntakeQuestions from './IntakeQuestions';
+import ServiceForms from './ServiceForms';
 
 const emptyService = { name: '', description: '', duration: 30, price: '', category: '', display_order: 0, deposit_enabled: false, deposit_type: 'fixed', deposit_value: '' };
 
@@ -24,6 +25,7 @@ export default function Services() {
   const [newCategoryMode, setNewCategoryMode] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [intakeOpen, setIntakeOpen] = useState(null); // { id, name } of service
+  const [formsOpen, setFormsOpen] = useState(null); // { id, name } of service
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
@@ -244,6 +246,9 @@ export default function Services() {
                         <IconButton size="small" onClick={() => setIntakeOpen({ id: s.id, name: s.name })} title="Intake questions">
                           <QuestionAnswer fontSize="small" />
                         </IconButton>
+                        <IconButton size="small" onClick={() => setFormsOpen({ id: s.id, name: s.name })} title="Forms">
+                          <AttachFile fontSize="small" />
+                        </IconButton>
                         <IconButton size="small" onClick={() => handleOpen(s)}>
                           <Edit fontSize="small" />
                         </IconButton>
@@ -299,6 +304,9 @@ export default function Services() {
                         <TableCell align="right">
                           <IconButton size="small" onClick={() => setIntakeOpen({ id: s.id, name: s.name })} title="Intake questions">
                             <QuestionAnswer fontSize="small" />
+                          </IconButton>
+                          <IconButton size="small" onClick={() => setFormsOpen({ id: s.id, name: s.name })} title="Forms">
+                            <AttachFile fontSize="small" />
                           </IconButton>
                           <IconButton size="small" onClick={() => handleOpen(s)}>
                             <Edit fontSize="small" />
@@ -449,6 +457,13 @@ export default function Services() {
         onClose={() => setIntakeOpen(null)}
         serviceId={intakeOpen?.id}
         serviceName={intakeOpen?.name}
+      />
+
+      <ServiceForms
+        open={!!formsOpen}
+        onClose={() => setFormsOpen(null)}
+        serviceId={formsOpen?.id}
+        serviceName={formsOpen?.name}
       />
     </Box>
   );

@@ -12,6 +12,16 @@ const {
 const { chargeNoShow, getCustomerPaymentMethods } = require('../utils/stripeService');
 const { awardStampForBooking } = require('./loyalty');
 const { TOTP, Secret } = require('otpauth');
+const multer = require('multer');
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  fileFilter: (req, file, cb) => {
+    const allowed = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'image/png', 'image/jpeg'];
+    if (allowed.includes(file.mimetype)) cb(null, true);
+    else cb(new Error('Only PDF, DOC, DOCX, PNG and JPG files are allowed'));
+  },
+});
 const QRCode = require('qrcode');
 
 const asyncHandler = (fn) => (req, res, next) =>
@@ -614,6 +624,66 @@ router.put('/intake-questions-reorder', asyncHandler(async (req, res) => {
   }
 
   res.json({ message: 'Reorder complete' });
+}));
+
+// ============================================
+// SERVICE FORMS (file attachments)
+// ============================================
+
+// GET /api/admin/services/:serviceId/forms — list forms for a service (no file data)
+router.get('/services/:serviceId/forms', asyncHandler(async (req, res) => {
+  const forms = await getAll(
+    'SELECT id, form_name, file_name, mime_type, file_size, active, created_at FROM service_forms WHERE service_id = $1 AND tenant_id = $2 AND active = TRUE ORDER BY created_at',
+    [req.params.serviceId, req.tenantId]
+  );
+  res.json(forms);
+}));
+
+// POST /api/admin/services/:serviceId/forms — upload a form
+router.post('/services/:serviceId/forms', upload.single('file'), asyncHandler(async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+  // Check max 3 forms per service
+  const existing = await getOne(
+    'SELECT COUNT(*)::int AS count FROM service_forms WHERE service_id = $1 AND tenant_id = $2 AND active = TRUE',
+    [req.params.serviceId, req.tenantId]
+  );
+  if (existing.count >= 3) return res.status(400).json({ error: 'Maximum 3 forms per service. Delete an existing form first.' });
+
+  const formName = req.body.form_name || req.file.originalname.replace(/\.[^.]+$/, '');
+
+  const form = await getOne(
+    `INSERT INTO service_forms (tenant_id, service_id, form_name, file_name, mime_type, file_size, file_data)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, form_name, file_name, mime_type, file_size, created_at`,
+    [req.tenantId, req.params.serviceId, formName, req.file.originalname, req.file.mimetype, req.file.size, req.file.buffer]
+  );
+
+  res.status(201).json(form);
+}));
+
+// GET /api/admin/service-forms/:id/download — download a form file
+router.get('/service-forms/:id/download', asyncHandler(async (req, res) => {
+  const form = await getOne(
+    'SELECT file_name, mime_type, file_data FROM service_forms WHERE id = $1 AND tenant_id = $2',
+    [req.params.id, req.tenantId]
+  );
+  if (!form) return res.status(404).json({ error: 'Form not found' });
+
+  res.set({
+    'Content-Type': form.mime_type,
+    'Content-Disposition': `attachment; filename="${form.file_name}"`,
+    'Content-Length': form.file_data.length,
+  });
+  res.send(form.file_data);
+}));
+
+// DELETE /api/admin/service-forms/:id — soft-delete a form
+router.delete('/service-forms/:id', asyncHandler(async (req, res) => {
+  await run(
+    'UPDATE service_forms SET active = FALSE WHERE id = $1 AND tenant_id = $2',
+    [req.params.id, req.tenantId]
+  );
+  res.json({ message: 'Form removed' });
 }));
 
 // ============================================

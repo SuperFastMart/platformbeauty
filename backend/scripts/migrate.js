@@ -702,6 +702,25 @@ const migrations = [
     `
   },
 
+  // 044 — Service forms (file attachments sent with booking emails)
+  {
+    name: '044_add_service_forms',
+    sql: `
+      CREATE TABLE IF NOT EXISTS service_forms (
+        id SERIAL PRIMARY KEY,
+        tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+        service_id INTEGER NOT NULL REFERENCES services(id),
+        form_name VARCHAR(255) NOT NULL,
+        file_name VARCHAR(255) NOT NULL,
+        mime_type VARCHAR(100) NOT NULL,
+        file_size INTEGER NOT NULL,
+        file_data BYTEA NOT NULL,
+        active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `
+  },
+
   // ============================================
   // MIGRATION TRACKING
   // ============================================

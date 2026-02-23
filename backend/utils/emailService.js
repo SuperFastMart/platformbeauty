@@ -42,7 +42,7 @@ function wrapInTemplate(content, tenant) {
 }
 
 // Log email to database and send via Brevo
-async function sendEmail({ to, toName, subject, html, tenant, emailType, bookingId, customerId }) {
+async function sendEmail({ to, toName, subject, html, tenant, emailType, bookingId, customerId, attachments }) {
   const tenantId = tenant.id;
   const apiKey = process.env.BREVO_API_KEY;
 
@@ -72,6 +72,7 @@ async function sendEmail({ to, toName, subject, html, tenant, emailType, booking
         to: [{ email: to, name: toName || to }],
         subject,
         htmlContent: wrapInTemplate(html, tenant),
+        ...(attachments && attachments.length > 0 ? { attachment: attachments } : {}),
       }),
     });
 
@@ -177,6 +178,32 @@ END:VCALENDAR`;
 }
 
 // ============================================
+// Helpers
+// ============================================
+
+// Fetch active service forms as Brevo-compatible attachments (base64)
+async function getServiceFormAttachments(serviceIds, tenantId) {
+  if (!serviceIds) return [];
+  const ids = String(serviceIds).split(',').map(id => parseInt(id.trim(), 10)).filter(Boolean);
+  if (ids.length === 0) return [];
+  try {
+    const placeholders = ids.map((_, i) => `$${i + 1}`).join(',');
+    const forms = await getAll(
+      `SELECT file_name, mime_type, file_data FROM service_forms
+       WHERE service_id IN (${placeholders}) AND tenant_id = $${ids.length + 1} AND active = TRUE`,
+      [...ids, tenantId]
+    );
+    return forms.map(f => ({
+      content: f.file_data.toString('base64'),
+      name: f.file_name,
+    }));
+  } catch (err) {
+    console.error('[Email] Failed to fetch service form attachments:', err.message);
+    return [];
+  }
+}
+
+// ============================================
 // Specific email senders
 // ============================================
 
@@ -204,6 +231,11 @@ async function sendBookingPendingNotification(booking, tenant) {
       </a>
     </p>`;
 
+  const attachments = await getServiceFormAttachments(booking.service_ids, tenant.id);
+  if (attachments.length > 0) {
+    html += `<p style="color:#555;font-size:13px;margin-top:16px;">📎 Please find attached form(s) to review before your appointment.</p>`;
+  }
+
   return sendEmail({
     to: booking.customer_email,
     toName: booking.customer_name,
@@ -212,6 +244,7 @@ async function sendBookingPendingNotification(booking, tenant) {
     tenant,
     emailType: 'booking_pending',
     bookingId: booking.id,
+    attachments,
   });
 }
 
@@ -238,6 +271,11 @@ async function sendBookingApprovedNotification(booking, tenant) {
       </a>
     </p>`;
 
+  const attachments = await getServiceFormAttachments(booking.service_ids, tenant.id);
+  if (attachments.length > 0) {
+    html += `<p style="color:#555;font-size:13px;margin-top:16px;">📎 Please find attached form(s) to review before your appointment.</p>`;
+  }
+
   return sendEmail({
     to: booking.customer_email,
     toName: booking.customer_name,
@@ -246,6 +284,7 @@ async function sendBookingApprovedNotification(booking, tenant) {
     tenant,
     emailType: 'booking_approved',
     bookingId: booking.id,
+    attachments,
   });
 }
 
