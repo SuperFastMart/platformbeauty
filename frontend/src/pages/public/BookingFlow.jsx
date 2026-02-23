@@ -1,10 +1,11 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import {
   Box, Typography, Stepper, Step, StepLabel, Button, Card, CardContent,
   TextField, Checkbox, Container, Chip, Alert, CircularProgress,
   IconButton, Grid, useMediaQuery, useTheme,
-  Accordion, AccordionSummary, AccordionDetails, FormControlLabel
+  Accordion, AccordionSummary, AccordionDetails, FormControlLabel,
+  FormGroup, ToggleButtonGroup, ToggleButton, Divider
 } from '@mui/material';
 import { ChevronLeft, ChevronRight, Search, ExpandMore, CheckCircle, Add, Gavel, EventBusy, ReportProblem, Security, Article } from '@mui/icons-material';
 import dayjs from 'dayjs';
@@ -13,8 +14,7 @@ import { Elements } from '@stripe/react-stripe-js';
 import api from '../../api/client';
 import { useTenant } from './TenantPublicLayout';
 import CardSetupForm from '../../components/CardSetupForm';
-
-const steps = ['Services', 'Date', 'Time', 'Details', 'Confirm'];
+import DepositPaymentForm from '../../components/DepositPaymentForm';
 
 // Cache Stripe instance per publishable key
 const stripeCache = {};
@@ -80,6 +80,13 @@ export default function BookingFlow() {
   const [siteSettings, setSiteSettings] = useState({});
   const [policyAgreed, setPolicyAgreed] = useState(false);
 
+  // Intake questions
+  const [intakeQuestions, setIntakeQuestions] = useState([]);
+  const [intakeResponses, setIntakeResponses] = useState({});
+
+  // Deposit
+  const [depositIntent, setDepositIntent] = useState(null); // { clientSecret, paymentIntentId, depositAmount, stripePublishableKey }
+
   const hasPolicies = !!(siteSettings.policy_cancellation || siteSettings.policy_noshow
     || siteSettings.policy_privacy || siteSettings.policy_terms);
 
@@ -106,16 +113,74 @@ export default function BookingFlow() {
       .finally(() => setSlotsLoading(false));
   }, [slug, selectedDate]);
 
+  // Load intake questions when selected services change
+  useEffect(() => {
+    if (selectedIds.length === 0) {
+      setIntakeQuestions([]);
+      setIntakeResponses({});
+      return;
+    }
+    api.get(`/t/${slug}/intake-questions?serviceIds=${selectedIds.join(',')}`)
+      .then(({ data }) => {
+        setIntakeQuestions(data);
+        // Initialise responses for new questions
+        setIntakeResponses(prev => {
+          const next = { ...prev };
+          data.forEach(q => {
+            if (next[q.id] === undefined) {
+              next[q.id] = q.question_type === 'checkbox' ? [] : '';
+            }
+          });
+          return next;
+        });
+      })
+      .catch(() => setIntakeQuestions([]));
+  }, [slug, selectedIds.join(',')]);
+
   const selectedServices = allServices.filter(s => selectedIds.includes(s.id));
   const totalPrice = selectedServices.reduce((sum, s) => sum + parseFloat(s.price), 0);
   const totalDuration = selectedServices.reduce((sum, s) => sum + s.duration, 0);
   const discountAmount = discountResult?.discount_amount || 0;
   const finalPrice = Math.max(0, totalPrice - discountAmount);
 
+  // Deposit calculation
+  const totalDeposit = useMemo(() => {
+    let dep = 0;
+    for (const svc of selectedServices) {
+      if (svc.deposit_enabled) {
+        if (svc.deposit_type === 'percentage') {
+          dep += parseFloat(svc.price) * (parseFloat(svc.deposit_value) / 100);
+        } else {
+          dep += parseFloat(svc.deposit_value);
+        }
+      }
+    }
+    return Math.round(dep * 100) / 100;
+  }, [selectedServices]);
+
+  const depositRequired = totalDeposit > 0;
+  const remainingBalance = Math.max(0, finalPrice - totalDeposit);
+
+  // Dynamic steps
+  const hasIntake = intakeQuestions.length > 0;
+  const stepsArr = useMemo(() => {
+    const s = ['Services', 'Date', 'Time'];
+    if (hasIntake) s.push('Questions');
+    s.push('Details', 'Confirm');
+    return s;
+  }, [hasIntake]);
+
+  const STEP_SERVICES = 0;
+  const STEP_DATE = 1;
+  const STEP_TIME = 2;
+  const STEP_INTAKE = hasIntake ? 3 : -1;
+  const STEP_DETAILS = hasIntake ? 4 : 3;
+  const STEP_CONFIRM = hasIntake ? 5 : 4;
+  const STEP_SUCCESS = STEP_CONFIRM + 1;
+
   // Filter slots to only show those with enough consecutive availability
   const availableSlots = useMemo(() => {
     if (slots.length === 0 || totalDuration <= 0) return slots;
-    // Determine slot duration from first slot
     const first = slots[0];
     if (!first?.start_time || !first?.end_time) return slots;
     const startMins = parseInt(first.start_time.slice(0, 2)) * 60 + parseInt(first.start_time.slice(3, 5));
@@ -124,13 +189,11 @@ export default function BookingFlow() {
     const slotsNeeded = Math.ceil(totalDuration / slotDuration);
     if (slotsNeeded <= 1) return slots;
 
-    // Check consecutive availability for each slot
     return slots.filter((slot, i) => {
       if (i + slotsNeeded > slots.length) return false;
       for (let j = 1; j < slotsNeeded; j++) {
         const prev = slots[i + j - 1];
         const next = slots[i + j];
-        // Check consecutive: prev end_time === next start_time
         if (prev.end_time?.slice(0, 5) !== next.start_time?.slice(0, 5)) return false;
       }
       return true;
@@ -202,7 +265,7 @@ export default function BookingFlow() {
         setSelectedDate(data.date);
         setSelectedSlot(data.time?.slice(0, 5));
         setCalendarMonth(dayjs(data.date).startOf('month'));
-        setActiveStep(2); // Go to time step
+        setActiveStep(STEP_TIME);
       } else {
         setError('No available slots found in the next 30 days. Please try again later.');
       }
@@ -213,10 +276,21 @@ export default function BookingFlow() {
     }
   };
 
-  const handleSubmit = async () => {
+  // Create booking (optionally with deposit payment intent)
+  const createBooking = useCallback(async (depositPaymentIntentId = null) => {
     setSubmitting(true);
     setError('');
     try {
+      // Build intake responses array for storage
+      const formattedResponses = intakeQuestions.length > 0
+        ? intakeQuestions.map(q => ({
+            question_id: q.id,
+            question_text: q.question_text,
+            question_type: q.question_type,
+            answer: intakeResponses[q.id] || '',
+          }))
+        : null;
+
       const { data } = await api.post(`/t/${slug}/bookings`, {
         customerName: customerForm.name,
         customerEmail: customerForm.email,
@@ -226,37 +300,97 @@ export default function BookingFlow() {
         startTime: selectedSlot,
         notes: customerForm.notes,
         discountCode: discountResult?.code || null,
+        depositPaymentIntentId,
+        intakeResponses: formattedResponses,
       });
       setBookingResult(data);
-      setActiveStep(5);
+      setActiveStep(STEP_SUCCESS);
 
-      try {
-        const { data: setupData } = await api.post(`/t/${slug}/bookings/${data.id}/setup-intent`);
-        if (setupData.available && setupData.clientSecret) {
-          setCardSetup(setupData);
+      // Only offer card setup if no deposit was paid
+      if (!depositPaymentIntentId) {
+        try {
+          const { data: setupData } = await api.post(`/t/${slug}/bookings/${data.id}/setup-intent`);
+          if (setupData.available && setupData.clientSecret) {
+            setCardSetup(setupData);
+          }
+        } catch {
+          // Card setup not available
         }
-      } catch {
-        // Card setup not available
       }
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to create booking. Please try again.');
     } finally {
       setSubmitting(false);
     }
-  };
+  }, [slug, customerForm, selectedIds, selectedDate, selectedSlot, discountResult, intakeQuestions, intakeResponses, STEP_SUCCESS]);
 
-  const canProceed = () => {
-    switch (activeStep) {
-      case 0: return selectedIds.length > 0;
-      case 1: return !!selectedDate;
-      case 2: return !!selectedSlot;
-      case 3: return customerForm.name && customerForm.email;
-      default: return true;
+  const handleSubmit = async () => {
+    if (depositRequired) {
+      // For deposits, we need to create the intent first
+      setSubmitting(true);
+      setError('');
+      try {
+        const { data } = await api.post(`/t/${slug}/deposit-intent`, {
+          serviceIds: selectedIds,
+          customerEmail: customerForm.email,
+        });
+        if (data.required && data.available && data.clientSecret) {
+          setDepositIntent({
+            clientSecret: data.clientSecret,
+            paymentIntentId: data.paymentIntentId,
+            depositAmount: data.depositAmount,
+            stripePublishableKey: data.stripePublishableKey,
+          });
+        } else if (!data.required) {
+          // No deposit actually needed (services may have changed)
+          await createBooking();
+        } else {
+          setError('Card payments are not set up for this business. Please contact them directly.');
+        }
+      } catch (err) {
+        setError(err.response?.data?.error || 'Failed to set up deposit payment.');
+      } finally {
+        setSubmitting(false);
+      }
+    } else {
+      await createBooking();
     }
   };
 
+  const handleDepositSuccess = async (paymentIntentId) => {
+    await createBooking(paymentIntentId);
+  };
+
+  const canProceed = () => {
+    if (activeStep === STEP_SERVICES) return selectedIds.length > 0;
+    if (activeStep === STEP_DATE) return !!selectedDate;
+    if (activeStep === STEP_TIME) return !!selectedSlot;
+    if (activeStep === STEP_INTAKE) {
+      // Validate required intake questions
+      return intakeQuestions.every(q => {
+        if (!q.required) return true;
+        const answer = intakeResponses[q.id];
+        if (q.question_type === 'checkbox') return Array.isArray(answer) && answer.length > 0;
+        return answer && String(answer).trim() !== '';
+      });
+    }
+    if (activeStep === STEP_DETAILS) return customerForm.name && customerForm.email;
+    return true;
+  };
+
+  // Group intake questions by service
+  const intakeByService = useMemo(() => {
+    const map = {};
+    for (const q of intakeQuestions) {
+      if (!map[q.service_id]) map[q.service_id] = { name: q.service_name, questions: [] };
+      map[q.service_id].questions.push(q);
+    }
+    return Object.values(map);
+  }, [intakeQuestions]);
+
   // Success view
   if (bookingResult) {
+    const depositPaid = parseFloat(bookingResult.deposit_amount) > 0 && bookingResult.deposit_status === 'paid';
     return (
       <Container maxWidth="sm" sx={{ py: 6, textAlign: 'center' }}>
         <Typography variant="h4" fontWeight={700} gutterBottom color={cardSetup && !cardSaved ? 'warning.main' : 'success.main'}>
@@ -282,6 +416,16 @@ export default function BookingFlow() {
             <Typography variant="body2" fontWeight={600} mt={1}>
               Total: £{parseFloat(bookingResult.total_price).toFixed(2)}
             </Typography>
+            {depositPaid && (
+              <Box mt={1.5} p={1.5} bgcolor="success.50" borderRadius={2} sx={{ bgcolor: 'rgba(46, 125, 50, 0.08)' }}>
+                <Typography variant="body2" color="success.main" fontWeight={600}>
+                  Deposit paid: £{parseFloat(bookingResult.deposit_amount).toFixed(2)}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Remaining £{(parseFloat(bookingResult.total_price) - parseFloat(bookingResult.deposit_amount)).toFixed(2)} payable at your appointment
+                </Typography>
+              </Box>
+            )}
           </CardContent>
         </Card>
 
@@ -322,7 +466,7 @@ export default function BookingFlow() {
   return (
     <Container maxWidth="sm" sx={{ py: isMobile ? 2 : 4 }}>
       <Stepper activeStep={activeStep} alternativeLabel sx={{ mb: 3 }}>
-        {steps.map(label => (
+        {stepsArr.map(label => (
           <Step key={label}>
             <StepLabel>{isMobile && label.length > 6 ? label.slice(0, 4) + '.' : label}</StepLabel>
           </Step>
@@ -332,7 +476,7 @@ export default function BookingFlow() {
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
       {/* Step 0: Services — Accordion by category */}
-      {activeStep === 0 && (
+      {activeStep === STEP_SERVICES && (
         <Box>
           <Typography variant="h6" fontWeight={600} mb={0.5}>Select Services</Typography>
           <Typography variant="body2" color="text.secondary" mb={2}>
@@ -524,11 +668,16 @@ export default function BookingFlow() {
                 <Typography fontWeight={700} fontSize="1.25rem" color="primary.main">
                   £{totalPrice.toFixed(2)}
                 </Typography>
+                {depositRequired && (
+                  <Typography variant="caption" color="info.main" fontWeight={600}>
+                    Deposit: £{totalDeposit.toFixed(2)}
+                  </Typography>
+                )}
               </Box>
               <Button
                 variant="contained"
                 size="large"
-                onClick={() => setActiveStep(1)}
+                onClick={() => setActiveStep(STEP_DATE)}
                 sx={{ px: 4, py: 1.5, minHeight: 48 }}
               >
                 Continue
@@ -542,7 +691,7 @@ export default function BookingFlow() {
       )}
 
       {/* Step 1: Date — Calendar Grid */}
-      {activeStep === 1 && (
+      {activeStep === STEP_DATE && (
         <Box>
           <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
             <Box>
@@ -570,7 +719,7 @@ export default function BookingFlow() {
                 <Typography variant="body2" color="text.secondary">
                   {selectedServices.map(s => s.name).join(', ')} — {totalDuration} min — £{totalPrice.toFixed(2)}
                 </Typography>
-                <Button size="small" variant="text" onClick={() => setActiveStep(0)} sx={{ minWidth: 'auto' }}>
+                <Button size="small" variant="text" onClick={() => setActiveStep(STEP_SERVICES)} sx={{ minWidth: 'auto' }}>
                   Change
                 </Button>
               </Box>
@@ -663,7 +812,7 @@ export default function BookingFlow() {
       )}
 
       {/* Step 2: Time — Grouped slots */}
-      {activeStep === 2 && (
+      {activeStep === STEP_TIME && (
         <Box>
           <Typography variant="h6" fontWeight={600} mb={1}>Choose a Time</Typography>
           <Typography variant="body2" color="text.secondary" mb={2}>
@@ -680,7 +829,7 @@ export default function BookingFlow() {
           ) : slots.length === 0 ? (
             <Box>
               <Alert severity="info" sx={{ mb: 2 }}>No available slots for this date.</Alert>
-              <Button variant="outlined" onClick={() => setActiveStep(1)}>
+              <Button variant="outlined" onClick={() => setActiveStep(STEP_DATE)}>
                 Choose Another Date
               </Button>
             </Box>
@@ -735,8 +884,89 @@ export default function BookingFlow() {
         </Box>
       )}
 
-      {/* Step 3: Details */}
-      {activeStep === 3 && (
+      {/* Intake Questions Step (conditional) */}
+      {activeStep === STEP_INTAKE && STEP_INTAKE >= 0 && (
+        <Box>
+          <Typography variant="h6" fontWeight={600} mb={0.5}>A Few Questions</Typography>
+          <Typography variant="body2" color="text.secondary" mb={2}>
+            Please answer the following to help your practitioner prepare for your appointment.
+          </Typography>
+
+          {intakeByService.map(group => (
+            <Card key={group.name} variant="outlined" sx={{ mb: 2 }}>
+              <CardContent>
+                <Typography variant="subtitle2" fontWeight={600} color="primary.main" mb={1.5}>
+                  {group.name}
+                </Typography>
+                {group.questions.map((q, qIdx) => (
+                  <Box key={q.id} mb={qIdx < group.questions.length - 1 ? 2.5 : 0}>
+                    <Typography variant="body2" fontWeight={500} mb={0.5}>
+                      {q.question_text}{q.required && <span style={{ color: '#d32f2f' }}> *</span>}
+                    </Typography>
+
+                    {q.question_type === 'text' && (
+                      <TextField
+                        fullWidth
+                        size="small"
+                        multiline
+                        minRows={1}
+                        maxRows={4}
+                        value={intakeResponses[q.id] || ''}
+                        onChange={e => setIntakeResponses(prev => ({ ...prev, [q.id]: e.target.value }))}
+                        placeholder="Your answer..."
+                      />
+                    )}
+
+                    {q.question_type === 'yes_no' && (
+                      <ToggleButtonGroup
+                        value={intakeResponses[q.id] || ''}
+                        exclusive
+                        onChange={(_, v) => v !== null && setIntakeResponses(prev => ({ ...prev, [q.id]: v }))}
+                        size="small"
+                      >
+                        <ToggleButton value="Yes" sx={{ px: 3 }}>Yes</ToggleButton>
+                        <ToggleButton value="No" sx={{ px: 3 }}>No</ToggleButton>
+                      </ToggleButtonGroup>
+                    )}
+
+                    {q.question_type === 'checkbox' && q.options && (
+                      <FormGroup>
+                        {(Array.isArray(q.options) ? q.options : []).map(opt => (
+                          <FormControlLabel
+                            key={opt}
+                            control={
+                              <Checkbox
+                                size="small"
+                                checked={(intakeResponses[q.id] || []).includes(opt)}
+                                onChange={e => {
+                                  setIntakeResponses(prev => {
+                                    const current = Array.isArray(prev[q.id]) ? [...prev[q.id]] : [];
+                                    if (e.target.checked) {
+                                      current.push(opt);
+                                    } else {
+                                      const idx = current.indexOf(opt);
+                                      if (idx > -1) current.splice(idx, 1);
+                                    }
+                                    return { ...prev, [q.id]: current };
+                                  });
+                                }}
+                              />
+                            }
+                            label={<Typography variant="body2">{opt}</Typography>}
+                          />
+                        ))}
+                      </FormGroup>
+                    )}
+                  </Box>
+                ))}
+              </CardContent>
+            </Card>
+          ))}
+        </Box>
+      )}
+
+      {/* Details Step */}
+      {activeStep === STEP_DETAILS && (
         <Box>
           <Typography variant="h6" fontWeight={600} mb={0.5}>Your Details</Typography>
           <Typography variant="body2" color="text.secondary" mb={2}>
@@ -806,8 +1036,8 @@ export default function BookingFlow() {
         </Box>
       )}
 
-      {/* Step 4: Confirm */}
-      {activeStep === 4 && (
+      {/* Confirm Step */}
+      {activeStep === STEP_CONFIRM && (
         <Box>
           <Typography variant="h6" fontWeight={600} mb={0.5}>Confirm Your Booking</Typography>
           <Typography variant="body2" color="text.secondary" mb={2}>
@@ -836,6 +1066,19 @@ export default function BookingFlow() {
                 <Typography fontWeight={600}>Total</Typography>
                 <Typography fontWeight={600}>£{finalPrice.toFixed(2)} — {totalDuration} min</Typography>
               </Box>
+
+              {depositRequired && (
+                <Box mt={1.5} p={1.5} borderRadius={2} sx={{ bgcolor: 'rgba(25, 118, 210, 0.08)' }}>
+                  <Box display="flex" justifyContent="space-between">
+                    <Typography variant="body2" fontWeight={600} color="info.main">Deposit due now</Typography>
+                    <Typography variant="body2" fontWeight={600} color="info.main">£{totalDeposit.toFixed(2)}</Typography>
+                  </Box>
+                  <Box display="flex" justifyContent="space-between">
+                    <Typography variant="body2" color="text.secondary">Remaining at appointment</Typography>
+                    <Typography variant="body2" color="text.secondary">£{remainingBalance.toFixed(2)}</Typography>
+                  </Box>
+                </Box>
+              )}
 
               <Box mt={3}>
                 <Typography variant="subtitle2" color="text.secondary">Date & Time</Typography>
@@ -903,6 +1146,23 @@ export default function BookingFlow() {
               />
             </Box>
           )}
+
+          {/* Deposit payment form */}
+          {depositRequired && depositIntent && depositIntent.stripePublishableKey && (
+            <Card sx={{ mt: 2 }}>
+              <CardContent>
+                <Typography fontWeight={600} mb={1.5}>Card Payment</Typography>
+                <Elements stripe={getStripePromise(depositIntent.stripePublishableKey)}>
+                  <DepositPaymentForm
+                    clientSecret={depositIntent.clientSecret}
+                    depositAmount={depositIntent.depositAmount}
+                    onSuccess={handleDepositSuccess}
+                    disabled={hasPolicies && !policyAgreed}
+                  />
+                </Elements>
+              </CardContent>
+            </Card>
+          )}
         </Box>
       )}
 
@@ -910,14 +1170,14 @@ export default function BookingFlow() {
       <Box display="flex" justifyContent="space-between" mt={4}>
         <Button
           variant="outlined"
-          disabled={activeStep === 0 || (activeStep === 1 && preSelectedIds.length > 0)}
+          disabled={activeStep === STEP_SERVICES || (activeStep === STEP_DATE && preSelectedIds.length > 0)}
           onClick={() => setActiveStep(s => s - 1)}
           sx={{ minHeight: 44 }}
         >
           Back
         </Button>
 
-        {activeStep < 4 ? (
+        {activeStep < STEP_CONFIRM ? (
           <Button
             variant="contained"
             disabled={!canProceed()}
@@ -926,7 +1186,16 @@ export default function BookingFlow() {
           >
             Continue
           </Button>
-        ) : (
+        ) : depositRequired && !depositIntent ? (
+          <Button
+            variant="contained"
+            onClick={handleSubmit}
+            disabled={submitting || (hasPolicies && !policyAgreed)}
+            sx={{ minHeight: 44 }}
+          >
+            {submitting ? 'Setting up payment...' : `Pay £${totalDeposit.toFixed(2)} Deposit`}
+          </Button>
+        ) : !depositRequired ? (
           <Button
             variant="contained"
             onClick={handleSubmit}
@@ -935,7 +1204,7 @@ export default function BookingFlow() {
           >
             {submitting ? 'Submitting...' : 'Confirm Booking'}
           </Button>
-        )}
+        ) : null}
       </Box>
     </Container>
   );

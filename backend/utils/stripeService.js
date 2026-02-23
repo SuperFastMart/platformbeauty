@@ -78,6 +78,35 @@ async function chargeNoShow(tenant, customerEmail, paymentMethodId, amount, book
   return paymentIntent;
 }
 
+// Create a PaymentIntent for a deposit (pre-booking charge)
+async function createDepositIntent(tenant, amount, customerEmail, metadata = {}) {
+  const stripe = getStripeInstance(tenant);
+  if (!stripe) return null;
+
+  const stripeCustomerId = await getOrCreateStripeCustomer(stripe, tenant, customerEmail);
+
+  const paymentIntent = await stripe.paymentIntents.create({
+    amount: Math.round(amount * 100),
+    currency: 'gbp',
+    customer: stripeCustomerId,
+    metadata: { ...metadata, type: 'deposit' },
+  });
+
+  return {
+    clientSecret: paymentIntent.client_secret,
+    paymentIntentId: paymentIntent.id,
+  };
+}
+
+// Verify a PaymentIntent was successfully paid
+async function verifyPaymentIntent(tenant, paymentIntentId) {
+  const stripe = getStripeInstance(tenant);
+  if (!stripe) return null;
+
+  const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+  return paymentIntent;
+}
+
 // Get saved card details
 async function getCardDetails(tenant, paymentMethodId) {
   const stripe = getStripeInstance(tenant);
@@ -151,6 +180,8 @@ module.exports = {
   getStripeInstance,
   createSetupIntent,
   createPaymentIntent,
+  createDepositIntent,
+  verifyPaymentIntent,
   chargeNoShow,
   getCardDetails,
   getCustomerPaymentMethods,

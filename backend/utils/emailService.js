@@ -42,7 +42,7 @@ function wrapInTemplate(content, tenant) {
 }
 
 // Log email to database and send via Brevo
-async function sendEmail({ to, toName, subject, html, tenant, emailType, bookingId, customerId }) {
+async function sendEmail({ to, toName, subject, html, tenant, emailType, bookingId, customerId, attachments }) {
   const tenantId = tenant.id;
   const apiKey = process.env.BREVO_API_KEY;
 
@@ -72,6 +72,7 @@ async function sendEmail({ to, toName, subject, html, tenant, emailType, booking
         to: [{ email: to, name: toName || to }],
         subject,
         htmlContent: wrapInTemplate(html, tenant),
+        ...(attachments && attachments.length > 0 ? { attachment: attachments } : {}),
       }),
     });
 
@@ -177,13 +178,39 @@ END:VCALENDAR`;
 }
 
 // ============================================
+// Helpers
+// ============================================
+
+// Fetch active service forms as Brevo-compatible attachments (base64)
+async function getServiceFormAttachments(serviceIds, tenantId) {
+  if (!serviceIds) return [];
+  const ids = String(serviceIds).split(',').map(id => parseInt(id.trim(), 10)).filter(Boolean);
+  if (ids.length === 0) return [];
+  try {
+    const placeholders = ids.map((_, i) => `$${i + 1}`).join(',');
+    const forms = await getAll(
+      `SELECT file_name, mime_type, file_data FROM service_forms
+       WHERE service_id IN (${placeholders}) AND tenant_id = $${ids.length + 1} AND active = TRUE`,
+      [...ids, tenantId]
+    );
+    return forms.map(f => ({
+      content: f.file_data.toString('base64'),
+      name: f.file_name,
+    }));
+  } catch (err) {
+    console.error('[Email] Failed to fetch service form attachments:', err.message);
+    return [];
+  }
+}
+
+// ============================================
 // Specific email senders
 // ============================================
 
 async function sendBookingPendingNotification(booking, tenant) {
   const platformUrl = process.env.PLATFORM_URL || 'https://boukd.com';
   const date = booking.date.toISOString ? booking.date.toISOString().split('T')[0] : String(booking.date).split('T')[0];
-  const html = `
+  let html = `
     <h2 style="margin:0 0 16px;color:#333;">Booking Request Received</h2>
     <p style="color:#555;">Hi ${booking.customer_name},</p>
     <p style="color:#555;">Your booking request has been submitted and is awaiting confirmation.</p>
@@ -192,6 +219,10 @@ async function sendBookingPendingNotification(booking, tenant) {
       <p style="margin:4px 0;"><strong>Date:</strong> ${date}</p>
       <p style="margin:4px 0;"><strong>Time:</strong> ${booking.start_time.slice(0, 5)} - ${booking.end_time.slice(0, 5)}</p>
       <p style="margin:4px 0;"><strong>Total:</strong> £${parseFloat(booking.total_price).toFixed(2)}</p>
+      ${parseFloat(booking.deposit_amount) > 0 ? `
+      <p style="margin:4px 0;color:#1976d2;"><strong>Deposit paid:</strong> £${parseFloat(booking.deposit_amount).toFixed(2)}</p>
+      <p style="margin:4px 0;color:#555;"><strong>Remaining balance:</strong> £${(parseFloat(booking.total_price) - parseFloat(booking.deposit_amount)).toFixed(2)} (payable at appointment)</p>
+      ` : ''}
     </div>
     <p style="color:#555;">We'll send you another email once your booking is confirmed.</p>
     <p style="color:#555;">
@@ -199,6 +230,11 @@ async function sendBookingPendingNotification(booking, tenant) {
         View your bookings in the customer portal
       </a>
     </p>`;
+
+  const attachments = await getServiceFormAttachments(booking.service_ids, tenant.id);
+  if (attachments.length > 0) {
+    html += `<p style="color:#555;font-size:13px;margin-top:16px;">📎 Please find attached form(s) to review before your appointment.</p>`;
+  }
 
   return sendEmail({
     to: booking.customer_email,
@@ -208,13 +244,14 @@ async function sendBookingPendingNotification(booking, tenant) {
     tenant,
     emailType: 'booking_pending',
     bookingId: booking.id,
+    attachments,
   });
 }
 
 async function sendBookingApprovedNotification(booking, tenant) {
   const platformUrl = process.env.PLATFORM_URL || 'https://boukd.com';
   const date = booking.date.toISOString ? booking.date.toISOString().split('T')[0] : String(booking.date).split('T')[0];
-  const html = `
+  let html = `
     <h2 style="margin:0 0 16px;color:#2e7d32;">Booking Confirmed!</h2>
     <p style="color:#555;">Hi ${booking.customer_name},</p>
     <p style="color:#555;">Great news — your booking has been confirmed!</p>
@@ -223,12 +260,21 @@ async function sendBookingApprovedNotification(booking, tenant) {
       <p style="margin:4px 0;"><strong>Date:</strong> ${date}</p>
       <p style="margin:4px 0;"><strong>Time:</strong> ${booking.start_time.slice(0, 5)} - ${booking.end_time.slice(0, 5)}</p>
       <p style="margin:4px 0;"><strong>Total:</strong> £${parseFloat(booking.total_price).toFixed(2)}</p>
+      ${parseFloat(booking.deposit_amount) > 0 ? `
+      <p style="margin:4px 0;color:#1976d2;"><strong>Deposit paid:</strong> £${parseFloat(booking.deposit_amount).toFixed(2)}</p>
+      <p style="margin:4px 0;color:#555;"><strong>Remaining balance:</strong> £${(parseFloat(booking.total_price) - parseFloat(booking.deposit_amount)).toFixed(2)} (payable at appointment)</p>
+      ` : ''}
     </div>
     <p style="color:#555;">
       <a href="${platformUrl}/t/${tenant.slug}/portal/login" style="color:${tenant.primary_color || '#8B2635'};">
         Manage your booking in the customer portal
       </a>
     </p>`;
+
+  const attachments = await getServiceFormAttachments(booking.service_ids, tenant.id);
+  if (attachments.length > 0) {
+    html += `<p style="color:#555;font-size:13px;margin-top:16px;">📎 Please find attached form(s) to review before your appointment.</p>`;
+  }
 
   return sendEmail({
     to: booking.customer_email,
@@ -238,6 +284,7 @@ async function sendBookingApprovedNotification(booking, tenant) {
     tenant,
     emailType: 'booking_approved',
     bookingId: booking.id,
+    attachments,
   });
 }
 
@@ -308,6 +355,9 @@ async function sendAdminNewBookingNotification(booking, tenant) {
       <p style="margin:4px 0;"><strong>Date:</strong> ${date}</p>
       <p style="margin:4px 0;"><strong>Time:</strong> ${booking.start_time.slice(0, 5)} - ${booking.end_time.slice(0, 5)}</p>
       <p style="margin:4px 0;"><strong>Total:</strong> £${parseFloat(booking.total_price).toFixed(2)}</p>
+      ${parseFloat(booking.deposit_amount) > 0 ? `
+      <p style="margin:4px 0;color:#1976d2;"><strong>Deposit collected:</strong> £${parseFloat(booking.deposit_amount).toFixed(2)}</p>
+      ` : ''}
     </div>
     <p style="color:#555;">Log in to the admin panel to approve or reject this booking.</p>`;
 

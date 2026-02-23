@@ -667,6 +667,60 @@ const migrations = [
     `
   },
 
+  {
+    name: '042_add_deposits',
+    sql: `
+      -- Services: per-service deposit configuration
+      ALTER TABLE services ADD COLUMN IF NOT EXISTS deposit_enabled BOOLEAN DEFAULT FALSE;
+      ALTER TABLE services ADD COLUMN IF NOT EXISTS deposit_type VARCHAR(20) DEFAULT 'fixed';
+      ALTER TABLE services ADD COLUMN IF NOT EXISTS deposit_value DECIMAL(10,2) DEFAULT 0;
+
+      -- Bookings: deposit tracking
+      ALTER TABLE bookings ADD COLUMN IF NOT EXISTS deposit_amount DECIMAL(10,2) DEFAULT 0;
+      ALTER TABLE bookings ADD COLUMN IF NOT EXISTS deposit_status VARCHAR(20) DEFAULT 'none';
+      ALTER TABLE bookings ADD COLUMN IF NOT EXISTS deposit_payment_intent_id VARCHAR(255);
+    `
+  },
+
+  {
+    name: '043_add_intake_forms',
+    sql: `
+      CREATE TABLE IF NOT EXISTS intake_questions (
+        id SERIAL PRIMARY KEY,
+        tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+        service_id INTEGER NOT NULL REFERENCES services(id),
+        question_text VARCHAR(500) NOT NULL,
+        question_type VARCHAR(20) NOT NULL,
+        required BOOLEAN DEFAULT FALSE,
+        display_order INTEGER DEFAULT 0,
+        options JSONB,
+        active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      ALTER TABLE bookings ADD COLUMN IF NOT EXISTS intake_responses JSONB;
+    `
+  },
+
+  // 044 — Service forms (file attachments sent with booking emails)
+  {
+    name: '044_add_service_forms',
+    sql: `
+      CREATE TABLE IF NOT EXISTS service_forms (
+        id SERIAL PRIMARY KEY,
+        tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+        service_id INTEGER NOT NULL REFERENCES services(id),
+        form_name VARCHAR(255) NOT NULL,
+        file_name VARCHAR(255) NOT NULL,
+        mime_type VARCHAR(100) NOT NULL,
+        file_size INTEGER NOT NULL,
+        file_data BYTEA NOT NULL,
+        active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `
+  },
+
   // ============================================
   // MIGRATION TRACKING
   // ============================================

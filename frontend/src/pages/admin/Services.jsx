@@ -3,13 +3,15 @@ import {
   Box, Typography, Button, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, Paper, Chip, IconButton, Dialog, DialogTitle,
   DialogContent, DialogActions, TextField, Snackbar, Alert, Card, CardContent,
-  MenuItem, Divider, useMediaQuery, useTheme
+  MenuItem, Divider, useMediaQuery, useTheme, FormControlLabel, Switch, ToggleButtonGroup, ToggleButton
 } from '@mui/material';
-import { Add, Edit, Delete, ArrowUpward, ArrowDownward, DragIndicator, Upload } from '@mui/icons-material';
+import { Add, Edit, Delete, ArrowUpward, ArrowDownward, DragIndicator, Upload, QuestionAnswer, AttachFile } from '@mui/icons-material';
 import api from '../../api/client';
 import CsvImportDialog from '../../components/CsvImportDialog';
+import IntakeQuestions from './IntakeQuestions';
+import ServiceForms from './ServiceForms';
 
-const emptyService = { name: '', description: '', duration: 30, price: '', category: '', display_order: 0 };
+const emptyService = { name: '', description: '', duration: 30, price: '', category: '', display_order: 0, deposit_enabled: false, deposit_type: 'fixed', deposit_value: '' };
 
 export default function Services() {
   const [services, setServices] = useState([]);
@@ -22,6 +24,8 @@ export default function Services() {
   const [orderChanged, setOrderChanged] = useState(false);
   const [newCategoryMode, setNewCategoryMode] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [intakeOpen, setIntakeOpen] = useState(null); // { id, name } of service
+  const [formsOpen, setFormsOpen] = useState(null); // { id, name } of service
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
@@ -48,7 +52,10 @@ export default function Services() {
       setForm({
         name: service.name, description: service.description || '',
         duration: service.duration, price: service.price,
-        category: service.category || '', display_order: service.display_order || 0
+        category: service.category || '', display_order: service.display_order || 0,
+        deposit_enabled: service.deposit_enabled || false,
+        deposit_type: service.deposit_type || 'fixed',
+        deposit_value: service.deposit_enabled ? service.deposit_value : '',
       });
     } else {
       setEditing(null);
@@ -224,14 +231,24 @@ export default function Services() {
                         {s.description && (
                           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.3 }}>{s.description}</Typography>
                         )}
-                        <Box display="flex" gap={1.5} mt={0.5} alignItems="center">
+                        <Box display="flex" gap={1.5} mt={0.5} alignItems="center" flexWrap="wrap">
                           <Typography variant="body2">{s.duration} min</Typography>
                           <Typography variant="body2" fontWeight={600}>£{parseFloat(s.price).toFixed(2)}</Typography>
                           <Chip label={s.active ? 'Active' : 'Inactive'} size="small"
                             color={s.active ? 'success' : 'default'} sx={{ height: 20, fontSize: 11 }} />
+                          {s.deposit_enabled && (
+                            <Chip label={s.deposit_type === 'percentage' ? `${s.deposit_value}% deposit` : `£${parseFloat(s.deposit_value).toFixed(2)} deposit`}
+                              size="small" color="info" sx={{ height: 20, fontSize: 11 }} />
+                          )}
                         </Box>
                       </Box>
                       <Box display="flex" gap={0.5} ml={1}>
+                        <IconButton size="small" onClick={() => setIntakeOpen({ id: s.id, name: s.name })} title="Intake questions">
+                          <QuestionAnswer fontSize="small" />
+                        </IconButton>
+                        <IconButton size="small" onClick={() => setFormsOpen({ id: s.id, name: s.name })} title="Forms">
+                          <AttachFile fontSize="small" />
+                        </IconButton>
                         <IconButton size="small" onClick={() => handleOpen(s)}>
                           <Edit fontSize="small" />
                         </IconButton>
@@ -254,8 +271,9 @@ export default function Services() {
                       <TableCell>Name</TableCell>
                       <TableCell sx={{ width: 100 }}>Duration</TableCell>
                       <TableCell sx={{ width: 100 }}>Price</TableCell>
+                      <TableCell sx={{ width: 110 }}>Deposit</TableCell>
                       <TableCell sx={{ width: 90 }}>Status</TableCell>
-                      <TableCell align="right" sx={{ width: 100 }}>Actions</TableCell>
+                      <TableCell align="right" sx={{ width: 130 }}>Actions</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -270,10 +288,26 @@ export default function Services() {
                         <TableCell>{s.duration} min</TableCell>
                         <TableCell>£{parseFloat(s.price).toFixed(2)}</TableCell>
                         <TableCell>
+                          {s.deposit_enabled ? (
+                            <Chip
+                              label={s.deposit_type === 'percentage' ? `${s.deposit_value}%` : `£${parseFloat(s.deposit_value).toFixed(2)}`}
+                              size="small" color="info" sx={{ height: 22 }}
+                            />
+                          ) : (
+                            <Typography variant="body2" color="text.disabled">—</Typography>
+                          )}
+                        </TableCell>
+                        <TableCell>
                           <Chip label={s.active ? 'Active' : 'Inactive'} size="small"
                             color={s.active ? 'success' : 'default'} />
                         </TableCell>
                         <TableCell align="right">
+                          <IconButton size="small" onClick={() => setIntakeOpen({ id: s.id, name: s.name })} title="Intake questions">
+                            <QuestionAnswer fontSize="small" />
+                          </IconButton>
+                          <IconButton size="small" onClick={() => setFormsOpen({ id: s.id, name: s.name })} title="Forms">
+                            <AttachFile fontSize="small" />
+                          </IconButton>
                           <IconButton size="small" onClick={() => handleOpen(s)}>
                             <Edit fontSize="small" />
                           </IconButton>
@@ -363,6 +397,43 @@ export default function Services() {
             helperText="Order within the category (lower = first)"
             sx={{ width: 160 }}
           />
+
+          <Divider sx={{ my: 2 }} />
+          <Typography variant="subtitle2" fontWeight={600} mb={1}>Deposit</Typography>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={form.deposit_enabled}
+                onChange={e => setForm(f => ({ ...f, deposit_enabled: e.target.checked, deposit_value: e.target.checked ? f.deposit_value : '' }))}
+              />
+            }
+            label="Require deposit for this service"
+          />
+          {form.deposit_enabled && (
+            <Box display="flex" gap={2} alignItems="center" mt={1}>
+              <ToggleButtonGroup
+                value={form.deposit_type}
+                exclusive
+                onChange={(_, v) => v && setForm(f => ({ ...f, deposit_type: v, deposit_value: '' }))}
+                size="small"
+              >
+                <ToggleButton value="fixed">Fixed (£)</ToggleButton>
+                <ToggleButton value="percentage">Percentage (%)</ToggleButton>
+              </ToggleButtonGroup>
+              <TextField
+                label={form.deposit_type === 'fixed' ? 'Amount (£)' : 'Percentage (%)'}
+                type="number"
+                size="small"
+                sx={{ width: 140 }}
+                inputProps={{ min: 0, max: form.deposit_type === 'percentage' ? 100 : 10000, step: form.deposit_type === 'percentage' ? 1 : 0.01 }}
+                value={form.deposit_value}
+                onChange={e => setForm(f => ({ ...f, deposit_value: e.target.value }))}
+                helperText={form.deposit_type === 'percentage' && form.price && form.deposit_value
+                  ? `£${(parseFloat(form.price) * parseFloat(form.deposit_value) / 100).toFixed(2)} deposit`
+                  : undefined}
+              />
+            </Box>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
@@ -379,6 +450,20 @@ export default function Services() {
         onClose={() => setImportOpen(false)}
         onComplete={() => { setImportOpen(false); fetchServices(); }}
         existingServices={services}
+      />
+
+      <IntakeQuestions
+        open={!!intakeOpen}
+        onClose={() => setIntakeOpen(null)}
+        serviceId={intakeOpen?.id}
+        serviceName={intakeOpen?.name}
+      />
+
+      <ServiceForms
+        open={!!formsOpen}
+        onClose={() => setFormsOpen(null)}
+        serviceId={formsOpen?.id}
+        serviceName={formsOpen?.name}
       />
     </Box>
   );

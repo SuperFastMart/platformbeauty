@@ -94,6 +94,14 @@ adminRouter.post('/checkout', asyncHandler(async (req, res) => {
 
   // Get or create Stripe customer for this tenant
   let stripeCustomerId = tenant.platform_stripe_customer_id;
+  if (stripeCustomerId) {
+    try {
+      await stripe.customers.retrieve(stripeCustomerId);
+    } catch {
+      console.log(`[Checkout] Customer ${stripeCustomerId} not found on Stripe, will recreate`);
+      stripeCustomerId = null;
+    }
+  }
   if (!stripeCustomerId) {
     const customer = await stripe.customers.create({
       email: tenant.owner_email,
@@ -238,6 +246,18 @@ platformRouter.post('/sync-stripe', asyncHandler(async (req, res) => {
   for (const plan of plans) {
     let productId = plan.stripe_product_id;
     let priceId = plan.stripe_price_id;
+    let createdProduct = false;
+
+    // Verify existing product exists on this Stripe account
+    if (productId) {
+      try {
+        await stripe.products.retrieve(productId);
+      } catch {
+        console.log(`[Sync] Product ${productId} not found on Stripe, will recreate`);
+        productId = null;
+        priceId = null; // Price is invalid too if product doesn't exist
+      }
+    }
 
     // Create product if needed
     if (!productId) {
@@ -247,13 +267,31 @@ platformRouter.post('/sync-stripe', asyncHandler(async (req, res) => {
         metadata: { plan_tier: plan.tier },
       });
       productId = product.id;
+      createdProduct = true;
+      priceId = null; // Always create fresh price for new product
+    }
+
+    // Verify existing price exists and amount matches
+    const expectedAmount = Math.round(plan.price_monthly * 100);
+    if (priceId && !createdProduct) {
+      try {
+        const existingPrice = await stripe.prices.retrieve(priceId);
+        if (existingPrice.unit_amount !== expectedAmount) {
+          console.log(`[Sync] Price amount changed (${existingPrice.unit_amount} → ${expectedAmount}), archiving old price and creating new one`);
+          await stripe.prices.update(priceId, { active: false });
+          priceId = null;
+        }
+      } catch {
+        console.log(`[Sync] Price ${priceId} not found on Stripe, will recreate`);
+        priceId = null;
+      }
     }
 
     // Create price if needed
     if (!priceId) {
       const price = await stripe.prices.create({
         product: productId,
-        unit_amount: Math.round(plan.price_monthly * 100),
+        unit_amount: expectedAmount,
         currency: 'gbp',
         recurring: { interval: 'month' },
         metadata: { plan_tier: plan.tier },

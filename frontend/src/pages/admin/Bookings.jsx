@@ -261,6 +261,31 @@ export default function Bookings() {
                     </Typography>
                   )}
 
+                  {parseFloat(b.deposit_amount) > 0 && (
+                    <Chip
+                      label={`Deposit: £${parseFloat(b.deposit_amount).toFixed(2)} (${b.deposit_status})`}
+                      size="small"
+                      color={b.deposit_status === 'paid' ? 'info' : 'warning'}
+                      sx={{ mt: 1 }}
+                    />
+                  )}
+
+                  {b.intake_responses && Array.isArray(b.intake_responses) && b.intake_responses.length > 0 && (
+                    <Box mt={1.5} p={1.5} bgcolor="grey.50" borderRadius={2}>
+                      <Typography variant="caption" fontWeight={600} color="text.secondary" mb={0.5} display="block">
+                        Intake Responses
+                      </Typography>
+                      {b.intake_responses.map((r, i) => (
+                        <Box key={i} mb={i < b.intake_responses.length - 1 ? 0.5 : 0}>
+                          <Typography variant="caption" color="text.secondary">{r.question_text}</Typography>
+                          <Typography variant="body2" fontWeight={500}>
+                            {Array.isArray(r.answer) ? r.answer.join(', ') : r.answer || '—'}
+                          </Typography>
+                        </Box>
+                      ))}
+                    </Box>
+                  )}
+
                   {b.status === 'pending' && (
                     <Box display="flex" gap={1} mt={2}>
                       <Button
