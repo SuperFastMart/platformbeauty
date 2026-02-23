@@ -238,6 +238,18 @@ platformRouter.post('/sync-stripe', asyncHandler(async (req, res) => {
   for (const plan of plans) {
     let productId = plan.stripe_product_id;
     let priceId = plan.stripe_price_id;
+    let createdProduct = false;
+
+    // Verify existing product exists on this Stripe account
+    if (productId) {
+      try {
+        await stripe.products.retrieve(productId);
+      } catch {
+        console.log(`[Sync] Product ${productId} not found on Stripe, will recreate`);
+        productId = null;
+        priceId = null; // Price is invalid too if product doesn't exist
+      }
+    }
 
     // Create product if needed
     if (!productId) {
@@ -247,6 +259,18 @@ platformRouter.post('/sync-stripe', asyncHandler(async (req, res) => {
         metadata: { plan_tier: plan.tier },
       });
       productId = product.id;
+      createdProduct = true;
+      priceId = null; // Always create fresh price for new product
+    }
+
+    // Verify existing price exists on this Stripe account
+    if (priceId && !createdProduct) {
+      try {
+        await stripe.prices.retrieve(priceId);
+      } catch {
+        console.log(`[Sync] Price ${priceId} not found on Stripe, will recreate`);
+        priceId = null;
+      }
     }
 
     // Create price if needed
