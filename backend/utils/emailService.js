@@ -210,7 +210,7 @@ async function getServiceFormAttachments(serviceIds, tenantId) {
 async function sendBookingPendingNotification(booking, tenant) {
   const platformUrl = process.env.PLATFORM_URL || 'https://boukd.com';
   const date = booking.date.toISOString ? booking.date.toISOString().split('T')[0] : String(booking.date).split('T')[0];
-  const html = `
+  let html = `
     <h2 style="margin:0 0 16px;color:#333;">Booking Request Received</h2>
     <p style="color:#555;">Hi ${booking.customer_name},</p>
     <p style="color:#555;">Your booking request has been submitted and is awaiting confirmation.</p>
@@ -251,7 +251,7 @@ async function sendBookingPendingNotification(booking, tenant) {
 async function sendBookingApprovedNotification(booking, tenant) {
   const platformUrl = process.env.PLATFORM_URL || 'https://boukd.com';
   const date = booking.date.toISOString ? booking.date.toISOString().split('T')[0] : String(booking.date).split('T')[0];
-  const html = `
+  let html = `
     <h2 style="margin:0 0 16px;color:#2e7d32;">Booking Confirmed!</h2>
     <p style="color:#555;">Hi ${booking.customer_name},</p>
     <p style="color:#555;">Great news — your booking has been confirmed!</p>
