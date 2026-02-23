@@ -1,15 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box, Typography, Card, CardContent, Button, Tabs, Tab, Chip,
   Container, Alert, CircularProgress, TextField, Dialog, DialogTitle,
   DialogContent, DialogActions, Radio, RadioGroup, FormControlLabel,
-  Snackbar, IconButton, Switch
+  Snackbar, IconButton, Switch, Grid,
 } from '@mui/material';
-import { Logout, Edit, EmojiEvents } from '@mui/icons-material';
+import { Logout, Edit, EmojiEvents, Search } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import api from '../../api/client';
 import { useTenant } from './TenantPublicLayout';
+import CalendarGrid from '../../components/CalendarGrid';
+import TimeSlotPicker from '../../components/TimeSlotPicker';
 
 const statusColors = {
   pending: 'warning', confirmed: 'success', rejected: 'error',
@@ -47,6 +49,12 @@ export default function CustomerPortal() {
   const [requestDate, setRequestDate] = useState('');
   const [requestTime, setRequestTime] = useState('');
   const [submittingRequest, setSubmittingRequest] = useState(false);
+
+  // Amendment slot picker state
+  const [amendSlots, setAmendSlots] = useState([]);
+  const [amendSlotsLoading, setAmendSlotsLoading] = useState(false);
+  const [amendCalendarMonth, setAmendCalendarMonth] = useState(dayjs().startOf('month'));
+  const [findingNextAmend, setFindingNextAmend] = useState(false);
 
   // Profile state
   const [editName, setEditName] = useState('');
@@ -110,7 +118,48 @@ export default function CustomerPortal() {
     setRequestReason('');
     setRequestDate('');
     setRequestTime('');
+    setAmendSlots([]);
+    setAmendCalendarMonth(dayjs().startOf('month'));
     setRequestDialog(true);
+  };
+
+  // Fetch available slots when amend date changes
+  useEffect(() => {
+    if (requestType !== 'amend' || !requestDate) {
+      setAmendSlots([]);
+      return;
+    }
+    setAmendSlotsLoading(true);
+    api.get(`/t/${slug}/slots?date=${requestDate}`)
+      .then(({ data }) => setAmendSlots(data))
+      .catch(() => setAmendSlots([]))
+      .finally(() => setAmendSlotsLoading(false));
+  }, [requestDate, requestType, slug]);
+
+  // Compute duration from the booking's start/end times
+  const amendDuration = useMemo(() => {
+    if (!requestBooking?.start_time || !requestBooking?.end_time) return 30;
+    const [sh, sm] = requestBooking.start_time.split(':').map(Number);
+    const [eh, em] = requestBooking.end_time.split(':').map(Number);
+    const d = (eh * 60 + em) - (sh * 60 + sm);
+    return d > 0 ? d : 30;
+  }, [requestBooking]);
+
+  const handleFindNextAmend = async () => {
+    if (!requestBooking?.service_ids) return;
+    setFindingNextAmend(true);
+    try {
+      const { data } = await api.get(`/t/${slug}/next-available?serviceIds=${requestBooking.service_ids}`);
+      if (data.found) {
+        setRequestDate(data.date);
+        setRequestTime(data.time?.slice(0, 5));
+        setAmendCalendarMonth(dayjs(data.date).startOf('month'));
+      }
+    } catch {
+      // Silent fail — user can pick manually
+    } finally {
+      setFindingNextAmend(false);
+    }
   };
 
   const submitRequest = async () => {
@@ -562,11 +611,44 @@ export default function CustomerPortal() {
             value={requestReason} onChange={e => setRequestReason(e.target.value)} />
 
           {requestType === 'amend' && (
-            <Box display="flex" gap={2} mt={1}>
-              <TextField type="date" label="Preferred Date" InputLabelProps={{ shrink: true }}
-                value={requestDate} onChange={e => setRequestDate(e.target.value)} fullWidth />
-              <TextField type="time" label="Preferred Time" InputLabelProps={{ shrink: true }}
-                value={requestTime} onChange={e => setRequestTime(e.target.value)} fullWidth />
+            <Box mt={2}>
+              <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                <Typography variant="subtitle2">Choose a new date and time</Typography>
+                <Button
+                  variant="text"
+                  size="small"
+                  startIcon={findingNextAmend ? <CircularProgress size={14} /> : <Search />}
+                  onClick={handleFindNextAmend}
+                  disabled={findingNextAmend}
+                >
+                  {findingNextAmend ? 'Searching...' : 'Find Next'}
+                </Button>
+              </Box>
+
+              <CalendarGrid
+                calendarMonth={amendCalendarMonth}
+                onMonthChange={setAmendCalendarMonth}
+                selectedDate={requestDate}
+                onDateSelect={(dateStr) => {
+                  setRequestDate(dateStr);
+                  setRequestTime('');
+                }}
+                compact
+              />
+
+              {requestDate && (
+                <Box mt={2}>
+                  <TimeSlotPicker
+                    slots={amendSlots}
+                    totalDuration={amendDuration}
+                    selectedSlot={requestTime}
+                    onSlotSelect={setRequestTime}
+                    loading={amendSlotsLoading}
+                    emptyMessage="No available slots for this date."
+                    compact
+                  />
+                </Box>
+              )}
             </Box>
           )}
         </DialogContent>
