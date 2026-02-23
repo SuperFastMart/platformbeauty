@@ -96,7 +96,11 @@ adminRouter.post('/checkout', asyncHandler(async (req, res) => {
   let stripeCustomerId = tenant.platform_stripe_customer_id;
   if (stripeCustomerId) {
     try {
-      await stripe.customers.retrieve(stripeCustomerId);
+      const existing = await stripe.customers.retrieve(stripeCustomerId);
+      if (existing.deleted) {
+        console.log(`[Checkout] Customer ${stripeCustomerId} was deleted on Stripe, will recreate`);
+        stripeCustomerId = null;
+      }
     } catch {
       console.log(`[Checkout] Customer ${stripeCustomerId} not found on Stripe, will recreate`);
       stripeCustomerId = null;
