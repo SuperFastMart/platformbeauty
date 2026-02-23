@@ -516,17 +516,49 @@ export default function AdminBookingCreate() {
         </Box>
       )}
 
-      {/* Navigation */}
-      <Box display="flex" justifyContent="space-between" mt={4}>
-        <Button variant="outlined" disabled={activeStep === 0} onClick={() => setActiveStep(s => s - 1)} sx={{ minHeight: 44 }}>
-          Back
-        </Button>
+      {/* Spacer for fixed bottom bar */}
+      <Box sx={{ height: 90 }} />
+
+      {/* Fixed bottom navigation bar */}
+      <Box
+        sx={{
+          position: 'fixed',
+          bottom: 0,
+          left: { xs: 0, md: '240px' },
+          right: 0,
+          bgcolor: 'background.paper',
+          borderTop: '1px solid',
+          borderColor: 'divider',
+          boxShadow: '0 -4px 20px rgba(0,0,0,0.1)',
+          px: 3,
+          py: 2,
+          zIndex: 1100,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+        }}
+      >
+        <Box display="flex" alignItems="center" gap={2}>
+          <Button variant="outlined" disabled={activeStep === 0} onClick={() => setActiveStep(s => s - 1)} sx={{ minHeight: 44 }}>
+            Back
+          </Button>
+          {selectedServiceIds.length > 0 && activeStep > 0 && (
+            <Box sx={{ display: { xs: 'none', sm: 'block' } }}>
+              <Typography variant="body2" color="text.secondary">
+                {selectedServiceIds.length} service{selectedServiceIds.length > 1 ? 's' : ''} — {totalDuration} min
+              </Typography>
+              <Typography variant="body2" fontWeight={700} color="primary.main">
+                £{totalPrice.toFixed(2)}
+              </Typography>
+            </Box>
+          )}
+        </Box>
         {activeStep < 3 ? (
-          <Button variant="contained" disabled={!canProceed()} onClick={() => setActiveStep(s => s + 1)} sx={{ minHeight: 44 }}>
+          <Button variant="contained" disabled={!canProceed()} onClick={() => setActiveStep(s => s + 1)} sx={{ minHeight: 44, px: 4 }}>
             Continue
           </Button>
         ) : (
-          <Button variant="contained" onClick={handleSubmit} disabled={submitting} sx={{ minHeight: 44 }}>
+          <Button variant="contained" onClick={handleSubmit} disabled={submitting} sx={{ minHeight: 44, px: 4 }}>
             {submitting ? 'Creating...' : isRecurring ? `Create ${allRecurringDates.length} Bookings` : 'Create Booking'}
           </Button>
         )}
