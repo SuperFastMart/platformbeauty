@@ -263,10 +263,16 @@ platformRouter.post('/sync-stripe', asyncHandler(async (req, res) => {
       priceId = null; // Always create fresh price for new product
     }
 
-    // Verify existing price exists on this Stripe account
+    // Verify existing price exists and amount matches
+    const expectedAmount = Math.round(plan.price_monthly * 100);
     if (priceId && !createdProduct) {
       try {
-        await stripe.prices.retrieve(priceId);
+        const existingPrice = await stripe.prices.retrieve(priceId);
+        if (existingPrice.unit_amount !== expectedAmount) {
+          console.log(`[Sync] Price amount changed (${existingPrice.unit_amount} → ${expectedAmount}), archiving old price and creating new one`);
+          await stripe.prices.update(priceId, { active: false });
+          priceId = null;
+        }
       } catch {
         console.log(`[Sync] Price ${priceId} not found on Stripe, will recreate`);
         priceId = null;
@@ -277,7 +283,7 @@ platformRouter.post('/sync-stripe', asyncHandler(async (req, res) => {
     if (!priceId) {
       const price = await stripe.prices.create({
         product: productId,
-        unit_amount: Math.round(plan.price_monthly * 100),
+        unit_amount: expectedAmount,
         currency: 'gbp',
         recurring: { interval: 'month' },
         metadata: { plan_tier: plan.tier },
