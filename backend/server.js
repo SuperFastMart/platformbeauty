@@ -20,6 +20,11 @@ app.use(cors({
     : ['http://localhost:3000', 'http://localhost:5173'],
   credentials: true
 }));
+
+// Stripe webhook MUST be registered before express.json() to preserve raw body for signature verification
+const { handleStripeWebhook } = require('./routes/subscriptions');
+app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), handleStripeWebhook);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -84,13 +89,10 @@ app.use('/api/admin/support', tenantAuth, supportAdminRoutes);
 app.use('/api/platform/support', platformAuth, supportPlatformRoutes);
 
 // --- Subscriptions ---
-const { adminRouter: subscriptionAdminRoutes, publicRouter: subscriptionPublicRoutes, platformRouter: subscriptionPlatformRoutes, handleStripeWebhook } = require('./routes/subscriptions');
+const { adminRouter: subscriptionAdminRoutes, publicRouter: subscriptionPublicRoutes, platformRouter: subscriptionPlatformRoutes } = require('./routes/subscriptions');
 app.use('/api/admin/subscription', subscriptionAdminRoutes);
 app.use('/api/subscriptions', subscriptionPublicRoutes);
 app.use('/api/platform/subscriptions', subscriptionPlatformRoutes);
-
-// Stripe webhook needs raw body
-app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), handleStripeWebhook);
 
 // Serve frontend for all non-API routes in production
 if (process.env.NODE_ENV === 'production') {
