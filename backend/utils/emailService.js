@@ -1,4 +1,4 @@
-const { getOne, run } = require('../config/database');
+const { getOne, getAll, run } = require('../config/database');
 
 const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
 const BREVO_SMS_URL = 'https://api.brevo.com/v3/transactionalSMS/sms';
