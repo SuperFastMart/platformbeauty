@@ -298,6 +298,26 @@ router.post('/change-password', asyncHandler(async (req, res) => {
   res.json({ message: 'Password changed successfully' });
 }));
 
+// DELETE /api/t/:tenant/auth/account — customer self-service GDPR deletion
+router.delete('/account', asyncHandler(async (req, res) => {
+  const customer = await getOne(
+    'SELECT id, email FROM customers WHERE id = $1 AND tenant_id = $2',
+    [req.customer.id, req.tenantId]
+  );
+
+  if (!customer) {
+    return res.status(404).json({ error: 'Account not found' });
+  }
+
+  const { deleteCustomerData } = require('../utils/gdprService');
+  await deleteCustomerData(customer.id, req.tenantId, customer.email);
+
+  const { logActivity } = require('../utils/activityLog');
+  logActivity(req.tenantId, 'customer', customer.id, customer.email, 'customer_self_deleted', {}).catch(() => {});
+
+  res.json({ message: 'Your account and personal data have been deleted.' });
+}));
+
 // ============================================
 // MESSAGES
 // ============================================

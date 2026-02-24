@@ -84,13 +84,24 @@ export default function BookingFlow() {
   const [intakeQuestions, setIntakeQuestions] = useState([]);
   const [intakeResponses, setIntakeResponses] = useState({});
 
+  // Add-ons
+  const [addonLinks, setAddonLinks] = useState([]); // { parent_service_id, addon_service_id }
+  const [addonServices, setAddonServices] = useState([]); // full add-on service objects
+
+  // Waitlist
+  const [showWaitlistForm, setShowWaitlistForm] = useState(false);
+  const [waitlistForm, setWaitlistForm] = useState({ name: '', email: '', phone: '', notes: '' });
+  const [waitlistSubmitting, setWaitlistSubmitting] = useState(false);
+  const [waitlistSuccess, setWaitlistSuccess] = useState(false);
+  const [waitlistError, setWaitlistError] = useState('');
+
   // Deposit
   const [depositIntent, setDepositIntent] = useState(null); // { clientSecret, paymentIntentId, depositAmount, stripePublishableKey }
 
   const hasPolicies = !!(siteSettings.policy_cancellation || siteSettings.policy_noshow
     || siteSettings.policy_privacy || siteSettings.policy_terms);
 
-  // Load services & site settings
+  // Load services, site settings, and add-on data
   useEffect(() => {
     api.get(`/t/${slug}/services`)
       .then(({ data }) => {
@@ -101,12 +112,21 @@ export default function BookingFlow() {
     api.get(`/t/${slug}/settings`)
       .then(({ data }) => setSiteSettings(data))
       .catch(() => {});
+    api.get(`/t/${slug}/addon-links`)
+      .then(({ data }) => setAddonLinks(data))
+      .catch(() => {});
+    api.get(`/t/${slug}/addon-services`)
+      .then(({ data }) => setAddonServices(data))
+      .catch(() => {});
   }, [slug]);
 
   // Load slots when date changes
   useEffect(() => {
     if (!selectedDate) return;
     setSlotsLoading(true);
+    setShowWaitlistForm(false);
+    setWaitlistSuccess(false);
+    setWaitlistError('');
     api.get(`/t/${slug}/slots?date=${selectedDate}`)
       .then(({ data }) => setSlots(data))
       .catch(console.error)
@@ -137,7 +157,8 @@ export default function BookingFlow() {
       .catch(() => setIntakeQuestions([]));
   }, [slug, selectedIds.join(',')]);
 
-  const selectedServices = allServices.filter(s => selectedIds.includes(s.id));
+  const allSelectableServices = [...allServices, ...addonServices];
+  const selectedServices = allSelectableServices.filter(s => selectedIds.includes(s.id));
   const totalPrice = selectedServices.reduce((sum, s) => sum + parseFloat(s.price), 0);
   const totalDuration = selectedServices.reduce((sum, s) => sum + s.duration, 0);
   const discountAmount = discountResult?.discount_amount || 0;
@@ -237,7 +258,45 @@ export default function BookingFlow() {
   };
 
   const toggleService = (id) => {
-    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+    setSelectedIds(prev => {
+      if (prev.includes(id)) {
+        // Deselecting — also remove any add-ons linked to this parent
+        const childAddonIds = addonLinks
+          .filter(l => l.parent_service_id === id)
+          .map(l => l.addon_service_id);
+        return prev.filter(x => x !== id && !childAddonIds.includes(x));
+      }
+      return [...prev, id];
+    });
+  };
+
+  const toggleAddon = (addonId) => {
+    setSelectedIds(prev =>
+      prev.includes(addonId) ? prev.filter(x => x !== addonId) : [...prev, addonId]
+    );
+  };
+
+  const handleJoinWaitlist = async () => {
+    if (!waitlistForm.name || !waitlistForm.email) return;
+    setWaitlistSubmitting(true);
+    setWaitlistError('');
+    try {
+      const serviceNames = selectedServices.map(s => s.name).join(', ');
+      await api.post(`/t/${slug}/waitlist`, {
+        customer_name: waitlistForm.name,
+        customer_email: waitlistForm.email,
+        customer_phone: waitlistForm.phone || null,
+        date: selectedDate,
+        service_ids: selectedIds.join(','),
+        service_names: serviceNames,
+        notes: waitlistForm.notes || null,
+      });
+      setWaitlistSuccess(true);
+    } catch (err) {
+      setWaitlistError(err.response?.data?.error || 'Failed to join waitlist');
+    } finally {
+      setWaitlistSubmitting(false);
+    }
   };
 
   // Calendar helpers
@@ -554,79 +613,133 @@ export default function BookingFlow() {
                   <AccordionDetails sx={{ p: 0 }}>
                     {services.map((s, idx) => {
                       const isSelected = selectedIds.includes(s.id);
+                      const serviceAddons = isSelected
+                        ? addonLinks.filter(l => l.parent_service_id === s.id).map(l => addonServices.find(a => a.id === l.addon_service_id)).filter(Boolean)
+                        : [];
                       return (
-                        <Box
-                          key={s.id}
-                          onClick={() => toggleService(s.id)}
-                          sx={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            p: 2,
-                            cursor: 'pointer',
-                            borderTop: idx === 0 ? '1px solid' : 'none',
-                            borderBottom: '1px solid',
-                            borderColor: 'divider',
-                            transition: 'all 0.15s ease',
-                            bgcolor: isSelected ? 'rgba(46, 125, 50, 0.08)' : 'transparent',
-                            '&:hover': {
-                              bgcolor: isSelected ? 'rgba(46, 125, 50, 0.12)' : 'action.hover',
-                            },
-                            '&:last-child': {
-                              borderBottom: 'none',
-                              borderRadius: '0 0 12px 12px',
-                            },
-                          }}
-                        >
-                          <Checkbox
-                            checked={isSelected}
+                        <Box key={s.id}>
+                          <Box
+                            onClick={() => toggleService(s.id)}
                             sx={{
-                              mr: 1,
-                              color: 'grey.400',
-                              '&.Mui-checked': { color: 'success.main' },
+                              display: 'flex',
+                              alignItems: 'center',
+                              p: 2,
+                              cursor: 'pointer',
+                              borderTop: idx === 0 ? '1px solid' : 'none',
+                              borderBottom: '1px solid',
+                              borderColor: 'divider',
+                              transition: 'all 0.15s ease',
+                              bgcolor: isSelected ? 'rgba(46, 125, 50, 0.08)' : 'transparent',
+                              '&:hover': {
+                                bgcolor: isSelected ? 'rgba(46, 125, 50, 0.12)' : 'action.hover',
+                              },
                             }}
-                          />
-                          <Box sx={{ flex: 1, pr: 2 }}>
-                            <Typography
-                              fontWeight={isSelected ? 600 : 500}
+                          >
+                            <Checkbox
+                              checked={isSelected}
                               sx={{
-                                fontSize: { xs: '0.9rem', sm: '1rem' },
-                                color: isSelected ? 'success.dark' : 'text.primary',
+                                mr: 1,
+                                color: 'grey.400',
+                                '&.Mui-checked': { color: 'success.main' },
                               }}
-                            >
-                              {s.name}
-                            </Typography>
-                            {s.description && (
+                            />
+                            <Box sx={{ flex: 1, pr: 2 }}>
                               <Typography
-                                variant="body2"
-                                color="text.secondary"
+                                fontWeight={isSelected ? 600 : 500}
                                 sx={{
-                                  mt: 0.5,
-                                  fontSize: '0.8rem',
-                                  display: { xs: 'none', sm: '-webkit-box' },
-                                  WebkitLineClamp: 1,
-                                  WebkitBoxOrient: 'vertical',
-                                  overflow: 'hidden',
+                                  fontSize: { xs: '0.9rem', sm: '1rem' },
+                                  color: isSelected ? 'success.dark' : 'text.primary',
                                 }}
                               >
-                                {s.description}
+                                {s.name}
                               </Typography>
+                              {s.description && (
+                                <Typography
+                                  variant="body2"
+                                  color="text.secondary"
+                                  sx={{
+                                    mt: 0.5,
+                                    fontSize: '0.8rem',
+                                    display: { xs: 'none', sm: '-webkit-box' },
+                                    WebkitLineClamp: 1,
+                                    WebkitBoxOrient: 'vertical',
+                                    overflow: 'hidden',
+                                  }}
+                                >
+                                  {s.description}
+                                </Typography>
+                              )}
+                            </Box>
+                            <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
+                              <Typography
+                                fontWeight={700}
+                                color="primary.main"
+                                sx={{ fontSize: { xs: '0.95rem', sm: '1.1rem' } }}
+                              >
+                                £{parseFloat(s.price).toFixed(2)}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+                                {s.duration} min
+                              </Typography>
+                            </Box>
+                            {!isSelected && (
+                              <Add sx={{ ml: 1, color: 'grey.400', fontSize: 20 }} />
                             )}
                           </Box>
-                          <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
-                            <Typography
-                              fontWeight={700}
-                              color="primary.main"
-                              sx={{ fontSize: { xs: '0.95rem', sm: '1.1rem' } }}
-                            >
-                              £{parseFloat(s.price).toFixed(2)}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-                              {s.duration} min
-                            </Typography>
-                          </Box>
-                          {!isSelected && (
-                            <Add sx={{ ml: 1, color: 'grey.400', fontSize: 20 }} />
-                          )}
+                          {/* Add-on sub-items */}
+                          {serviceAddons.map(addon => {
+                            const addonSelected = selectedIds.includes(addon.id);
+                            return (
+                              <Box
+                                key={`addon-${addon.id}`}
+                                onClick={() => toggleAddon(addon.id)}
+                                sx={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  p: 1.5,
+                                  pl: 5,
+                                  cursor: 'pointer',
+                                  borderBottom: '1px solid',
+                                  borderColor: 'divider',
+                                  borderLeft: '3px solid #D4A853',
+                                  bgcolor: addonSelected ? 'rgba(212, 168, 83, 0.1)' : 'rgba(0,0,0,0.02)',
+                                  transition: 'all 0.15s ease',
+                                  '&:hover': {
+                                    bgcolor: addonSelected ? 'rgba(212, 168, 83, 0.15)' : 'rgba(0,0,0,0.04)',
+                                  },
+                                }}
+                              >
+                                <Checkbox
+                                  checked={addonSelected}
+                                  size="small"
+                                  sx={{
+                                    mr: 1,
+                                    color: 'grey.400',
+                                    '&.Mui-checked': { color: '#D4A853' },
+                                  }}
+                                />
+                                <Box sx={{ flex: 1, pr: 2 }}>
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                    <Add sx={{ fontSize: 14, color: '#D4A853' }} />
+                                    <Typography
+                                      fontWeight={addonSelected ? 600 : 500}
+                                      sx={{ fontSize: { xs: '0.85rem', sm: '0.9rem' }, color: addonSelected ? '#8a7020' : 'text.primary' }}
+                                    >
+                                      {addon.name}
+                                    </Typography>
+                                  </Box>
+                                </Box>
+                                <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
+                                  <Typography fontWeight={600} color="#D4A853" sx={{ fontSize: { xs: '0.85rem', sm: '0.95rem' } }}>
+                                    +£{parseFloat(addon.price).toFixed(2)}
+                                  </Typography>
+                                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+                                    +{addon.duration} min
+                                  </Typography>
+                                </Box>
+                              </Box>
+                            );
+                          })}
                         </Box>
                       );
                     })}
@@ -829,9 +942,87 @@ export default function BookingFlow() {
           ) : slots.length === 0 ? (
             <Box>
               <Alert severity="info" sx={{ mb: 2 }}>No available slots for this date.</Alert>
-              <Button variant="outlined" onClick={() => setActiveStep(STEP_DATE)}>
-                Choose Another Date
-              </Button>
+              <Box display="flex" gap={1} mb={2} flexWrap="wrap">
+                <Button variant="outlined" onClick={() => setActiveStep(STEP_DATE)}>
+                  Choose Another Date
+                </Button>
+                {!showWaitlistForm && !waitlistSuccess && (
+                  <Button
+                    variant="contained"
+                    onClick={() => {
+                      setShowWaitlistForm(true);
+                      // Pre-fill from customer form if available
+                      setWaitlistForm(prev => ({
+                        ...prev,
+                        name: prev.name || customerForm.name,
+                        email: prev.email || customerForm.email,
+                        phone: prev.phone || customerForm.phone,
+                      }));
+                    }}
+                    sx={{ bgcolor: '#D4A853', color: '#1a1a1a', '&:hover': { bgcolor: '#c49a3f' } }}
+                  >
+                    Join Waitlist
+                  </Button>
+                )}
+              </Box>
+              {waitlistSuccess && (
+                <Alert severity="success" sx={{ mb: 2 }}>
+                  You've been added to the waitlist! We'll notify you when a slot opens up.
+                </Alert>
+              )}
+              {showWaitlistForm && !waitlistSuccess && (
+                <Card sx={{ p: 2.5, borderLeft: '3px solid #D4A853' }}>
+                  <Typography fontWeight={600} mb={2}>Join the Waitlist</Typography>
+                  <Typography variant="body2" color="text.secondary" mb={2}>
+                    We'll notify you by email when a slot becomes available on this date.
+                  </Typography>
+                  {waitlistError && <Alert severity="error" sx={{ mb: 2 }}>{waitlistError}</Alert>}
+                  <Box display="flex" flexDirection="column" gap={2}>
+                    <TextField
+                      label="Name"
+                      required
+                      size="small"
+                      value={waitlistForm.name}
+                      onChange={e => setWaitlistForm(f => ({ ...f, name: e.target.value }))}
+                    />
+                    <TextField
+                      label="Email"
+                      required
+                      type="email"
+                      size="small"
+                      value={waitlistForm.email}
+                      onChange={e => setWaitlistForm(f => ({ ...f, email: e.target.value }))}
+                    />
+                    <TextField
+                      label="Phone (optional)"
+                      size="small"
+                      value={waitlistForm.phone}
+                      onChange={e => setWaitlistForm(f => ({ ...f, phone: e.target.value }))}
+                    />
+                    <TextField
+                      label="Notes (optional)"
+                      size="small"
+                      multiline
+                      rows={2}
+                      value={waitlistForm.notes}
+                      onChange={e => setWaitlistForm(f => ({ ...f, notes: e.target.value }))}
+                    />
+                    <Box display="flex" gap={1}>
+                      <Button
+                        variant="contained"
+                        onClick={handleJoinWaitlist}
+                        disabled={waitlistSubmitting || !waitlistForm.name || !waitlistForm.email}
+                        sx={{ bgcolor: '#D4A853', color: '#1a1a1a', '&:hover': { bgcolor: '#c49a3f' } }}
+                      >
+                        {waitlistSubmitting ? <CircularProgress size={20} /> : 'Submit'}
+                      </Button>
+                      <Button variant="text" onClick={() => setShowWaitlistForm(false)}>
+                        Cancel
+                      </Button>
+                    </Box>
+                  </Box>
+                </Card>
+              )}
             </Box>
           ) : (
             <Box>

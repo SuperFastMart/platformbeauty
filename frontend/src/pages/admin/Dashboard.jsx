@@ -3,11 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import {
   Box, Typography, Card, CardContent, Grid, Chip, Button, Divider,
   List, ListItem, ListItemText, ListItemIcon, useMediaQuery, useTheme,
-  ToggleButtonGroup, ToggleButton, CircularProgress
+  ToggleButtonGroup, ToggleButton, CircularProgress, Tooltip
 } from '@mui/material';
 import {
   CalendarMonth, PendingActions, CurrencyPound, People,
-  AccessTime, Add, Visibility
+  AccessTime, Add, Visibility, ReportProblem, HourglassEmpty
 } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import api from '../../api/client';
@@ -173,6 +173,17 @@ export default function Dashboard() {
             color="info.main"
           />
         </Grid>
+        {stats.waitlistCount > 0 && (
+          <Grid item xs={6} sm={6} md={3}>
+            <StatCard
+              title="Waitlist"
+              value={stats.waitlistCount}
+              icon={<HourglassEmpty fontSize="inherit" />}
+              color="warning.main"
+              onClick={() => navigate('/admin/waitlist')}
+            />
+          </Grid>
+        )}
       </Grid>
 
       {/* Quick Actions */}
@@ -406,6 +417,11 @@ export default function Dashboard() {
                           <Typography variant="body2">
                             {appt.customer_name}
                           </Typography>
+                          {appt.customer_allergies && (
+                            <Tooltip title={`Allergies: ${appt.customer_allergies}`} arrow>
+                              <ReportProblem sx={{ fontSize: 16, color: 'warning.main' }} />
+                            </Tooltip>
+                          )}
                           <Chip
                             label={appt.status}
                             size="small"

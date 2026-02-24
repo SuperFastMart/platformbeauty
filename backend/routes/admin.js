@@ -355,7 +355,7 @@ router.get('/services', asyncHandler(async (req, res) => {
 
 // POST /api/admin/services
 router.post('/services', asyncHandler(async (req, res) => {
-  const { name, description, duration, price, category, display_order, deposit_enabled, deposit_type, deposit_value } = req.body;
+  const { name, description, duration, price, category, display_order, deposit_enabled, deposit_type, deposit_value, is_addon } = req.body;
 
   if (!name || !duration || !price) {
     return res.status(400).json({ error: 'Name, duration, and price are required' });
@@ -404,11 +404,11 @@ router.post('/services', asyncHandler(async (req, res) => {
   }
 
   const service = await getOne(
-    `INSERT INTO services (tenant_id, name, description, duration, price, category, display_order, deposit_enabled, deposit_type, deposit_value)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+    `INSERT INTO services (tenant_id, name, description, duration, price, category, display_order, deposit_enabled, deposit_type, deposit_value, is_addon)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
      RETURNING *`,
     [req.tenantId, name, description || null, numDuration, numPrice, category || null, display_order || 0,
-     deposit_enabled || false, deposit_type || 'fixed', deposit_enabled ? parseFloat(deposit_value) || 0 : 0]
+     deposit_enabled || false, deposit_type || 'fixed', deposit_enabled ? parseFloat(deposit_value) || 0 : 0, is_addon || false]
   );
 
   res.status(201).json(service);
@@ -416,7 +416,7 @@ router.post('/services', asyncHandler(async (req, res) => {
 
 // PUT /api/admin/services/:id
 router.put('/services/:id', asyncHandler(async (req, res) => {
-  const { name, description, duration, price, category, display_order, active, deposit_enabled, deposit_type, deposit_value } = req.body;
+  const { name, description, duration, price, category, display_order, active, deposit_enabled, deposit_type, deposit_value, is_addon } = req.body;
 
   if (duration !== undefined) {
     const numDuration = parseInt(duration);
@@ -457,13 +457,15 @@ router.put('/services/:id', asyncHandler(async (req, res) => {
       active = COALESCE($7, active),
       deposit_enabled = COALESCE($10, deposit_enabled),
       deposit_type = COALESCE($11, deposit_type),
-      deposit_value = COALESCE($12, deposit_value)
+      deposit_value = COALESCE($12, deposit_value),
+      is_addon = COALESCE($13, is_addon)
      WHERE id = $8 AND tenant_id = $9
      RETURNING *`,
     [name, description, duration, price, category, display_order, active, req.params.id, req.tenantId,
      deposit_enabled !== undefined ? deposit_enabled : null,
      deposit_type !== undefined ? deposit_type : null,
-     deposit_value !== undefined ? parseFloat(deposit_value) : null]
+     deposit_value !== undefined ? parseFloat(deposit_value) : null,
+     is_addon !== undefined ? is_addon : null]
   );
 
   if (!service) {
@@ -485,6 +487,48 @@ router.delete('/services/:id', asyncHandler(async (req, res) => {
   }
 
   res.json({ message: 'Service deactivated' });
+}));
+
+// ── Service Add-on Links ──
+
+// GET /api/admin/services/:id/addons
+router.get('/services/:id/addons', asyncHandler(async (req, res) => {
+  const links = await getAll(
+    `SELECT sal.id as link_id, sal.display_order, s.id, s.name, s.duration, s.price, s.category
+     FROM service_addon_links sal
+     JOIN services s ON s.id = sal.addon_service_id
+     WHERE sal.parent_service_id = $1 AND sal.tenant_id = $2
+     ORDER BY sal.display_order, s.name`,
+    [req.params.id, req.tenantId]
+  );
+  res.json(links);
+}));
+
+// POST /api/admin/services/:id/addons — link an add-on
+router.post('/services/:id/addons', asyncHandler(async (req, res) => {
+  const { addon_service_id, display_order } = req.body;
+  if (!addon_service_id) return res.status(400).json({ error: 'addon_service_id is required' });
+
+  const link = await getOne(
+    `INSERT INTO service_addon_links (tenant_id, parent_service_id, addon_service_id, display_order)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (tenant_id, parent_service_id, addon_service_id) DO NOTHING
+     RETURNING *`,
+    [req.tenantId, req.params.id, addon_service_id, display_order || 0]
+  );
+
+  if (!link) return res.status(409).json({ error: 'Add-on already linked' });
+  res.status(201).json(link);
+}));
+
+// DELETE /api/admin/services/:id/addons/:linkId
+router.delete('/services/:id/addons/:linkId', asyncHandler(async (req, res) => {
+  const result = await run(
+    'DELETE FROM service_addon_links WHERE id = $1 AND tenant_id = $2',
+    [req.params.linkId, req.tenantId]
+  );
+  if (result.rowCount === 0) return res.status(404).json({ error: 'Link not found' });
+  res.json({ message: 'Add-on unlinked' });
 }));
 
 // POST /api/admin/services/import — bulk import services from CSV
@@ -746,7 +790,7 @@ router.delete('/service-forms/:id', asyncHandler(async (req, res) => {
 // GET /api/admin/bookings
 router.get('/bookings', asyncHandler(async (req, res) => {
   const { date, status, from, to } = req.query;
-  let sql = 'SELECT b.*, dc.code as discount_code FROM bookings b LEFT JOIN discount_codes dc ON dc.id = b.discount_code_id WHERE b.tenant_id = $1';
+  let sql = 'SELECT b.*, dc.code as discount_code, c.allergies as customer_allergies FROM bookings b LEFT JOIN discount_codes dc ON dc.id = b.discount_code_id LEFT JOIN customers c ON c.id = b.customer_id WHERE b.tenant_id = $1';
   const params = [req.tenantId];
 
   if (date) {
@@ -792,12 +836,17 @@ router.put('/bookings/:id/status', asyncHandler(async (req, res) => {
     return res.status(404).json({ error: 'Booking not found' });
   }
 
-  // If rejected or cancelled, free up the time slots
+  // If rejected or cancelled, free up the time slots and check waitlist
   if (status === 'rejected' || status === 'cancelled') {
     await run(
       `UPDATE time_slots SET is_available = TRUE
        WHERE tenant_id = $1 AND date = $2 AND start_time >= $3 AND end_time <= $4`,
       [req.tenantId, booking.date, booking.start_time, booking.end_time]
+    );
+    // Notify waitlist customers about freed slot
+    const { checkWaitlistForDate } = require('../utils/waitlistService');
+    checkWaitlistForDate(req.tenantId, booking.date).catch(err =>
+      console.error('[Waitlist] check error:', err.message)
     );
   }
 
@@ -1018,7 +1067,7 @@ router.delete('/slot-exceptions/:id', asyncHandler(async (req, res) => {
 router.get('/dashboard', asyncHandler(async (req, res) => {
   const today = new Date().toISOString().split('T')[0];
 
-  const [todayBookings, pendingCount, weekRevenue, totalCustomers, todayAppointments, pendingRequests] = await Promise.all([
+  const [todayBookings, pendingCount, weekRevenue, totalCustomers, todayAppointments, pendingRequests, waitlistCount] = await Promise.all([
     getOne(
       'SELECT COUNT(*) as count FROM bookings WHERE tenant_id = $1 AND date = $2',
       [req.tenantId, today]
@@ -1037,15 +1086,20 @@ router.get('/dashboard', asyncHandler(async (req, res) => {
       [req.tenantId]
     ),
     getAll(
-      `SELECT id, customer_name, customer_email, service_names, start_time, end_time, status, total_price
-       FROM bookings WHERE tenant_id = $1 AND date = $2 AND status IN ('confirmed', 'pending')
-       ORDER BY start_time`,
+      `SELECT b.id, b.customer_name, b.customer_email, b.service_names, b.start_time, b.end_time, b.status, b.total_price, c.allergies as customer_allergies
+       FROM bookings b LEFT JOIN customers c ON c.id = b.customer_id
+       WHERE b.tenant_id = $1 AND b.date = $2 AND b.status IN ('confirmed', 'pending')
+       ORDER BY b.start_time`,
       [req.tenantId, today]
     ),
     getOne(
       "SELECT COUNT(*) as count FROM booking_requests WHERE tenant_id = $1 AND status = 'pending'",
       [req.tenantId]
     ),
+    getOne(
+      "SELECT COUNT(*)::int as count FROM waitlist WHERE tenant_id = $1 AND status = 'waiting'",
+      [req.tenantId]
+    ).catch(() => ({ count: 0 })),
   ]);
 
   res.json({
@@ -1055,6 +1109,7 @@ router.get('/dashboard', asyncHandler(async (req, res) => {
     totalCustomers: parseInt(totalCustomers.count),
     todayAppointments: todayAppointments || [],
     pendingRequests: parseInt(pendingRequests?.count || 0),
+    waitlistCount: parseInt(waitlistCount?.count || 0),
   });
 }));
 
@@ -1195,6 +1250,11 @@ router.post('/bookings/requests/:id/approve', asyncHandler(async (req, res) => {
       `UPDATE time_slots SET is_available = TRUE
        WHERE tenant_id = $1 AND date = $2 AND start_time >= $3 AND start_time < $4`,
       [req.tenantId, booking.date, booking.start_time, booking.end_time]
+    );
+    // Notify waitlist customers about freed slot
+    const { checkWaitlistForDate } = require('../utils/waitlistService');
+    checkWaitlistForDate(req.tenantId, booking.date).catch(err =>
+      console.error('[Waitlist] check error:', err.message)
     );
   } else if (request.request_type === 'amend' && request.requested_date) {
     // Update booking date/time
@@ -1361,6 +1421,22 @@ router.put('/customers/:id/notes', asyncHandler(async (req, res) => {
   res.json(customer);
 }));
 
+// PUT /api/admin/customers/:id/preferences
+router.put('/customers/:id/preferences', asyncHandler(async (req, res) => {
+  const { allergies, preferences, tags } = req.body;
+  const customer = await getOne(
+    `UPDATE customers SET allergies = $1, preferences = $2, tags = $3
+     WHERE id = $4 AND tenant_id = $5 RETURNING *`,
+    [allergies || null, preferences || null, tags || null, req.params.id, req.tenantId]
+  );
+
+  if (!customer) {
+    return res.status(404).json({ error: 'Customer not found' });
+  }
+
+  res.json(customer);
+}));
+
 // DELETE /api/admin/customers/:id (GDPR delete — anonymize bookings, preserve revenue)
 router.delete('/customers/:id', asyncHandler(async (req, res) => {
   const customer = await getOne(
@@ -1372,32 +1448,14 @@ router.delete('/customers/:id', asyncHandler(async (req, res) => {
     return res.status(404).json({ error: 'Customer not found' });
   }
 
-  // Delete personal data records (no financial value)
-  await run('DELETE FROM booking_requests WHERE customer_id = $1 AND tenant_id = $2', [customer.id, req.tenantId]);
-  await run('DELETE FROM email_logs WHERE customer_id = $1 AND tenant_id = $2', [customer.id, req.tenantId]);
-  await run('DELETE FROM messages WHERE customer_id = $1 AND tenant_id = $2', [customer.id, req.tenantId]);
-
-  // Anonymize bookings (preserve for revenue reporting)
-  await run(
-    `UPDATE bookings SET
-      customer_name = 'Deleted Customer',
-      customer_email = 'deleted@removed.local',
-      customer_phone = NULL,
-      customer_id = NULL,
-      notes = NULL
-    WHERE customer_email = $1 AND tenant_id = $2`,
-    [customer.email, req.tenantId]
-  );
-  // Payments are left intact — they reference booking_id, not customer directly
-
-  // Delete customer record
-  await run('DELETE FROM customers WHERE id = $1 AND tenant_id = $2', [customer.id, req.tenantId]);
+  const { deleteCustomerData } = require('../utils/gdprService');
+  await deleteCustomerData(customer.id, req.tenantId, customer.email);
 
   // Activity log
   const { logActivity } = require('../utils/activityLog');
   logActivity(req.tenantId, 'tenant_admin', req.user.id, req.user.email, 'customer_gdpr_deleted', { customer_id: customer.id }).catch(() => {});
 
-  res.json({ message: 'Customer data deleted. Revenue records preserved with anonymized data.' });
+  res.json({ message: 'Customer data deleted. Revenue records preserved with anonymised data.' });
 }));
 
 // ============================================
@@ -2032,6 +2090,121 @@ router.post('/setup-status/dismiss', asyncHandler(async (req, res) => {
     [req.tenantId]
   );
   res.json({ ok: true });
+}));
+
+// ── SMS Settings ──
+const SMS_SETTING_KEYS = [
+  'sms_booking_confirmed_enabled',
+  'sms_booking_rejected_enabled',
+  'sms_reminder_24h_enabled',
+  'sms_reminder_2h_enabled',
+];
+
+router.get('/sms-settings', asyncHandler(async (req, res) => {
+  const rows = await getAll(
+    `SELECT setting_key, setting_value FROM tenant_settings
+     WHERE tenant_id = $1 AND setting_key = ANY($2)`,
+    [req.tenantId, SMS_SETTING_KEYS]
+  );
+
+  // Build settings object with defaults
+  const settings = {
+    sms_booking_confirmed_enabled: 'true',
+    sms_booking_rejected_enabled: 'true',
+    sms_reminder_24h_enabled: 'true',
+    sms_reminder_2h_enabled: 'false',
+  };
+  rows.forEach(r => { settings[r.setting_key] = r.setting_value; });
+
+  // Check if tenant plan supports SMS
+  const tenant = await getOne('SELECT sms_enabled, subscription_tier FROM tenants WHERE id = $1', [req.tenantId]);
+  let planSmsEnabled = tenant?.sms_enabled;
+  if (!planSmsEnabled) {
+    const plan = await getOne(
+      'SELECT sms_enabled FROM subscription_plans WHERE tier = $1 AND is_active = TRUE',
+      [tenant?.subscription_tier || 'free']
+    );
+    planSmsEnabled = plan?.sms_enabled;
+  }
+
+  res.json({ settings, sms_available: !!planSmsEnabled });
+}));
+
+router.put('/sms-settings', asyncHandler(async (req, res) => {
+  const { settings } = req.body;
+  if (!settings) return res.status(400).json({ error: 'settings is required' });
+
+  for (const key of SMS_SETTING_KEYS) {
+    if (settings[key] !== undefined) {
+      await run(
+        `INSERT INTO tenant_settings (tenant_id, setting_key, setting_value, updated_at)
+         VALUES ($1, $2, $3, NOW())
+         ON CONFLICT (tenant_id, setting_key) DO UPDATE SET
+           setting_value = $3, updated_at = NOW()`,
+        [req.tenantId, key, String(settings[key])]
+      );
+    }
+  }
+
+  res.json({ message: 'SMS settings saved' });
+}));
+
+// ============================================
+// WAITLIST
+// ============================================
+
+// GET /api/admin/waitlist
+router.get('/waitlist', asyncHandler(async (req, res) => {
+  const { date, status } = req.query;
+  let query = `SELECT * FROM waitlist WHERE tenant_id = $1`;
+  const params = [req.tenantId];
+
+  if (date) {
+    params.push(date);
+    query += ` AND date = $${params.length}`;
+  }
+  if (status) {
+    params.push(status);
+    query += ` AND status = $${params.length}`;
+  }
+
+  query += ' ORDER BY date ASC, created_at ASC';
+  const entries = await getAll(query, params);
+  res.json(entries);
+}));
+
+// GET /api/admin/waitlist/count — active waitlist count for dashboard
+router.get('/waitlist/count', asyncHandler(async (req, res) => {
+  const result = await getOne(
+    `SELECT COUNT(*)::int as count FROM waitlist WHERE tenant_id = $1 AND status = 'waiting'`,
+    [req.tenantId]
+  );
+  res.json({ count: result?.count || 0 });
+}));
+
+// DELETE /api/admin/waitlist/:id
+router.delete('/waitlist/:id', asyncHandler(async (req, res) => {
+  const entry = await getOne(
+    'DELETE FROM waitlist WHERE id = $1 AND tenant_id = $2 RETURNING *',
+    [req.params.id, req.tenantId]
+  );
+  if (!entry) return res.status(404).json({ error: 'Waitlist entry not found' });
+  res.json({ message: 'Removed from waitlist' });
+}));
+
+// POST /api/admin/waitlist/:id/notify — manually notify a waitlist entry
+router.post('/waitlist/:id/notify', asyncHandler(async (req, res) => {
+  const entry = await getOne(
+    `SELECT * FROM waitlist WHERE id = $1 AND tenant_id = $2 AND status = 'waiting'`,
+    [req.params.id, req.tenantId]
+  );
+  if (!entry) return res.status(404).json({ error: 'Waitlist entry not found or not in waiting status' });
+
+  const tenant = await getOne('SELECT * FROM tenants WHERE id = $1', [req.tenantId]);
+  const { notifyWaitlistCustomer } = require('../utils/waitlistService');
+  await notifyWaitlistCustomer(entry, tenant);
+
+  res.json({ message: 'Customer notified' });
 }));
 
 module.exports = router;

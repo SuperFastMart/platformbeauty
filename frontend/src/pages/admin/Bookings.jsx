@@ -3,9 +3,9 @@ import {
   Box, Typography, Card, CardContent, Chip, Button, TextField,
   ToggleButton, ToggleButtonGroup, Snackbar, Alert, Grid,
   Dialog, DialogTitle, DialogContent, DialogActions, Divider,
-  useMediaQuery, useTheme
+  useMediaQuery, useTheme, Tooltip
 } from '@mui/material';
-import { Check, Close, SwapHoriz, CurrencyPound, CreditCardOff, CreditCard, Add } from '@mui/icons-material';
+import { Check, Close, SwapHoriz, CurrencyPound, CreditCardOff, CreditCard, Add, ReportProblem } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api/client';
@@ -225,7 +225,14 @@ export default function Bookings() {
                 <CardContent>
                   <Box display="flex" justifyContent="space-between" alignItems="start" mb={1}>
                     <Box>
-                      <Typography fontWeight={600}>{b.customer_name}</Typography>
+                      <Box display="flex" alignItems="center" gap={0.5}>
+                        <Typography fontWeight={600}>{b.customer_name}</Typography>
+                        {b.customer_allergies && (
+                          <Tooltip title={`Allergies: ${b.customer_allergies}`} arrow>
+                            <ReportProblem sx={{ fontSize: 18, color: 'warning.main' }} />
+                          </Tooltip>
+                        )}
+                      </Box>
                       <Typography variant="body2" color="text.secondary">
                         {b.customer_email} {b.customer_phone && `| ${b.customer_phone}`}
                       </Typography>

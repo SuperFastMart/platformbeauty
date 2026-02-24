@@ -6,7 +6,7 @@ import {
   DialogContent, DialogActions, Radio, RadioGroup, FormControlLabel,
   Snackbar, IconButton, Switch, Grid,
 } from '@mui/material';
-import { Logout, Edit, EmojiEvents, Search } from '@mui/icons-material';
+import { Logout, Edit, EmojiEvents, Search, DeleteForever } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import api from '../../api/client';
 import { useTenant } from './TenantPublicLayout';
@@ -62,6 +62,11 @@ export default function CustomerPortal() {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+
+  // Account deletion
+  const [deleteDialog, setDeleteDialog] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   const customerToken = localStorage.getItem('customer_token');
 
@@ -241,6 +246,21 @@ export default function CustomerPortal() {
       setSnackbar({ open: true, message: err.response?.data?.error || 'Failed to redeem', severity: 'error' });
     } finally {
       setRedeemingCategory(null);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    setDeletingAccount(true);
+    try {
+      await authApi('delete', `/t/${slug}/auth/account`);
+      localStorage.removeItem('customer_token');
+      localStorage.removeItem('customer_user');
+      navigate(`/t/${slug}`);
+    } catch (err) {
+      setSnackbar({ open: true, message: err.response?.data?.error || 'Failed to delete account', severity: 'error' });
+    } finally {
+      setDeletingAccount(false);
+      setDeleteDialog(false);
     }
   };
 
@@ -588,6 +608,26 @@ export default function CustomerPortal() {
             </Button>
           </CardContent>
         </Card>
+
+        <Card sx={{ mt: 3, border: '1px solid', borderColor: 'error.main' }}>
+          <CardContent>
+            <Box display="flex" alignItems="center" gap={1} mb={1}>
+              <DeleteForever color="error" />
+              <Typography fontWeight={600} color="error">Delete My Account</Typography>
+            </Box>
+            <Typography variant="body2" color="text.secondary" mb={2}>
+              Permanently delete your account and all personal data. Your booking history will be anonymised
+              for the business's records but will no longer be linked to you. This action cannot be undone.
+            </Typography>
+            <Button
+              variant="outlined"
+              color="error"
+              onClick={() => { setDeleteConfirmText(''); setDeleteDialog(true); }}
+            >
+              Delete My Account
+            </Button>
+          </CardContent>
+        </Card>
       </TabPanel>
 
       {/* Cancel/Amend Request Dialog */}
@@ -656,6 +696,44 @@ export default function CustomerPortal() {
           <Button onClick={() => setRequestDialog(false)}>Cancel</Button>
           <Button variant="contained" onClick={submitRequest} disabled={submittingRequest}>
             {submittingRequest ? 'Submitting...' : 'Submit Request'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Account Confirmation Dialog */}
+      <Dialog open={deleteDialog} onClose={() => !deletingAccount && setDeleteDialog(false)} maxWidth="xs" fullWidth>
+        <DialogTitle color="error">Delete Your Account</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" mb={2}>
+            This will permanently delete your account including:
+          </Typography>
+          <Typography variant="body2" component="ul" sx={{ pl: 2, mb: 2 }}>
+            <li>Your personal details and contact information</li>
+            <li>Messages and booking requests</li>
+            <li>Loyalty stamps and rewards</li>
+          </Typography>
+          <Typography variant="body2" color="text.secondary" mb={2}>
+            Your past bookings and reviews will be anonymised (not deleted) so the business can keep their records.
+          </Typography>
+          <Typography variant="body2" fontWeight={600} mb={1}>
+            Type DELETE to confirm:
+          </Typography>
+          <TextField
+            fullWidth size="small"
+            value={deleteConfirmText}
+            onChange={e => setDeleteConfirmText(e.target.value)}
+            placeholder="DELETE"
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteDialog(false)} disabled={deletingAccount}>Cancel</Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleDeleteAccount}
+            disabled={deleteConfirmText !== 'DELETE' || deletingAccount}
+          >
+            {deletingAccount ? 'Deleting...' : 'Permanently Delete'}
           </Button>
         </DialogActions>
       </Dialog>

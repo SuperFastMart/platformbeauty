@@ -270,7 +270,7 @@ async function sendBookingApprovedNotification(booking, tenant) {
     html += `
     <div style="background:#fff8e1;border-radius:8px;padding:16px;margin:16px 0;border-left:4px solid #D4A853;">
       <p style="margin:0;color:#555;font-weight:600;">Important: Forms Attached</p>
-      <p style="margin:8px 0 0;color:#555;">Please take a look at the attached form(s) and complete them prior to your appointment date.</p>
+      <p style="margin:8px 0 0;color:#555;">Please fill in the attached form(s) and complete them prior to your appointment date.</p>
     </div>`;
   }
 
@@ -427,6 +427,12 @@ async function sendSMSReminder24h(booking, tenant) {
   return sendSMS(booking.customer_phone, message, tenant);
 }
 
+async function sendSMSReminder2h(booking, tenant) {
+  if (!booking.customer_phone) return { success: false };
+  const message = `Reminder: Your appointment at ${tenant.name} is in 2 hours at ${booking.start_time.slice(0, 5)}. See you soon!`;
+  return sendSMS(booking.customer_phone, message, tenant);
+}
+
 async function sendBookingConfirmedSMS(booking, tenant) {
   if (!booking.customer_phone) {
     console.log(`[SMS] Skipped booking #${booking.id}: no phone number on booking`);
@@ -572,6 +578,43 @@ async function sendVerificationEmail(email, name, token) {
   return sendPlatformEmail({ to: email, toName: name, subject: 'Verify your email - Boukd', html });
 }
 
+// Waitlist notification — slot opened up
+async function sendWaitlistNotification(entry, tenant) {
+  const platformUrl = process.env.PLATFORM_URL || 'https://boukd.com';
+  const bookUrl = `${platformUrl}/t/${tenant.slug}/book`;
+  const date = typeof entry.date === 'string' ? entry.date.split('T')[0] : entry.date.toISOString().split('T')[0];
+  const timeRange = entry.preferred_start_time
+    ? ` around ${entry.preferred_start_time.slice(0, 5)}`
+    : '';
+
+  const html = `
+    <h2 style="margin:0 0 16px;color:#333;">A Slot Has Opened Up!</h2>
+    <p style="color:#555;">Great news, ${entry.customer_name}! A slot has become available on <strong>${date}</strong>${timeRange} at <strong>${tenant.name}</strong>.</p>
+    ${entry.service_names ? `<p style="color:#555;">Services: <strong>${entry.service_names}</strong></p>` : ''}
+    <p style="color:#555;">You have <strong>4 hours</strong> to book before the slot is offered to the next person on the waitlist.</p>
+    <p style="text-align:center;margin:24px 0;">
+      <a href="${bookUrl}" style="display:inline-block;background:${tenant.primary_color || '#8B2635'};color:#fff;padding:14px 36px;border-radius:8px;text-decoration:none;font-weight:600;font-size:16px;">
+        Book Now
+      </a>
+    </p>
+    <p style="color:#999;font-size:13px;">If you no longer need this appointment, no action is needed — the slot will automatically be offered to someone else.</p>`;
+
+  return sendEmail({
+    to: entry.customer_email,
+    toName: entry.customer_name,
+    subject: `A slot has opened up at ${tenant.name}!`,
+    html,
+    tenant,
+  });
+}
+
+async function sendWaitlistSMS(entry, tenant) {
+  if (!entry.customer_phone) return { success: false };
+  const date = typeof entry.date === 'string' ? entry.date.split('T')[0] : entry.date.toISOString().split('T')[0];
+  const message = `Great news! A slot has opened at ${tenant.name} on ${date}. Book now before it's taken — you have 4 hours. Visit our booking page to secure your spot.`;
+  return sendSMS(entry.customer_phone, message, tenant);
+}
+
 module.exports = {
   sendEmail,
   sendPlatformEmail,
@@ -585,10 +628,13 @@ module.exports = {
   sendPasswordResetEmail,
   sendSMS,
   sendSMSReminder24h,
+  sendSMSReminder2h,
   sendBookingConfirmedSMS,
   sendBookingRejectedSMS,
   sendBookingRequestNotification,
   sendRequestApprovedNotification,
   sendRequestRejectedNotification,
   generateBookingICS,
+  sendWaitlistNotification,
+  sendWaitlistSMS,
 };

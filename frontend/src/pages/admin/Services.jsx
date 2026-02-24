@@ -5,14 +5,14 @@ import {
   DialogContent, DialogActions, TextField, Snackbar, Alert, Card, CardContent,
   MenuItem, Divider, useMediaQuery, useTheme, FormControlLabel, Switch, ToggleButtonGroup, ToggleButton
 } from '@mui/material';
-import { Add, Edit, Delete, ArrowUpward, ArrowDownward, DragIndicator, Upload, QuestionAnswer, AttachFile } from '@mui/icons-material';
+import { Add, Edit, Delete, ArrowUpward, ArrowDownward, DragIndicator, Upload, QuestionAnswer, AttachFile, Extension } from '@mui/icons-material';
 import Badge from '@mui/material/Badge';
 import api from '../../api/client';
 import CsvImportDialog from '../../components/CsvImportDialog';
 import IntakeQuestions from './IntakeQuestions';
 import ServiceForms from './ServiceForms';
 
-const emptyService = { name: '', description: '', duration: 30, price: '', category: '', display_order: 0, deposit_enabled: false, deposit_type: 'fixed', deposit_value: '' };
+const emptyService = { name: '', description: '', duration: 30, price: '', category: '', display_order: 0, deposit_enabled: false, deposit_type: 'fixed', deposit_value: '', is_addon: false };
 
 export default function Services() {
   const [services, setServices] = useState([]);
@@ -27,6 +27,10 @@ export default function Services() {
   const [importOpen, setImportOpen] = useState(false);
   const [intakeOpen, setIntakeOpen] = useState(null); // { id, name } of service
   const [formsOpen, setFormsOpen] = useState(null); // { id, name } of service
+  const [addonsOpen, setAddonsOpen] = useState(null); // { id, name } of parent service
+  const [addonLinks, setAddonLinks] = useState([]);
+  const [addonLinkLoading, setAddonLinkLoading] = useState(false);
+  const [selectedAddonId, setSelectedAddonId] = useState('');
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
@@ -57,6 +61,7 @@ export default function Services() {
         deposit_enabled: service.deposit_enabled || false,
         deposit_type: service.deposit_type || 'fixed',
         deposit_value: service.deposit_enabled ? service.deposit_value : '',
+        is_addon: service.is_addon || false,
       });
     } else {
       setEditing(null);
@@ -143,6 +148,46 @@ export default function Services() {
       setSnackbar({ open: true, message: 'Failed to save order', severity: 'error' });
     }
   };
+
+  // Add-on management
+  const openAddons = async (service) => {
+    setAddonsOpen({ id: service.id, name: service.name });
+    setSelectedAddonId('');
+    setAddonLinkLoading(true);
+    try {
+      const { data } = await api.get(`/admin/services/${service.id}/addons`);
+      setAddonLinks(data);
+    } catch { setAddonLinks([]); }
+    finally { setAddonLinkLoading(false); }
+  };
+
+  const linkAddon = async () => {
+    if (!selectedAddonId || !addonsOpen) return;
+    try {
+      await api.post(`/admin/services/${addonsOpen.id}/addons`, { addon_service_id: selectedAddonId });
+      const { data } = await api.get(`/admin/services/${addonsOpen.id}/addons`);
+      setAddonLinks(data);
+      setSelectedAddonId('');
+      setSnackbar({ open: true, message: 'Add-on linked', severity: 'success' });
+    } catch (err) {
+      setSnackbar({ open: true, message: err.response?.data?.error || 'Failed to link add-on', severity: 'error' });
+    }
+  };
+
+  const unlinkAddon = async (linkId) => {
+    if (!addonsOpen) return;
+    try {
+      await api.delete(`/admin/services/${addonsOpen.id}/addons/${linkId}`);
+      setAddonLinks(prev => prev.filter(l => l.link_id !== linkId));
+      setSnackbar({ open: true, message: 'Add-on removed', severity: 'success' });
+    } catch {
+      setSnackbar({ open: true, message: 'Failed to remove', severity: 'error' });
+    }
+  };
+
+  // Services available as add-ons (is_addon = true)
+  const addonServices = services.filter(s => s.is_addon && s.active);
+  const availableAddons = addonServices.filter(a => !addonLinks.some(l => l.id === a.id));
 
   // Existing category names for dropdown
   const existingCategories = [...new Set(services.map(s => s.category || 'General').filter(Boolean))];
@@ -241,9 +286,17 @@ export default function Services() {
                             <Chip label={s.deposit_type === 'percentage' ? `${s.deposit_value}% deposit` : `£${parseFloat(s.deposit_value).toFixed(2)} deposit`}
                               size="small" color="info" sx={{ height: 20, fontSize: 11 }} />
                           )}
+                          {s.is_addon && (
+                            <Chip label="Add-on" size="small" color="secondary" sx={{ height: 20, fontSize: 11 }} />
+                          )}
                         </Box>
                       </Box>
                       <Box display="flex" gap={0.5} ml={1} flexShrink={0}>
+                        {!s.is_addon && (
+                          <IconButton size="small" onClick={() => openAddons(s)} title="Add-ons">
+                            <Extension fontSize="small" />
+                          </IconButton>
+                        )}
                         <IconButton size="small" onClick={() => setIntakeOpen({ id: s.id, name: s.name })} title="Intake questions">
                           <QuestionAnswer fontSize="small" />
                         </IconButton>
@@ -303,10 +356,18 @@ export default function Services() {
                           )}
                         </TableCell>
                         <TableCell>
-                          <Chip label={s.active ? 'Active' : 'Inactive'} size="small"
-                            color={s.active ? 'success' : 'default'} />
+                          <Box display="flex" gap={0.5} alignItems="center">
+                            <Chip label={s.active ? 'Active' : 'Inactive'} size="small"
+                              color={s.active ? 'success' : 'default'} />
+                            {s.is_addon && <Chip label="Add-on" size="small" color="secondary" sx={{ height: 22 }} />}
+                          </Box>
                         </TableCell>
                         <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
+                          {!s.is_addon && (
+                            <IconButton size="small" onClick={() => openAddons(s)} title="Add-ons">
+                              <Extension fontSize="small" />
+                            </IconButton>
+                          )}
                           <IconButton size="small" onClick={() => setIntakeOpen({ id: s.id, name: s.name })} title="Intake questions">
                             <QuestionAnswer fontSize="small" />
                           </IconButton>
@@ -408,6 +469,22 @@ export default function Services() {
           />
 
           <Divider sx={{ my: 2 }} />
+          <FormControlLabel
+            control={
+              <Switch
+                checked={form.is_addon}
+                onChange={e => setForm(f => ({ ...f, is_addon: e.target.checked }))}
+              />
+            }
+            label="This is an add-on service"
+          />
+          {form.is_addon && (
+            <Typography variant="body2" color="text.secondary" sx={{ ml: 4, mt: -0.5, mb: 1 }}>
+              Add-on services don't appear in the main booking list. They can be linked to parent services and offered as extras during booking.
+            </Typography>
+          )}
+
+          <Divider sx={{ my: 2 }} />
           <Typography variant="subtitle2" fontWeight={600} mb={1}>Deposit</Typography>
           <FormControlLabel
             control={
@@ -474,6 +551,65 @@ export default function Services() {
         serviceId={formsOpen?.id}
         serviceName={formsOpen?.name}
       />
+
+      {/* Add-ons Management Dialog */}
+      <Dialog open={!!addonsOpen} onClose={() => setAddonsOpen(null)} maxWidth="sm" fullWidth>
+        <DialogTitle>Add-ons — {addonsOpen?.name}</DialogTitle>
+        <DialogContent>
+          {addonLinkLoading ? (
+            <Typography color="text.secondary" py={2}>Loading...</Typography>
+          ) : (
+            <>
+              {addonLinks.length === 0 ? (
+                <Typography color="text.secondary" py={2}>No add-ons linked to this service yet.</Typography>
+              ) : (
+                addonLinks.map(link => (
+                  <Box key={link.link_id} display="flex" justifyContent="space-between" alignItems="center" py={1} borderBottom="1px solid" borderColor="divider">
+                    <Box>
+                      <Typography fontWeight={500}>{link.name}</Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {link.duration} min — £{parseFloat(link.price).toFixed(2)}
+                      </Typography>
+                    </Box>
+                    <IconButton size="small" color="error" onClick={() => unlinkAddon(link.link_id)}>
+                      <Delete fontSize="small" />
+                    </IconButton>
+                  </Box>
+                ))
+              )}
+
+              <Divider sx={{ my: 2 }} />
+              <Typography variant="subtitle2" fontWeight={600} mb={1}>Link an Add-on</Typography>
+              {availableAddons.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">
+                  No add-on services available. Create a service with "This is an add-on" enabled first.
+                </Typography>
+              ) : (
+                <Box display="flex" gap={1} alignItems="flex-start">
+                  <TextField
+                    select fullWidth size="small"
+                    value={selectedAddonId}
+                    onChange={e => setSelectedAddonId(e.target.value)}
+                    label="Select add-on"
+                  >
+                    {availableAddons.map(a => (
+                      <MenuItem key={a.id} value={a.id}>
+                        {a.name} — £{parseFloat(a.price).toFixed(2)} ({a.duration} min)
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                  <Button variant="contained" onClick={linkAddon} disabled={!selectedAddonId} sx={{ minWidth: 80 }}>
+                    Link
+                  </Button>
+                </Box>
+              )}
+            </>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAddonsOpen(null)}>Close</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

@@ -740,6 +740,66 @@ const migrations = [
   },
 
   // ============================================
+  // SPRINT 9 — Client Preferences, SMS, Add-ons, Waitlist
+  // ============================================
+  {
+    name: '046_add_customer_preferences',
+    sql: `
+      ALTER TABLE customers ADD COLUMN IF NOT EXISTS allergies TEXT;
+      ALTER TABLE customers ADD COLUMN IF NOT EXISTS preferences TEXT;
+      ALTER TABLE customers ADD COLUMN IF NOT EXISTS tags TEXT;
+    `
+  },
+  {
+    name: '047_add_sms_2h_tracking',
+    sql: `
+      ALTER TABLE bookings ADD COLUMN IF NOT EXISTS sms_2h_sent BOOLEAN DEFAULT FALSE;
+    `
+  },
+  {
+    name: '048_add_service_addons',
+    sql: `
+      ALTER TABLE services ADD COLUMN IF NOT EXISTS is_addon BOOLEAN DEFAULT FALSE;
+
+      CREATE TABLE IF NOT EXISTS service_addon_links (
+        id SERIAL PRIMARY KEY,
+        tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+        parent_service_id INTEGER NOT NULL REFERENCES services(id) ON DELETE CASCADE,
+        addon_service_id INTEGER NOT NULL REFERENCES services(id) ON DELETE CASCADE,
+        display_order INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(tenant_id, parent_service_id, addon_service_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_addon_links_parent ON service_addon_links(parent_service_id);
+    `
+  },
+  {
+    name: '049_create_waitlist',
+    sql: `
+      CREATE TABLE IF NOT EXISTS waitlist (
+        id SERIAL PRIMARY KEY,
+        tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+        customer_name VARCHAR(255) NOT NULL,
+        customer_email VARCHAR(255) NOT NULL,
+        customer_phone VARCHAR(50),
+        customer_id INTEGER REFERENCES customers(id),
+        date DATE NOT NULL,
+        preferred_start_time TIME,
+        preferred_end_time TIME,
+        service_ids TEXT,
+        service_names TEXT,
+        notes TEXT,
+        status VARCHAR(20) DEFAULT 'waiting',
+        notified_at TIMESTAMP,
+        expires_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_waitlist_tenant_date ON waitlist(tenant_id, date);
+      CREATE INDEX IF NOT EXISTS idx_waitlist_status ON waitlist(status);
+    `
+  },
+
+  // ============================================
   // MIGRATION TRACKING
   // ============================================
   {

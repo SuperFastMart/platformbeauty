@@ -40,6 +40,7 @@ const ReviewsManagement = lazy(() => import('./pages/admin/ReviewsManagement'));
 const Support = lazy(() => import('./pages/admin/Support'));
 const SupportTicketDetail = lazy(() => import('./pages/admin/SupportTicketDetail'));
 const SetupWizard = lazy(() => import('./pages/admin/SetupWizard'));
+const Waitlist = lazy(() => import('./pages/admin/Waitlist'));
 
 // Public booking
 const TenantPublicLayout = lazy(() => import('./pages/public/TenantPublicLayout'));
@@ -102,6 +103,7 @@ export default function App() {
           <Route path="reviews" element={<ReviewsManagement />} />
           <Route path="support" element={<Support />} />
           <Route path="support/:id" element={<SupportTicketDetail />} />
+          <Route path="waitlist" element={<Waitlist />} />
           <Route path="setup" element={<SetupWizard />} />
         </Route>
 

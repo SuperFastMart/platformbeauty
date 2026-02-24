@@ -26,12 +26,12 @@ router.get('/', asyncHandler(async (req, res) => {
   });
 }));
 
-// GET /api/t/:tenant/services - active services grouped by category
+// GET /api/t/:tenant/services - active services grouped by category (excludes add-ons)
 router.get('/services', asyncHandler(async (req, res) => {
   const services = await getAll(
     `SELECT id, name, description, duration, price, category, display_order
      FROM services
-     WHERE tenant_id = $1 AND active = TRUE
+     WHERE tenant_id = $1 AND active = TRUE AND (is_addon = FALSE OR is_addon IS NULL)
      ORDER BY category, display_order, name`,
     [req.tenantId]
   );
@@ -45,6 +45,31 @@ router.get('/services', asyncHandler(async (req, res) => {
   }
 
   res.json({ services, grouped });
+}));
+
+// GET /api/t/:tenant/addon-links - all add-on links for this tenant
+router.get('/addon-links', asyncHandler(async (req, res) => {
+  const links = await getAll(
+    `SELECT sal.parent_service_id, sal.addon_service_id, sal.display_order
+     FROM service_addon_links sal
+     JOIN services s ON s.id = sal.addon_service_id AND s.active = TRUE
+     WHERE sal.tenant_id = $1
+     ORDER BY sal.display_order`,
+    [req.tenantId]
+  );
+  res.json(links);
+}));
+
+// GET /api/t/:tenant/addon-services - all add-on services
+router.get('/addon-services', asyncHandler(async (req, res) => {
+  const addons = await getAll(
+    `SELECT id, name, description, duration, price, category
+     FROM services
+     WHERE tenant_id = $1 AND active = TRUE AND is_addon = TRUE
+     ORDER BY name`,
+    [req.tenantId]
+  );
+  res.json(addons);
 }));
 
 // GET /api/t/:tenant/slots?date=YYYY-MM-DD - available slots for a date
@@ -537,6 +562,40 @@ router.get('/intake-questions', asyncHandler(async (req, res) => {
   );
 
   res.json(questions);
+}));
+
+// POST /api/t/:tenant/waitlist — customer joins waitlist
+router.post('/waitlist', asyncHandler(async (req, res) => {
+  const { customer_name, customer_email, customer_phone, date, preferred_start_time, preferred_end_time, service_ids, service_names, notes } = req.body;
+
+  if (!customer_name || !customer_email || !date) {
+    return res.status(400).json({ error: 'Name, email, and date are required' });
+  }
+
+  // Check if already on waitlist for this date
+  const existing = await getOne(
+    `SELECT id FROM waitlist WHERE tenant_id = $1 AND customer_email = $2 AND date = $3 AND status = 'waiting'`,
+    [req.tenantId, customer_email, date]
+  );
+  if (existing) {
+    return res.status(409).json({ error: 'You are already on the waitlist for this date' });
+  }
+
+  // Look up customer_id if they have an account
+  const customer = await getOne(
+    'SELECT id FROM customers WHERE tenant_id = $1 AND email = $2',
+    [req.tenantId, customer_email]
+  );
+
+  const entry = await getOne(
+    `INSERT INTO waitlist (tenant_id, customer_name, customer_email, customer_phone, customer_id, date, preferred_start_time, preferred_end_time, service_ids, service_names, notes)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+    [req.tenantId, customer_name, customer_email, customer_phone || null, customer?.id || null,
+     date, preferred_start_time || null, preferred_end_time || null,
+     service_ids || null, service_names || null, notes || null]
+  );
+
+  res.status(201).json(entry);
 }));
 
 module.exports = router;

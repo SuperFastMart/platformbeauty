@@ -10,7 +10,7 @@ import {
   Schedule, Logout, People, AddCircle, Settings as SettingsIcon,
   Loyalty as LoyaltyIcon, LocalOffer, Assessment,
   Chat, StarBorder, Menu as MenuIcon, SupportAgent,
-  DarkMode, LightMode, Security, Close, AccountBalance
+  DarkMode, LightMode, Security, Close, AccountBalance, HourglassEmpty
 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
 import { useThemeMode } from '../../contexts/ThemeContext';
@@ -22,6 +22,7 @@ const navItems = [
   { label: 'Dashboard', path: '/admin/dashboard', icon: <DashboardIcon /> },
   { label: 'Services', path: '/admin/services', icon: <ContentCut /> },
   { label: 'Bookings', path: '/admin/bookings', icon: <CalendarMonth /> },
+  { label: 'Waitlist', path: '/admin/waitlist', icon: <HourglassEmpty /> },
   { label: 'Availability', path: '/admin/slot-templates', icon: <Schedule /> },
   { label: 'Create Booking', path: '/admin/bookings/create', icon: <AddCircle /> },
   { label: 'Customers', path: '/admin/customers', icon: <People /> },

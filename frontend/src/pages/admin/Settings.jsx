@@ -5,7 +5,7 @@ import {
   Snackbar, Alert, CircularProgress, InputAdornment, Chip, Switch, FormControlLabel, Grid, MenuItem,
   useMediaQuery, useTheme, LinearProgress
 } from '@mui/material';
-import { Save, CreditCard, Store, Palette, Info, Schedule, Code, ContentCopy, Share, Delete, Add, DragIndicator, Gavel, Subscriptions, OpenInNew, CheckCircle, Security, Lock, LockOpen, AccountBalance } from '@mui/icons-material';
+import { Save, CreditCard, Store, Palette, Info, Schedule, Code, ContentCopy, Share, Delete, Add, DragIndicator, Gavel, Subscriptions, OpenInNew, CheckCircle, Security, Lock, LockOpen, AccountBalance, Sms } from '@mui/icons-material';
 import api from '../../api/client';
 
 function TabPanel({ children, value, index }) {
@@ -621,13 +621,122 @@ function TaxComplianceTab({ snackbar, setSnackbar }) {
   );
 }
 
+function SmsTab({ snackbar, setSnackbar }) {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [smsAvailable, setSmsAvailable] = useState(false);
+  const [smsSettings, setSmsSettings] = useState({
+    sms_booking_confirmed_enabled: 'true',
+    sms_booking_rejected_enabled: 'true',
+    sms_reminder_24h_enabled: 'true',
+    sms_reminder_2h_enabled: 'false',
+  });
+
+  useEffect(() => {
+    api.get('/admin/sms-settings')
+      .then(({ data }) => {
+        setSmsSettings(data.settings);
+        setSmsAvailable(data.sms_available);
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await api.put('/admin/sms-settings', { settings: smsSettings });
+      setSnackbar({ open: true, message: 'SMS settings saved', severity: 'success' });
+    } catch (err) {
+      setSnackbar({ open: true, message: err.response?.data?.error || 'Failed to save', severity: 'error' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleSetting = (key) => {
+    setSmsSettings(prev => ({
+      ...prev,
+      [key]: prev[key] === 'true' ? 'false' : 'true',
+    }));
+  };
+
+  if (loading) return <Box display="flex" justifyContent="center" py={4}><CircularProgress size={32} /></Box>;
+
+  return (
+    <Box>
+      <Card sx={{ mb: 3 }}>
+        <CardContent>
+          <Box display="flex" alignItems="center" gap={1.5} mb={2}>
+            <Sms color={smsAvailable ? 'success' : 'action'} />
+            <Typography variant="subtitle1" fontWeight={600}>SMS Notifications</Typography>
+            <Chip
+              label={smsAvailable ? 'Available' : 'Not included in plan'}
+              size="small"
+              color={smsAvailable ? 'success' : 'default'}
+            />
+          </Box>
+
+          {!smsAvailable ? (
+            <Alert severity="info">
+              SMS notifications are available on Growth and Pro plans. Upgrade your subscription to enable SMS reminders
+              and booking confirmations for your customers.
+            </Alert>
+          ) : (
+            <>
+              <Typography variant="body2" color="text.secondary" mb={3}>
+                Configure which SMS notifications are sent to your customers. SMS messages are sent via Brevo
+                using your plan's included SMS credits.
+              </Typography>
+
+              <Typography variant="subtitle2" fontWeight={600} mb={1.5}>Booking Notifications</Typography>
+              <FormControlLabel
+                control={<Switch checked={smsSettings.sms_booking_confirmed_enabled === 'true'} onChange={() => toggleSetting('sms_booking_confirmed_enabled')} />}
+                label="Send SMS when booking is confirmed"
+                sx={{ display: 'block', mb: 1 }}
+              />
+              <FormControlLabel
+                control={<Switch checked={smsSettings.sms_booking_rejected_enabled === 'true'} onChange={() => toggleSetting('sms_booking_rejected_enabled')} />}
+                label="Send SMS when booking is rejected"
+                sx={{ display: 'block', mb: 2 }}
+              />
+
+              <Typography variant="subtitle2" fontWeight={600} mb={1.5}>Appointment Reminders</Typography>
+              <FormControlLabel
+                control={<Switch checked={smsSettings.sms_reminder_24h_enabled === 'true'} onChange={() => toggleSetting('sms_reminder_24h_enabled')} />}
+                label="24-hour SMS reminder (sent daily at 9am)"
+                sx={{ display: 'block', mb: 1 }}
+              />
+              <FormControlLabel
+                control={<Switch checked={smsSettings.sms_reminder_2h_enabled === 'true'} onChange={() => toggleSetting('sms_reminder_2h_enabled')} />}
+                label="2-hour SMS reminder (sent 2 hours before appointment)"
+                sx={{ display: 'block', mb: 2 }}
+              />
+
+              <Alert severity="info" sx={{ mb: 3 }}>
+                Email reminders are always sent regardless of SMS settings. SMS provides an additional reminder channel
+                for customers who have provided a phone number.
+              </Alert>
+
+              <Button variant="contained" onClick={handleSave} disabled={saving}>
+                {saving ? 'Saving...' : 'Save SMS Settings'}
+              </Button>
+            </>
+          )}
+        </CardContent>
+      </Card>
+    </Box>
+  );
+}
+
 export default function Settings() {
   const [searchParams] = useSearchParams();
   const initialTab = useMemo(() => {
     const tabParam = searchParams.get('tab');
-    if (tabParam === 'subscription') return 8;
-    if (tabParam === 'security') return 9;
-    if (tabParam === 'tax') return 10;
+    if (tabParam === 'sms') return 8;
+    if (tabParam === 'subscription') return 9;
+    if (tabParam === 'security') return 10;
+    if (tabParam === 'tax') return 11;
     return 0;
   }, []);
   const [tab, setTab] = useState(initialTab);
@@ -741,6 +850,7 @@ export default function Settings() {
         <Tab icon={<Share />} label="Social" iconPosition="start" />
         <Tab icon={<Gavel />} label="Policies" iconPosition="start" />
         <Tab icon={<Code />} label="Widget" iconPosition="start" />
+        <Tab icon={<Sms />} label="SMS" iconPosition="start" />
         <Tab icon={<Subscriptions />} label="Subscription" iconPosition="start" />
         <Tab icon={<Security />} label="Security" iconPosition="start" />
         <Tab icon={<AccountBalance />} label="Tax & Compliance" iconPosition="start" />
@@ -1301,18 +1411,23 @@ window.addEventListener('message', function(e) {
         </Card>
       </TabPanel>
 
-      {/* Subscription */}
+      {/* SMS */}
       <TabPanel value={tab} index={8}>
+        <SmsTab snackbar={snackbar} setSnackbar={setSnackbar} />
+      </TabPanel>
+
+      {/* Subscription */}
+      <TabPanel value={tab} index={9}>
         <SubscriptionTab snackbar={snackbar} setSnackbar={setSnackbar} />
       </TabPanel>
 
       {/* Security */}
-      <TabPanel value={tab} index={9}>
+      <TabPanel value={tab} index={10}>
         <SecurityTab snackbar={snackbar} setSnackbar={setSnackbar} />
       </TabPanel>
 
       {/* Tax & Compliance */}
-      <TabPanel value={tab} index={10}>
+      <TabPanel value={tab} index={11}>
         <TaxComplianceTab snackbar={snackbar} setSnackbar={setSnackbar} />
       </TabPanel>
 

@@ -4,9 +4,9 @@ import {
   Box, Typography, Card, CardContent, Chip, Button, TextField,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
   Grid, Alert, Snackbar, Dialog, DialogTitle, DialogContent, DialogActions,
-  IconButton, useMediaQuery, useTheme
+  IconButton, useMediaQuery, useTheme, Tooltip
 } from '@mui/material';
-import { ArrowBack, Delete, PersonOutline } from '@mui/icons-material';
+import { ArrowBack, Delete, PersonOutline, ReportProblem, LocalOffer, Add } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import api from '../../api/client';
 import { useAuth } from '../../contexts/AuthContext';
@@ -26,6 +26,10 @@ export default function CustomerDetail() {
   const [stats, setStats] = useState({});
   const [loading, setLoading] = useState(true);
   const [notes, setNotes] = useState('');
+  const [allergies, setAllergies] = useState('');
+  const [preferences, setPreferences] = useState('');
+  const [tags, setTags] = useState([]);
+  const [newTag, setNewTag] = useState('');
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [deleteDialog, setDeleteDialog] = useState(false);
   const theme = useTheme();
@@ -38,6 +42,9 @@ export default function CustomerDetail() {
         setBookings(data.bookings);
         setStats(data.stats);
         setNotes(data.customer.admin_notes || '');
+        setAllergies(data.customer.allergies || '');
+        setPreferences(data.customer.preferences || '');
+        setTags(data.customer.tags ? data.customer.tags.split(',').map(t => t.trim()).filter(Boolean) : []);
       })
       .catch(err => {
         if (err.response?.status === 404) navigate('/admin/customers');
@@ -45,12 +52,27 @@ export default function CustomerDetail() {
       .finally(() => setLoading(false));
   }, [id]);
 
-  const saveNotes = async () => {
+  const saveAll = async () => {
     try {
-      await api.put(`/admin/customers/${id}/notes`, { notes });
-      setSnackbar({ open: true, message: 'Notes saved', severity: 'success' });
+      await Promise.all([
+        api.put(`/admin/customers/${id}/notes`, { notes }),
+        api.put(`/admin/customers/${id}/preferences`, {
+          allergies: allergies || null,
+          preferences: preferences || null,
+          tags: tags.length > 0 ? tags.join(',') : null,
+        }),
+      ]);
+      setSnackbar({ open: true, message: 'Customer details saved', severity: 'success' });
     } catch (err) {
-      setSnackbar({ open: true, message: 'Failed to save notes', severity: 'error' });
+      setSnackbar({ open: true, message: 'Failed to save', severity: 'error' });
+    }
+  };
+
+  const addTag = () => {
+    const tag = newTag.trim();
+    if (tag && !tags.includes(tag)) {
+      setTags([...tags, tag]);
+      setNewTag('');
     }
   };
 
@@ -135,16 +157,63 @@ export default function CustomerDetail() {
         <Grid item xs={12} md={6}>
           <Card>
             <CardContent>
-              <Typography fontWeight={600} mb={1}>Admin Notes</Typography>
+              {/* Allergies / Alerts */}
+              <Box sx={{ bgcolor: allergies ? 'rgba(211, 47, 47, 0.06)' : 'transparent', borderRadius: 1, p: allergies ? 1.5 : 0, mb: 2 }}>
+                <Box display="flex" alignItems="center" gap={0.5} mb={0.5}>
+                  <ReportProblem sx={{ fontSize: 18, color: allergies ? 'error.main' : 'text.secondary' }} />
+                  <Typography fontWeight={600} variant="body2" color={allergies ? 'error.main' : 'text.primary'}>Allergies / Alerts</Typography>
+                </Box>
+                <TextField
+                  fullWidth multiline rows={2} size="small"
+                  placeholder="e.g. Nut allergy, sensitive skin, latex..."
+                  value={allergies}
+                  onChange={e => setAllergies(e.target.value)}
+                />
+              </Box>
+
+              {/* Preferences */}
+              <Typography fontWeight={600} variant="body2" mb={0.5}>Preferences</Typography>
               <TextField
-                fullWidth multiline rows={3}
+                fullWidth multiline rows={2} size="small" sx={{ mb: 2 }}
+                placeholder="Colour formulas, preferred products, notes..."
+                value={preferences}
+                onChange={e => setPreferences(e.target.value)}
+              />
+
+              {/* Tags */}
+              <Typography fontWeight={600} variant="body2" mb={0.5}>Tags</Typography>
+              <Box display="flex" flexWrap="wrap" gap={0.5} mb={1}>
+                {tags.map(tag => (
+                  <Chip
+                    key={tag} label={tag} size="small" variant="outlined"
+                    icon={<LocalOffer sx={{ fontSize: 14 }} />}
+                    onDelete={() => setTags(tags.filter(t => t !== tag))}
+                  />
+                ))}
+              </Box>
+              <Box display="flex" gap={1} mb={2}>
+                <TextField
+                  size="small" placeholder="Add tag..." value={newTag}
+                  onChange={e => setNewTag(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addTag())}
+                  sx={{ flex: 1 }}
+                />
+                <Button size="small" variant="outlined" onClick={addTag} disabled={!newTag.trim()}>
+                  <Add sx={{ fontSize: 18 }} />
+                </Button>
+              </Box>
+
+              {/* Admin Notes */}
+              <Typography fontWeight={600} variant="body2" mb={0.5}>Admin Notes</Typography>
+              <TextField
+                fullWidth multiline rows={3} size="small"
                 placeholder="Private notes about this customer..."
                 value={notes}
                 onChange={e => setNotes(e.target.value)}
-                size="small"
               />
-              <Button size="small" variant="contained" sx={{ mt: 1 }} onClick={saveNotes}>
-                Save Notes
+
+              <Button size="small" variant="contained" sx={{ mt: 1.5 }} onClick={saveAll}>
+                Save All
               </Button>
             </CardContent>
           </Card>
@@ -214,12 +283,24 @@ export default function CustomerDetail() {
       </Box>
 
       <Dialog open={deleteDialog} onClose={() => setDeleteDialog(false)}>
-        <DialogTitle>Delete Customer?</DialogTitle>
+        <DialogTitle>Delete Customer (GDPR)?</DialogTitle>
         <DialogContent>
-          <Alert severity="warning" sx={{ mt: 1 }}>
-            This will permanently delete <strong>{customer.name}</strong> and all their bookings,
-            requests, and payment records. This action cannot be undone.
+          <Alert severity="warning" sx={{ mt: 1, mb: 2 }}>
+            This will permanently delete <strong>{customer.name}</strong>'s personal data. This action cannot be undone.
           </Alert>
+          <Typography variant="body2" fontWeight={600} gutterBottom>What gets deleted:</Typography>
+          <Typography variant="body2" color="text.secondary" component="ul" sx={{ pl: 2, mb: 1 }}>
+            <li>Customer record (name, email, phone, notes, preferences)</li>
+            <li>Messages and booking requests</li>
+            <li>Loyalty stamps and redeemed rewards</li>
+            <li>Email history</li>
+          </Typography>
+          <Typography variant="body2" fontWeight={600} gutterBottom>What gets anonymised (kept for reporting):</Typography>
+          <Typography variant="body2" color="text.secondary" component="ul" sx={{ pl: 2 }}>
+            <li>Bookings (customer name replaced with "Deleted Customer")</li>
+            <li>Reviews (anonymised)</li>
+            <li>Payment records (preserved for accounting)</li>
+          </Typography>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDeleteDialog(false)}>Cancel</Button>
