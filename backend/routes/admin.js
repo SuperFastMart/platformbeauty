@@ -294,7 +294,15 @@ router.post('/mfa/dismiss', asyncHandler(async (req, res) => {
 // GET /api/admin/services
 router.get('/services', asyncHandler(async (req, res) => {
   const services = await getAll(
-    'SELECT * FROM services WHERE tenant_id = $1 ORDER BY category, display_order, name',
+    `SELECT s.*, COALESCE(sf.form_count, 0)::int AS form_count
+     FROM services s
+     LEFT JOIN (
+       SELECT service_id, COUNT(*)::int AS form_count
+       FROM service_forms WHERE tenant_id = $1 AND active = TRUE
+       GROUP BY service_id
+     ) sf ON sf.service_id = s.id
+     WHERE s.tenant_id = $1
+     ORDER BY s.category, s.display_order, s.name`,
     [req.tenantId]
   );
   res.json(services);

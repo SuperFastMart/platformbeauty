@@ -6,6 +6,7 @@ import {
   MenuItem, Divider, useMediaQuery, useTheme, FormControlLabel, Switch, ToggleButtonGroup, ToggleButton
 } from '@mui/material';
 import { Add, Edit, Delete, ArrowUpward, ArrowDownward, DragIndicator, Upload, QuestionAnswer, AttachFile } from '@mui/icons-material';
+import Badge from '@mui/material/Badge';
 import api from '../../api/client';
 import CsvImportDialog from '../../components/CsvImportDialog';
 import IntakeQuestions from './IntakeQuestions';
@@ -242,12 +243,16 @@ export default function Services() {
                           )}
                         </Box>
                       </Box>
-                      <Box display="flex" gap={0.5} ml={1}>
+                      <Box display="flex" gap={0.5} ml={1} flexShrink={0}>
                         <IconButton size="small" onClick={() => setIntakeOpen({ id: s.id, name: s.name })} title="Intake questions">
                           <QuestionAnswer fontSize="small" />
                         </IconButton>
                         <IconButton size="small" onClick={() => setFormsOpen({ id: s.id, name: s.name })} title="Forms">
-                          <AttachFile fontSize="small" />
+                          <Badge badgeContent={s.form_count || 0} color="primary" max={9}
+                            sx={{ '& .MuiBadge-badge': { fontSize: 10, height: 16, minWidth: 16 } }}
+                            invisible={!s.form_count}>
+                            <AttachFile fontSize="small" />
+                          </Badge>
                         </IconButton>
                         <IconButton size="small" onClick={() => handleOpen(s)}>
                           <Edit fontSize="small" />
@@ -273,7 +278,7 @@ export default function Services() {
                       <TableCell sx={{ width: 100 }}>Price</TableCell>
                       <TableCell sx={{ width: 110 }}>Deposit</TableCell>
                       <TableCell sx={{ width: 90 }}>Status</TableCell>
-                      <TableCell align="right" sx={{ width: 130 }}>Actions</TableCell>
+                      <TableCell align="right" sx={{ width: 160 }}>Actions</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -301,12 +306,16 @@ export default function Services() {
                           <Chip label={s.active ? 'Active' : 'Inactive'} size="small"
                             color={s.active ? 'success' : 'default'} />
                         </TableCell>
-                        <TableCell align="right">
+                        <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
                           <IconButton size="small" onClick={() => setIntakeOpen({ id: s.id, name: s.name })} title="Intake questions">
                             <QuestionAnswer fontSize="small" />
                           </IconButton>
                           <IconButton size="small" onClick={() => setFormsOpen({ id: s.id, name: s.name })} title="Forms">
-                            <AttachFile fontSize="small" />
+                            <Badge badgeContent={s.form_count || 0} color="primary" max={9}
+                              sx={{ '& .MuiBadge-badge': { fontSize: 10, height: 16, minWidth: 16 } }}
+                              invisible={!s.form_count}>
+                              <AttachFile fontSize="small" />
+                            </Badge>
                           </IconButton>
                           <IconButton size="small" onClick={() => handleOpen(s)}>
                             <Edit fontSize="small" />
