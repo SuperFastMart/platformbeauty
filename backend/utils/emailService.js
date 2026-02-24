@@ -233,7 +233,11 @@ async function sendBookingPendingNotification(booking, tenant) {
 
   const attachments = await getServiceFormAttachments(booking.service_ids, tenant.id);
   if (attachments.length > 0) {
-    html += `<p style="color:#555;font-size:13px;margin-top:16px;">📎 Please find attached form(s) to review before your appointment.</p>`;
+    html += `
+    <div style="background:#fff8e1;border-radius:8px;padding:16px;margin:16px 0;border-left:4px solid #D4A853;">
+      <p style="margin:0;color:#555;font-weight:600;">Important: Forms Attached</p>
+      <p style="margin:8px 0 0;color:#555;">Please take a look at the attached form(s) and complete them prior to your appointment date.</p>
+    </div>`;
   }
 
   return sendEmail({
@@ -273,7 +277,11 @@ async function sendBookingApprovedNotification(booking, tenant) {
 
   const attachments = await getServiceFormAttachments(booking.service_ids, tenant.id);
   if (attachments.length > 0) {
-    html += `<p style="color:#555;font-size:13px;margin-top:16px;">📎 Please find attached form(s) to review before your appointment.</p>`;
+    html += `
+    <div style="background:#fff8e1;border-radius:8px;padding:16px;margin:16px 0;border-left:4px solid #D4A853;">
+      <p style="margin:0;color:#555;font-weight:600;">Important: Forms Attached</p>
+      <p style="margin:8px 0 0;color:#555;">Please take a look at the attached form(s) and complete them prior to your appointment date.</p>
+    </div>`;
   }
 
   return sendEmail({
