@@ -679,7 +679,7 @@ function SmsTab({ snackbar, setSnackbar }) {
 
           {!smsAvailable ? (
             <Alert severity="info">
-              SMS notifications are available on Growth and Pro plans. Upgrade your subscription to enable SMS reminders
+              SMS notifications are available on the Pro plan. Upgrade your subscription to enable SMS reminders
               and booking confirmations for your customers.
             </Alert>
           ) : (
