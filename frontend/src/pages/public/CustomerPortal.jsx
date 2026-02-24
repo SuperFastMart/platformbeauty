@@ -38,6 +38,9 @@ export default function CustomerPortal() {
   const [sendingMessage, setSendingMessage] = useState(false);
   const [loyalty, setLoyalty] = useState(null);
   const [redeemingCategory, setRedeemingCategory] = useState(null);
+  const [myMembership, setMyMembership] = useState(null);
+  const [myPackages, setMyPackages] = useState([]);
+  const [cancellingMembership, setCancellingMembership] = useState(false);
   const [error, setError] = useState('');
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
@@ -84,11 +87,13 @@ export default function CustomerPortal() {
 
   const fetchData = async () => {
     try {
-      const [meRes, reqRes, msgRes, loyaltyRes] = await Promise.all([
+      const [meRes, reqRes, msgRes, loyaltyRes, membershipRes, packagesRes] = await Promise.all([
         authApi('get', `/t/${slug}/auth/me`),
         authApi('get', `/t/${slug}/auth/booking-requests`),
         authApi('get', `/t/${slug}/auth/messages`),
         authApi('get', `/t/${slug}/loyalty/status`).catch(() => ({ data: { active: false } })),
+        authApi('get', `/t/${slug}/memberships/my-membership`).catch(() => ({ data: null })),
+        authApi('get', `/t/${slug}/packages/my-packages`).catch(() => ({ data: [] })),
       ]);
       setCustomer(meRes.data.customer);
       setUpcoming(meRes.data.upcoming);
@@ -96,6 +101,8 @@ export default function CustomerPortal() {
       setRequests(reqRes.data);
       setMessages(msgRes.data);
       setLoyalty(loyaltyRes.data);
+      setMyMembership(membershipRes.data);
+      setMyPackages(packagesRes.data || []);
       setEditName(meRes.data.customer.name);
       setEditPhone(meRes.data.customer.phone || '');
     } catch (err) {
@@ -249,6 +256,22 @@ export default function CustomerPortal() {
     }
   };
 
+  const handleCancelMembership = async () => {
+    if (!window.confirm('Are you sure you want to cancel your membership? It will remain active until the end of your current billing period.')) return;
+    setCancellingMembership(true);
+    try {
+      await authApi('post', `/t/${slug}/memberships/cancel`);
+      setSnackbar({ open: true, message: 'Membership will be cancelled at the end of your billing period', severity: 'success' });
+      fetchData();
+    } catch (err) {
+      setSnackbar({ open: true, message: err.response?.data?.error || 'Failed to cancel', severity: 'error' });
+    } finally {
+      setCancellingMembership(false);
+    }
+  };
+
+  const hasPlans = !!(myMembership || myPackages.length > 0);
+
   const handleDeleteAccount = async () => {
     setDeletingAccount(true);
     try {
@@ -310,11 +333,20 @@ export default function CustomerPortal() {
 
   return (
     <Container maxWidth="md" sx={{ py: 4 }}>
+      {/* Welcome blurb */}
+      <Box mb={3} p={2.5} bgcolor="rgba(139, 38, 53, 0.04)" borderRadius={3}>
+        <Typography variant="h5" fontWeight={700} mb={0.5}>Welcome back, {customer?.name}</Typography>
+        <Typography variant="body2" color="text.secondary">
+          This is your personal portal where you can manage all your bookings, view your history, send messages to
+          {tenant?.name ? ` ${tenant.name}` : ' your stylist'}, and manage your loyalty rewards, memberships, and packages.
+          Use the tabs below to navigate.
+        </Typography>
+      </Box>
+
       {/* Header */}
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Box>
-          <Typography variant="h5" fontWeight={700}>My Bookings</Typography>
-          <Typography color="text.secondary">Welcome back, {customer?.name}</Typography>
+          <Typography variant="h6" fontWeight={600}>My Bookings</Typography>
         </Box>
         <Box display="flex" gap={1}>
           <Button variant="outlined" size="small" onClick={() => navigate(`/t/${slug}/book`)}>
@@ -334,6 +366,7 @@ export default function CustomerPortal() {
         <Tab label="History" />
         <Tab label={`Requests (${requests.filter(r => r.status === 'pending').length})`} />
         <Tab label={`Messages${messages.length > 0 ? ` (${messages.filter(m => m.direction === 'outbound' && !m.read_at).length})` : ''}`} />
+        {hasPlans && <Tab label="My Plans" />}
         {loyalty?.active && <Tab label="Loyalty" />}
         <Tab label="Profile" />
       </Tabs>
@@ -458,9 +491,103 @@ export default function CustomerPortal() {
         </Box>
       </TabPanel>
 
+      {/* My Plans (Membership + Packages) */}
+      {hasPlans && (
+        <TabPanel value={tab} index={4}>
+          {myMembership && (
+            <Card sx={{ mb: 3, border: '2px solid', borderColor: '#D4A85330' }}>
+              <CardContent>
+                <Box display="flex" justifyContent="space-between" alignItems="start" mb={2}>
+                  <Box>
+                    <Typography fontWeight={700} variant="h6">{myMembership.plan_name}</Typography>
+                    <Chip label={myMembership.status === 'cancelling' ? 'Cancelling' : 'Active'}
+                      size="small" color={myMembership.status === 'cancelling' ? 'warning' : 'success'}
+                      sx={{ mt: 0.5 }} />
+                  </Box>
+                  <Typography variant="h5" fontWeight={700} color="#D4A853">
+                    £{parseFloat(myMembership.price_monthly).toFixed(2)}/mo
+                  </Typography>
+                </Box>
+                <Grid container spacing={2} mb={2}>
+                  {myMembership.included_sessions > 0 && (
+                    <Grid item xs={6}>
+                      <Box bgcolor="grey.50" p={1.5} borderRadius={2} textAlign="center">
+                        <Typography variant="h5" fontWeight={700}>
+                          {myMembership.included_sessions - (myMembership.sessions_used_this_period || 0)}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">Sessions Remaining</Typography>
+                      </Box>
+                    </Grid>
+                  )}
+                  {myMembership.discount_percent > 0 && (
+                    <Grid item xs={6}>
+                      <Box bgcolor="grey.50" p={1.5} borderRadius={2} textAlign="center">
+                        <Typography variant="h5" fontWeight={700}>{myMembership.discount_percent}%</Typography>
+                        <Typography variant="caption" color="text.secondary">Discount</Typography>
+                      </Box>
+                    </Grid>
+                  )}
+                </Grid>
+                {myMembership.current_period_end && (
+                  <Typography variant="body2" color="text.secondary" mb={1}>
+                    {myMembership.status === 'cancelling'
+                      ? `Access until: ${dayjs(myMembership.current_period_end).format('D MMM YYYY')}`
+                      : `Next billing: ${dayjs(myMembership.current_period_end).format('D MMM YYYY')}`}
+                  </Typography>
+                )}
+                {myMembership.status !== 'cancelling' && myMembership.status !== 'cancelled' && (
+                  <Button variant="outlined" color="error" size="small"
+                    onClick={handleCancelMembership} disabled={cancellingMembership}>
+                    {cancellingMembership ? 'Cancelling...' : 'Cancel Membership'}
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {myPackages.length > 0 && (
+            <>
+              <Typography fontWeight={600} mb={2}>Service Packages</Typography>
+              {myPackages.map(pkg => (
+                <Card key={pkg.id} sx={{ mb: 2, opacity: pkg.status === 'active' ? 1 : 0.6 }}>
+                  <CardContent>
+                    <Box display="flex" justifyContent="space-between" alignItems="start">
+                      <Box>
+                        <Typography fontWeight={600}>{pkg.name}</Typography>
+                        <Chip label={pkg.status} size="small"
+                          color={pkg.status === 'active' ? 'success' : 'default'}
+                          sx={{ mt: 0.5 }} />
+                      </Box>
+                      <Box textAlign="right">
+                        <Typography variant="h6" fontWeight={700} color="#D4A853">
+                          {pkg.sessions_remaining}/{pkg.total_sessions}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">sessions left</Typography>
+                      </Box>
+                    </Box>
+                    {pkg.services && (
+                      <Box display="flex" flexWrap="wrap" gap={0.5} mt={1}>
+                        {pkg.services.filter(Boolean).map(s => (
+                          <Chip key={s.id} label={s.name} size="small" variant="outlined" sx={{ fontSize: 11 }} />
+                        ))}
+                      </Box>
+                    )}
+                    {pkg.expires_at && (
+                      <Typography variant="caption" color="text.secondary" display="block" mt={1}>
+                        Expires: {dayjs(pkg.expires_at).format('D MMM YYYY')}
+                      </Typography>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </>
+          )}
+        </TabPanel>
+      )}
+
       {/* Loyalty */}
       {loyalty?.active && (
-        <TabPanel value={tab} index={4}>
+        <TabPanel value={tab} index={hasPlans ? 5 : 4}>
           <Card sx={{ mb: 3 }}>
             <CardContent>
               <Box display="flex" alignItems="center" gap={1} mb={2}>
@@ -552,7 +679,7 @@ export default function CustomerPortal() {
       )}
 
       {/* Profile */}
-      <TabPanel value={tab} index={loyalty?.active ? 5 : 4}>
+      <TabPanel value={tab} index={4 + (hasPlans ? 1 : 0) + (loyalty?.active ? 1 : 0)}>
         <Card sx={{ mb: 3 }}>
           <CardContent>
             <Typography fontWeight={600} mb={2}>Your Details</Typography>

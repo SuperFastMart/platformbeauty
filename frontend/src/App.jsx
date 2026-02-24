@@ -53,6 +53,9 @@ const CustomerLogin = lazy(() => import('./pages/public/CustomerLogin'));
 const VerifyMagicLink = lazy(() => import('./pages/public/VerifyMagicLink'));
 const CustomerPortal = lazy(() => import('./pages/public/CustomerPortal'));
 const BookingWidget = lazy(() => import('./pages/public/BookingWidget'));
+const TipPage = lazy(() => import('./pages/public/TipPage'));
+const GiftCardPurchase = lazy(() => import('./pages/public/GiftCardPurchase'));
+const MembershipSignup = lazy(() => import('./pages/public/MembershipSignup'));
 const LandingPage = lazy(() => import('./pages/public/LandingPage'));
 const EmailVerification = lazy(() => import('./pages/public/EmailVerification'));
 
@@ -120,6 +123,9 @@ export default function App() {
           <Route path="portal/login" element={<CustomerLogin />} />
           <Route path="portal/verify" element={<VerifyMagicLink />} />
           <Route path="portal" element={<CustomerPortal />} />
+          <Route path="tip/:token" element={<TipPage />} />
+          <Route path="gift-cards" element={<GiftCardPurchase />} />
+          <Route path="memberships" element={<MembershipSignup />} />
         </Route>
 
         {/* Embeddable widget (no layout wrapper) */}

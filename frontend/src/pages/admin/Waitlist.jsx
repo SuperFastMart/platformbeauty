@@ -67,7 +67,17 @@ export default function Waitlist() {
 
   return (
     <Box>
-      <Typography variant="h5" fontWeight={600} mb={3}>Waitlist</Typography>
+      <Typography variant="h5" fontWeight={600} mb={1}>Waitlist</Typography>
+
+      <Alert severity="info" sx={{ mb: 3 }} variant="outlined">
+        <Typography variant="body2" fontWeight={600} mb={0.5}>How the waitlist works for your clients</Typography>
+        <Typography variant="body2" color="text.secondary">
+          When a customer tries to book a date with no available slots, they'll see the option to join
+          the waitlist. They enter their name, email, and phone number, and you'll be notified immediately.
+          When a slot opens up, use the "Notify" button to send them an email letting them know a spot
+          is available. They can then rebook at their convenience through your booking page.
+        </Typography>
+      </Alert>
 
       {/* Filters */}
       <Box display="flex" gap={2} mb={3} flexWrap="wrap">

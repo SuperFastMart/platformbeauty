@@ -84,9 +84,8 @@ export default function BookingFlow() {
   const [intakeQuestions, setIntakeQuestions] = useState([]);
   const [intakeResponses, setIntakeResponses] = useState({});
 
-  // Add-ons
-  const [addonLinks, setAddonLinks] = useState([]); // { parent_service_id, addon_service_id }
-  const [addonServices, setAddonServices] = useState([]); // full add-on service objects
+  // Add-ons — enriched links include full addon service details
+  const [addonLinks, setAddonLinks] = useState([]); // { parent_service_id, addon_service_id, id, name, duration, price, ... }
 
   // Waitlist
   const [showWaitlistForm, setShowWaitlistForm] = useState(false);
@@ -95,15 +94,15 @@ export default function BookingFlow() {
   const [waitlistSuccess, setWaitlistSuccess] = useState(false);
   const [waitlistError, setWaitlistError] = useState('');
 
-  // Tip
-  const [tipOption, setTipOption] = useState('none');
-  const [customTip, setCustomTip] = useState('');
-
   // Gift card
   const [giftCardInput, setGiftCardInput] = useState('');
   const [giftCardResult, setGiftCardResult] = useState(null);
   const [giftCardError, setGiftCardError] = useState('');
   const [giftCardLoading, setGiftCardLoading] = useState(false);
+
+  // Customer packages (for logged-in customers)
+  const [customerPackages, setCustomerPackages] = useState([]);
+  const [selectedPackageId, setSelectedPackageId] = useState(null);
 
   // Booking source (from UTM params)
   const [bookingSource] = useState(() => {
@@ -135,10 +134,17 @@ export default function BookingFlow() {
       .catch(() => {});
     api.get(`/t/${slug}/addon-links`)
       .then(({ data }) => setAddonLinks(data))
-      .catch(() => {});
-    api.get(`/t/${slug}/addon-services`)
-      .then(({ data }) => setAddonServices(data))
-      .catch(() => {});
+      .catch(err => console.error('Failed to load add-on links:', err));
+  }, [slug]);
+
+  // Fetch customer's active packages if logged in
+  useEffect(() => {
+    const token = localStorage.getItem('customer_token');
+    if (token) {
+      api.get(`/t/${slug}/packages/my-packages`, { headers: { Authorization: `Bearer ${token}` } })
+        .then(({ data }) => setCustomerPackages((data || []).filter(p => p.status === 'active' && p.sessions_remaining > 0)))
+        .catch(() => {});
+    }
   }, [slug]);
 
   // Load slots when date changes
@@ -178,6 +184,14 @@ export default function BookingFlow() {
       .catch(() => setIntakeQuestions([]));
   }, [slug, selectedIds.join(',')]);
 
+  // Derive unique addon service objects from enriched addon links
+  const addonServicesMap = new Map();
+  addonLinks.forEach(l => {
+    if (l.id && !addonServicesMap.has(l.id)) {
+      addonServicesMap.set(l.id, { id: l.id, name: l.name, description: l.description, duration: l.duration, price: l.price, category: l.category });
+    }
+  });
+  const addonServices = Array.from(addonServicesMap.values());
   const allSelectableServices = [...allServices, ...addonServices];
   const selectedServices = allSelectableServices.filter(s => selectedIds.includes(s.id));
   const totalPrice = selectedServices.reduce((sum, s) => sum + parseFloat(s.price), 0);
@@ -185,13 +199,8 @@ export default function BookingFlow() {
   const discountAmount = discountResult?.discount_amount || 0;
   const finalPrice = Math.max(0, totalPrice - discountAmount);
 
-  // Tip calculation
-  const tipAmountCalc = tipOption === 'custom'
-    ? (parseFloat(customTip) || 0)
-    : tipOption === 'none' ? 0 : (finalPrice * parseInt(tipOption) / 100);
-  const tipRounded = Math.round(tipAmountCalc * 100) / 100;
   const giftCardApplied = giftCardResult ? Math.min(giftCardResult.remaining_balance, finalPrice) : 0;
-  const grandTotal = finalPrice - giftCardApplied + tipRounded;
+  const grandTotal = finalPrice - giftCardApplied;
 
   // Deposit calculation
   const totalDeposit = useMemo(() => {
@@ -412,8 +421,8 @@ export default function BookingFlow() {
         depositPaymentIntentId,
         intakeResponses: formattedResponses,
         bookingSource: bookingSource || undefined,
-        tipAmount: tipRounded > 0 ? tipRounded : undefined,
         giftCardCode: giftCardResult?.code || undefined,
+        customerPackageId: selectedPackageId || undefined,
       });
       setBookingResult(data);
       setActiveStep(STEP_SUCCESS);
@@ -667,7 +676,7 @@ export default function BookingFlow() {
                     {services.map((s, idx) => {
                       const isSelected = selectedIds.includes(s.id);
                       const serviceAddons = isSelected
-                        ? addonLinks.filter(l => l.parent_service_id === s.id).map(l => addonServices.find(a => a.id === l.addon_service_id)).filter(Boolean)
+                        ? addonLinks.filter(l => l.parent_service_id === s.id)
                         : [];
                       return (
                         <Box key={s.id}>
@@ -1306,48 +1315,53 @@ export default function BookingFlow() {
                   </Typography>
                 </Box>
               )}
-              <Box display="flex" justifyContent="space-between" pt={1} mt={1} borderTop={1} borderColor="divider">
-                <Typography fontWeight={600}>Subtotal</Typography>
-                <Typography fontWeight={600}>£{finalPrice.toFixed(2)} — {totalDuration} min</Typography>
-              </Box>
+              {/* Use Package */}
+              {customerPackages.length > 0 && (() => {
+                // Find packages that cover at least one selected service
+                const eligiblePackages = customerPackages.filter(pkg =>
+                  pkg.services?.some(ps => selectedIds.includes(ps.id))
+                );
+                if (eligiblePackages.length === 0) return null;
+                return (
+                  <Box mt={1.5} p={2} bgcolor="rgba(212, 168, 83, 0.08)" borderRadius={2} border="1px dashed" borderColor="#D4A853">
+                    <Typography variant="body2" fontWeight={600} color="#8a7020" mb={1}>
+                      Use a Service Package
+                    </Typography>
+                    {eligiblePackages.map(pkg => (
+                      <Box
+                        key={pkg.id}
+                        onClick={() => setSelectedPackageId(selectedPackageId === pkg.id ? null : pkg.id)}
+                        sx={{
+                          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                          p: 1, borderRadius: 1, cursor: 'pointer', mb: 0.5,
+                          bgcolor: selectedPackageId === pkg.id ? 'rgba(212, 168, 83, 0.15)' : 'transparent',
+                          '&:hover': { bgcolor: 'rgba(212, 168, 83, 0.1)' },
+                        }}
+                      >
+                        <Box display="flex" alignItems="center" gap={1}>
+                          <Checkbox size="small" checked={selectedPackageId === pkg.id}
+                            sx={{ p: 0, '&.Mui-checked': { color: '#D4A853' } }} />
+                          <Box>
+                            <Typography variant="body2" fontWeight={500}>{pkg.name}</Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {pkg.sessions_remaining} session{pkg.sessions_remaining !== 1 ? 's' : ''} remaining
+                            </Typography>
+                          </Box>
+                        </Box>
+                        <Chip label="FREE" size="small" sx={{ bgcolor: '#D4A853', color: '#1a1a1a', fontWeight: 700 }} />
+                      </Box>
+                    ))}
+                  </Box>
+                );
+              })()}
 
-              {/* Tip selection */}
-              <Box mt={2}>
-                <Typography variant="body2" color="text.secondary" mb={1}>
-                  Would you like to add a tip?
+              <Box display="flex" justifyContent="space-between" pt={1} mt={1} borderTop={1} borderColor="divider">
+                <Typography fontWeight={600}>
+                  {selectedPackageId ? 'Total (Package Applied)' : 'Subtotal'}
                 </Typography>
-                <ToggleButtonGroup
-                  value={tipOption} exclusive size="small"
-                  onChange={(_, v) => { if (v !== null) setTipOption(v); }}
-                  sx={{ flexWrap: 'wrap', gap: 0.5 }}
-                >
-                  <ToggleButton value="none">No Tip</ToggleButton>
-                  <ToggleButton value="10">10%</ToggleButton>
-                  <ToggleButton value="15">15%</ToggleButton>
-                  <ToggleButton value="20">20%</ToggleButton>
-                  <ToggleButton value="custom">Custom</ToggleButton>
-                </ToggleButtonGroup>
-                {tipOption === 'custom' && (
-                  <TextField
-                    size="small" type="number" placeholder="0.00"
-                    value={customTip} onChange={e => setCustomTip(e.target.value)}
-                    InputProps={{ startAdornment: <Typography sx={{ mr: 0.5 }}>£</Typography> }}
-                    sx={{ mt: 1, width: 120 }}
-                    inputProps={{ min: 0, step: 0.5 }}
-                  />
-                )}
-                {tipRounded > 0 && (
-                  <Box display="flex" justifyContent="space-between" mt={1}>
-                    <Typography variant="body2">Tip</Typography>
-                    <Typography variant="body2">£{tipRounded.toFixed(2)}</Typography>
-                  </Box>
-                )}
-                {tipRounded > 0 && (
-                  <Box display="flex" justifyContent="space-between" pt={0.5}>
-                    <Typography fontWeight={700}>Total with tip</Typography>
-                    <Typography fontWeight={700}>£{grandTotal.toFixed(2)}</Typography>
-                  </Box>
-                )}
+                <Typography fontWeight={600}>
+                  {selectedPackageId ? '£0.00' : `£${finalPrice.toFixed(2)}`} — {totalDuration} min
+                </Typography>
               </Box>
 
               {/* Gift card */}
@@ -1539,6 +1553,24 @@ export default function BookingFlow() {
             {submitting ? 'Submitting...' : 'Confirm Booking'}
           </Button>
         ) : null}
+      </Box>
+
+      <Box textAlign="center" mt={2} mb={2}>
+        <Button
+          variant="text" size="small" color="inherit"
+          onClick={() => {
+            if (selectedIds.length > 0 || selectedDate || selectedSlot) {
+              if (window.confirm('Are you sure you want to cancel? Your selections will be lost.')) {
+                navigate(`/t/${slug}`);
+              }
+            } else {
+              navigate(`/t/${slug}`);
+            }
+          }}
+          sx={{ color: 'text.secondary', textTransform: 'none', fontSize: '0.85rem' }}
+        >
+          Cancel Booking
+        </Button>
       </Box>
     </Container>
   );

@@ -8,6 +8,7 @@ const {
   sendBookingApprovedNotification, sendBookingRejectedNotification,
   sendRequestApprovedNotification, sendRequestRejectedNotification,
   sendBookingConfirmedSMS, sendBookingRejectedSMS,
+  sendCompletionFollowUpEmail,
 } = require('../utils/emailService');
 const { chargeNoShow, getCustomerPaymentMethods } = require('../utils/stripeService');
 const { awardStampForBooking } = require('./loyalty');
@@ -1989,6 +1990,18 @@ router.post('/bookings/:id/cash-payment', asyncHandler(async (req, res) => {
     }
   }
 
+  // Send completion follow-up email (review + tip)
+  if (booking.customer_email) {
+    const tenant = await getOne('SELECT * FROM tenants WHERE id = $1', [req.tenantId]);
+    const followUpToken = jwt.sign(
+      { bookingId: booking.id, tenantId: req.tenantId },
+      process.env.JWT_SECRET,
+      { expiresIn: '30d' }
+    );
+    sendCompletionFollowUpEmail(booking, tenant, followUpToken)
+      .catch(err => console.error('Follow-up email error:', err));
+  }
+
   res.json({ message: 'Cash payment recorded', booking_id: booking.id });
 }));
 
@@ -2082,6 +2095,17 @@ router.post('/bookings/:id/charge-complete', asyncHandler(async (req, res) => {
         awardStampForBooking(req.tenantId, booking.customer_id, booking.id, primaryServiceId, booking.discount_code_id)
           .catch(err => console.error('Loyalty stamp error:', err));
       }
+    }
+
+    // Send completion follow-up email (review + tip)
+    if (booking.customer_email) {
+      const followUpToken = jwt.sign(
+        { bookingId: booking.id, tenantId: req.tenantId },
+        process.env.JWT_SECRET,
+        { expiresIn: '30d' }
+      );
+      sendCompletionFollowUpEmail(booking, tenant, followUpToken)
+        .catch(err => console.error('Follow-up email error:', err));
     }
 
     res.json({ message: 'Card charged and service completed', payment_intent_id: paymentIntent.id });

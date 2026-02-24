@@ -47,14 +47,15 @@ router.get('/services', asyncHandler(async (req, res) => {
   res.json({ services, grouped });
 }));
 
-// GET /api/t/:tenant/addon-links - all add-on links for this tenant
+// GET /api/t/:tenant/addon-links - all add-on links with full addon service details
 router.get('/addon-links', asyncHandler(async (req, res) => {
   const links = await getAll(
-    `SELECT sal.parent_service_id, sal.addon_service_id, sal.display_order
+    `SELECT sal.parent_service_id, sal.addon_service_id, sal.display_order,
+       s.id, s.name, s.description, s.duration, s.price, s.category
      FROM service_addon_links sal
      JOIN services s ON s.id = sal.addon_service_id AND s.active = TRUE
      WHERE sal.tenant_id = $1
-     ORDER BY sal.display_order`,
+     ORDER BY sal.display_order, s.name`,
     [req.tenantId]
   );
   res.json(links);
@@ -70,6 +71,111 @@ router.get('/addon-services', asyncHandler(async (req, res) => {
     [req.tenantId]
   );
   res.json(addons);
+}));
+
+// GET /api/t/:tenant/tip/:token — validate tip token and return booking info
+router.get('/tip/:token', asyncHandler(async (req, res) => {
+  const jwt = require('jsonwebtoken');
+  try {
+    const decoded = jwt.verify(req.params.token, process.env.JWT_SECRET);
+    if (decoded.tenantId !== req.tenantId) {
+      return res.status(403).json({ error: 'Invalid token' });
+    }
+
+    const booking = await getOne(
+      `SELECT b.id, b.customer_name, b.service_names, b.date, b.total_price, b.tip_amount
+       FROM bookings b
+       WHERE b.id = $1 AND b.tenant_id = $2 AND b.status = 'completed'`,
+      [decoded.bookingId, req.tenantId]
+    );
+    if (!booking) return res.status(404).json({ error: 'Booking not found' });
+    if (parseFloat(booking.tip_amount) > 0) {
+      return res.json({ alreadyTipped: true, booking });
+    }
+
+    const tenant = await getOne('SELECT name, stripe_publishable_key FROM tenants WHERE id = $1', [req.tenantId]);
+    res.json({ booking, tenantName: tenant.name, stripePublishableKey: tenant.stripe_publishable_key });
+  } catch (err) {
+    return res.status(400).json({ error: 'Invalid or expired link' });
+  }
+}));
+
+// POST /api/t/:tenant/tip/:token — create a payment intent for the tip
+router.post('/tip/:token', asyncHandler(async (req, res) => {
+  const jwt = require('jsonwebtoken');
+  const { amount } = req.body;
+
+  if (!amount || parseFloat(amount) <= 0) {
+    return res.status(400).json({ error: 'Tip amount must be greater than zero' });
+  }
+
+  try {
+    const decoded = jwt.verify(req.params.token, process.env.JWT_SECRET);
+    if (decoded.tenantId !== req.tenantId) {
+      return res.status(403).json({ error: 'Invalid token' });
+    }
+
+    const booking = await getOne(
+      "SELECT * FROM bookings WHERE id = $1 AND tenant_id = $2 AND status = 'completed'",
+      [decoded.bookingId, req.tenantId]
+    );
+    if (!booking) return res.status(404).json({ error: 'Booking not found' });
+    if (parseFloat(booking.tip_amount) > 0) {
+      return res.status(400).json({ error: 'A tip has already been left for this booking' });
+    }
+
+    const tenant = await getOne('SELECT * FROM tenants WHERE id = $1', [req.tenantId]);
+    if (!tenant.stripe_secret_key) {
+      return res.status(400).json({ error: 'Online payments are not configured' });
+    }
+
+    const stripe = require('stripe')(tenant.stripe_secret_key);
+    const tipPence = Math.round(parseFloat(amount) * 100);
+
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: tipPence,
+      currency: 'gbp',
+      metadata: {
+        type: 'tip',
+        booking_id: booking.id.toString(),
+        tenant_id: req.tenantId.toString(),
+      },
+    });
+
+    res.json({ clientSecret: paymentIntent.client_secret });
+  } catch (err) {
+    if (err.name === 'JsonWebTokenError' || err.name === 'TokenExpiredError') {
+      return res.status(400).json({ error: 'Invalid or expired link' });
+    }
+    throw err;
+  }
+}));
+
+// POST /api/t/:tenant/tip/:token/confirm — confirm tip payment
+router.post('/tip/:token/confirm', asyncHandler(async (req, res) => {
+  const jwt = require('jsonwebtoken');
+
+  try {
+    const decoded = jwt.verify(req.params.token, process.env.JWT_SECRET);
+    if (decoded.tenantId !== req.tenantId) {
+      return res.status(403).json({ error: 'Invalid token' });
+    }
+
+    const { amount } = req.body;
+    const tipAmount = Math.round(parseFloat(amount) * 100) / 100;
+
+    await run(
+      'UPDATE bookings SET tip_amount = $1 WHERE id = $2 AND tenant_id = $3',
+      [tipAmount, decoded.bookingId, req.tenantId]
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    if (err.name === 'JsonWebTokenError' || err.name === 'TokenExpiredError') {
+      return res.status(400).json({ error: 'Invalid or expired link' });
+    }
+    throw err;
+  }
 }));
 
 // GET /api/t/:tenant/slots?date=YYYY-MM-DD - available slots for a date

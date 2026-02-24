@@ -4,7 +4,7 @@ import {
   Box, Typography, Card, CardContent, Button, Checkbox, Chip, Divider, Container,
   Rating, Grid, Accordion, AccordionSummary, AccordionDetails
 } from '@mui/material';
-import { AccessTime, Schedule, Star, Place, Gavel, ExpandMore, EventBusy, ReportProblem, Security, Article } from '@mui/icons-material';
+import { AccessTime, Schedule, Star, Place, Gavel, ExpandMore, EventBusy, ReportProblem, Security, Article, CardGiftcard, WorkspacePremium } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import api from '../../api/client';
 import { useTenant } from './TenantPublicLayout';
@@ -247,6 +247,40 @@ export default function TenantLanding() {
           <Divider sx={{ mt: 3 }} />
         </Box>
       )}
+
+      {/* Quick links — Gift Cards & Memberships */}
+      <Grid container spacing={2} mb={3}>
+        <Grid item xs={6}>
+          <Card
+            onClick={() => navigate(`/t/${slug}/gift-cards`)}
+            sx={{
+              cursor: 'pointer', textAlign: 'center', p: 2,
+              border: '1px solid', borderColor: 'divider',
+              transition: 'all 0.3s ease',
+              '&:hover': { borderColor: '#D4A853', boxShadow: '0 4px 16px rgba(212, 168, 83, 0.15)', transform: 'translateY(-2px)' },
+            }}
+          >
+            <CardGiftcard sx={{ fontSize: 32, color: '#D4A853', mb: 0.5 }} />
+            <Typography variant="body2" fontWeight={600}>Gift Cards</Typography>
+            <Typography variant="caption" color="text.secondary">Send to a friend</Typography>
+          </Card>
+        </Grid>
+        <Grid item xs={6}>
+          <Card
+            onClick={() => navigate(`/t/${slug}/memberships`)}
+            sx={{
+              cursor: 'pointer', textAlign: 'center', p: 2,
+              border: '1px solid', borderColor: 'divider',
+              transition: 'all 0.3s ease',
+              '&:hover': { borderColor: '#D4A853', boxShadow: '0 4px 16px rgba(212, 168, 83, 0.15)', transform: 'translateY(-2px)' },
+            }}
+          >
+            <WorkspacePremium sx={{ fontSize: 32, color: '#D4A853', mb: 0.5 }} />
+            <Typography variant="body2" fontWeight={600}>Memberships</Typography>
+            <Typography variant="caption" color="text.secondary">Join a plan</Typography>
+          </Card>
+        </Grid>
+      </Grid>
 
       {/* Services by category */}
       <Typography variant="h6" fontWeight={600} mb={2}>Our Services</Typography>

@@ -643,6 +643,58 @@ async function sendGiftCardEmail(recipientEmail, recipientName, code, amount, se
   });
 }
 
+// Follow-up email after booking completion — asks for review + tip
+async function sendCompletionFollowUpEmail(booking, tenant, followUpToken) {
+  const platformUrl = process.env.PLATFORM_URL || 'https://boukd.com';
+  const color = tenant.primary_color || '#8B2635';
+  const reviewUrl = `${platformUrl}/t/${tenant.slug}/portal/login`;
+  const tipUrl = `${platformUrl}/t/${tenant.slug}/tip/${followUpToken}`;
+
+  const html = `
+    <h2 style="margin:0 0 16px;color:${color};">Thanks for visiting ${tenant.name}!</h2>
+    <p style="color:#555;">Hi ${booking.customer_name},</p>
+    <p style="color:#555;">We hope you enjoyed your appointment. We'd love to hear about your experience.</p>
+
+    <div style="background:#f8f8f8;border-radius:8px;padding:20px;margin:20px 0;text-align:center;">
+      <p style="margin:0 0 8px;font-weight:600;color:#333;">How was your experience?</p>
+      <p style="margin:0;font-size:32px;letter-spacing:4px;">
+        <a href="${reviewUrl}" style="text-decoration:none;">&#11088;</a>
+        <a href="${reviewUrl}" style="text-decoration:none;">&#11088;</a>
+        <a href="${reviewUrl}" style="text-decoration:none;">&#11088;</a>
+        <a href="${reviewUrl}" style="text-decoration:none;">&#11088;</a>
+        <a href="${reviewUrl}" style="text-decoration:none;">&#11088;</a>
+      </p>
+    </div>
+
+    <div style="text-align:center;margin:24px 0;">
+      <a href="${reviewUrl}" style="display:inline-block;background:${color};color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;">
+        Leave a Review
+      </a>
+    </div>
+
+    <div style="background:#fffbf0;border-radius:8px;padding:20px;margin:20px 0;border-left:4px solid #D4A853;text-align:center;">
+      <p style="margin:0 0 8px;font-weight:600;color:#333;">Would you like to leave a tip?</p>
+      <p style="margin:0 0 16px;color:#777;font-size:13px;">Your support means the world to us</p>
+      <a href="${tipUrl}" style="display:inline-block;background:#D4A853;color:#1a1a1a;padding:10px 24px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;">
+        Leave a Tip
+      </a>
+    </div>
+
+    <p style="color:#999;font-size:12px;text-align:center;margin-top:24px;">
+      If you have any concerns about your visit, please don't hesitate to get in touch.
+    </p>`;
+
+  return sendEmail({
+    to: booking.customer_email,
+    toName: booking.customer_name,
+    subject: `How was your visit? - ${tenant.name}`,
+    html,
+    tenant,
+    emailType: 'completion_followup',
+    bookingId: booking.id,
+  });
+}
+
 module.exports = {
   sendEmail,
   sendPlatformEmail,
@@ -666,4 +718,5 @@ module.exports = {
   generateBookingICS,
   sendWaitlistNotification,
   sendWaitlistSMS,
+  sendCompletionFollowUpEmail,
 };
