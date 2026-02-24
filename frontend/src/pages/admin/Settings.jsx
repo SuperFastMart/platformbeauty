@@ -16,12 +16,33 @@ function SubscriptionTab({ snackbar, setSnackbar }) {
   const [subData, setSubData] = useState(null);
   const [subLoading, setSubLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  useEffect(() => {
+  const loadSubscription = () => {
     api.get('/admin/subscription')
       .then(r => setSubData(r.data))
       .catch(console.error)
       .finally(() => setSubLoading(false));
+  };
+
+  useEffect(() => {
+    const sessionId = searchParams.get('session_id');
+    const status = searchParams.get('status');
+
+    // If returning from Stripe checkout, verify the session then load data
+    if (sessionId && status === 'success') {
+      api.post('/admin/subscription/verify', { session_id: sessionId })
+        .then(() => setSnackbar({ open: true, message: 'Subscription activated!', severity: 'success' }))
+        .catch(() => {})
+        .finally(() => {
+          searchParams.delete('session_id');
+          searchParams.delete('status');
+          setSearchParams(searchParams, { replace: true });
+          loadSubscription();
+        });
+    } else {
+      loadSubscription();
+    }
   }, []);
 
   const handleCheckout = async (tier) => {

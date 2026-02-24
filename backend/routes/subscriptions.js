@@ -122,7 +122,7 @@ adminRouter.post('/checkout', asyncHandler(async (req, res) => {
     customer: stripeCustomerId,
     mode: 'subscription',
     line_items: [{ price: plan.stripe_price_id, quantity: 1 }],
-    success_url: `${frontendUrl}/admin/settings?tab=subscription&status=success`,
+    success_url: `${frontendUrl}/admin/settings?tab=subscription&status=success&session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${frontendUrl}/admin/settings?tab=subscription&status=cancelled`,
     metadata: { tenant_id: tenant.id.toString(), tier: plan.tier },
     subscription_data: {
@@ -131,6 +131,54 @@ adminRouter.post('/checkout', asyncHandler(async (req, res) => {
   });
 
   res.json({ url: session.url });
+}));
+
+// POST /api/admin/subscription/verify — verify checkout session and update DB (fallback for webhook)
+adminRouter.post('/verify', asyncHandler(async (req, res) => {
+  const { session_id } = req.body;
+  if (!session_id) return res.status(400).json({ error: 'session_id required' });
+
+  const stripe = getPlatformStripe();
+  if (!stripe) return res.status(500).json({ error: 'Stripe not configured' });
+
+  const session = await stripe.checkout.sessions.retrieve(session_id);
+  if (session.mode !== 'subscription' || session.payment_status !== 'paid') {
+    return res.status(400).json({ error: 'Session not completed' });
+  }
+
+  const tenantId = session.metadata?.tenant_id;
+  const tier = session.metadata?.tier;
+  if (!tenantId || String(tenantId) !== String(req.tenantId)) {
+    return res.status(403).json({ error: 'Session does not belong to this tenant' });
+  }
+
+  // Update tenant subscription (same logic as webhook)
+  await run(
+    `UPDATE tenants SET
+      subscription_tier = $1,
+      subscription_status = 'active',
+      stripe_subscription_id = $2,
+      platform_stripe_customer_id = $3
+     WHERE id = $4`,
+    [tier, session.subscription, session.customer, tenantId]
+  );
+
+  // Get period end from subscription
+  if (session.subscription) {
+    try {
+      const subscription = await stripe.subscriptions.retrieve(session.subscription);
+      if (subscription.items?.data?.[0]?.price?.id) {
+        await run(
+          'UPDATE tenants SET subscription_price_id = $1, subscription_current_period_end = to_timestamp($2) WHERE id = $3',
+          [subscription.items.data[0].price.id, subscription.current_period_end, tenantId]
+        );
+      }
+    } catch (err) {
+      console.error('[Verify] Failed to fetch subscription details:', err.message);
+    }
+  }
+
+  res.json({ success: true, tier });
 }));
 
 // POST /api/admin/subscription/portal — create Stripe Customer Portal session
