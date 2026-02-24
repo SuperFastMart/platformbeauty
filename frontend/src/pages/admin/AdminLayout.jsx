@@ -10,7 +10,7 @@ import {
   Schedule, Logout, People, AddCircle, Settings as SettingsIcon,
   Loyalty as LoyaltyIcon, LocalOffer, Assessment,
   Chat, StarBorder, Menu as MenuIcon, SupportAgent,
-  DarkMode, LightMode, Security, Close
+  DarkMode, LightMode, Security, Close, AccountBalance
 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
 import { useThemeMode } from '../../contexts/ThemeContext';
@@ -43,6 +43,7 @@ export default function AdminLayout() {
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [mobileOpen, setMobileOpen] = useState(false);
   const [showMfaBanner, setShowMfaBanner] = useState(false);
+  const [showTaxBanner, setShowTaxBanner] = useState(false);
   const [supportUnread, setSupportUnread] = useState(0);
 
   // Poll support unread count
@@ -83,6 +84,27 @@ export default function AdminLayout() {
       })
       .catch(() => {});
   }, []);
+
+  // Check DAC7 tax info completion (show after 14 days)
+  useEffect(() => {
+    if (sessionStorage.getItem('tax_banner_dismissed')) return;
+    api.get('/admin/tax-info')
+      .then(r => {
+        if (r.data.tax_info_completed_at) return;
+        // Only show if account is older than 14 days
+        const created = new Date(r.data.created_at);
+        const daysSinceCreation = (Date.now() - created.getTime()) / (1000 * 60 * 60 * 24);
+        if (daysSinceCreation >= 14) {
+          setShowTaxBanner(true);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const dismissTaxBanner = () => {
+    setShowTaxBanner(false);
+    sessionStorage.setItem('tax_banner_dismissed', '1');
+  };
 
   const dismissMfaBanner = () => {
     setShowMfaBanner(false);
@@ -268,6 +290,30 @@ export default function AdminLayout() {
           >
             <Typography variant="body2">
               <strong>Protect your account</strong> — Enable two-factor authentication for extra security.
+            </Typography>
+          </Alert>
+        )}
+        {showTaxBanner && !isImpersonating && (
+          <Alert
+            severity="warning"
+            icon={<AccountBalance fontSize="small" />}
+            action={
+              <Box display="flex" gap={1} alignItems="center">
+                <Button
+                  color="inherit" size="small"
+                  onClick={() => { navigate('/admin/settings?tab=tax'); dismissTaxBanner(); }}
+                >
+                  Complete now
+                </Button>
+                <IconButton size="small" color="inherit" onClick={dismissTaxBanner}>
+                  <Close fontSize="small" />
+                </IconButton>
+              </Box>
+            }
+            sx={{ mb: 2, borderRadius: 2 }}
+          >
+            <Typography variant="body2">
+              <strong>Tax information required</strong> — Under UK platform reporting rules, we need your identity and tax details to continue operating your account.
             </Typography>
           </Alert>
         )}

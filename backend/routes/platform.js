@@ -683,4 +683,59 @@ router.put('/notifications/read-all', platformAuth, asyncHandler(async (req, res
   res.json({ success: true });
 }));
 
+// ============================================
+// DAC7 COMPLIANCE EXPORT
+// ============================================
+
+// GET /api/platform/dac7-export?year=2025 — download annual seller report as CSV
+router.get('/dac7-export', platformAuth, asyncHandler(async (req, res) => {
+  const year = parseInt(req.query.year) || new Date().getFullYear() - 1;
+
+  const data = await getAll(
+    `SELECT
+       t.id, t.name, t.slug, t.owner_email, t.owner_name,
+       t.legal_name, t.legal_entity_type, t.tax_reference, t.date_of_birth,
+       t.address_line_1, t.address_line_2, t.city, t.postcode, t.country,
+       t.tax_info_completed_at, t.created_at,
+       COALESCE(SUM(p.amount), 0) as total_earnings,
+       COUNT(p.id)::int as transaction_count
+     FROM tenants t
+     LEFT JOIN payments p ON p.tenant_id = t.id
+       AND p.payment_status = 'completed'
+       AND EXTRACT(YEAR FROM p.paid_at) = $1
+     WHERE t.active = TRUE
+     GROUP BY t.id
+     HAVING COUNT(p.id) > 0
+     ORDER BY t.name`,
+    [year]
+  );
+
+  const header = 'Tenant ID,Business Name,Legal Name,Entity Type,Tax Reference,Date of Birth,Address Line 1,Address Line 2,City,Postcode,Country,Owner Email,Total Earnings (£),Transaction Count,Tax Info Completed';
+  const rows = data.map(t => {
+    const dob = t.date_of_birth ? new Date(t.date_of_birth).toISOString().split('T')[0] : '';
+    const completed = t.tax_info_completed_at ? 'Yes' : 'No';
+    const escape = (v) => `"${(v || '').replace(/"/g, '""')}"`;
+    return [
+      t.id, escape(t.name), escape(t.legal_name || ''), t.legal_entity_type || '',
+      t.tax_reference || '', dob, escape(t.address_line_1 || ''), escape(t.address_line_2 || ''),
+      escape(t.city || ''), t.postcode || '', escape(t.country || ''),
+      t.owner_email, parseFloat(t.total_earnings).toFixed(2), t.transaction_count, completed,
+    ].join(',');
+  });
+
+  const csv = [header, ...rows].join('\n');
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', `attachment; filename="dac7_report_${year}.csv"`);
+  res.send(csv);
+}));
+
+// GET /api/platform/dac7-stats — compliance overview
+router.get('/dac7-stats', platformAuth, asyncHandler(async (req, res) => {
+  const total = await getOne('SELECT COUNT(*)::int as count FROM tenants WHERE active = TRUE');
+  const completed = await getOne('SELECT COUNT(*)::int as count FROM tenants WHERE active = TRUE AND tax_info_completed_at IS NOT NULL');
+  const incomplete = total.count - completed.count;
+
+  res.json({ total: total.count, completed: completed.count, incomplete });
+}));
+
 module.exports = router;

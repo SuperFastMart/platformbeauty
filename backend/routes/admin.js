@@ -288,6 +288,51 @@ router.post('/mfa/dismiss', asyncHandler(async (req, res) => {
 }));
 
 // ============================================
+// TAX & COMPLIANCE (DAC7)
+// ============================================
+
+// GET /api/admin/tax-info — retrieve tenant tax/identity fields
+router.get('/tax-info', asyncHandler(async (req, res) => {
+  const tenant = await getOne(
+    `SELECT legal_name, legal_entity_type, tax_reference, date_of_birth,
+            address_line_1, address_line_2, city, postcode, country,
+            tax_info_completed_at, created_at
+     FROM tenants WHERE id = $1`,
+    [req.tenantId]
+  );
+  res.json(tenant || {});
+}));
+
+// PUT /api/admin/tax-info — save tenant tax/identity fields
+router.put('/tax-info', asyncHandler(async (req, res) => {
+  const { legal_name, legal_entity_type, tax_reference, date_of_birth,
+          address_line_1, address_line_2, city, postcode, country } = req.body;
+
+  // Validate required fields
+  if (!legal_name || !address_line_1 || !city || !postcode) {
+    return res.status(400).json({ error: 'Legal name, address, city and postcode are required' });
+  }
+  if (legal_entity_type === 'individual' && !date_of_birth) {
+    return res.status(400).json({ error: 'Date of birth is required for individual sellers' });
+  }
+
+  await run(
+    `UPDATE tenants SET
+      legal_name = $1, legal_entity_type = $2, tax_reference = $3,
+      date_of_birth = $4, address_line_1 = $5, address_line_2 = $6,
+      city = $7, postcode = $8, country = $9,
+      tax_info_completed_at = COALESCE(tax_info_completed_at, NOW()),
+      updated_at = NOW()
+     WHERE id = $10`,
+    [legal_name, legal_entity_type || 'individual', tax_reference || null,
+     date_of_birth || null, address_line_1, address_line_2 || null,
+     city, postcode, country || 'United Kingdom', req.tenantId]
+  );
+
+  res.json({ success: true });
+}));
+
+// ============================================
 // SERVICES
 // ============================================
 

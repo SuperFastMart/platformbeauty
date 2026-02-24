@@ -3,7 +3,7 @@ import {
   Box, Typography, Card, CardContent, Grid, Button, TextField, Chip,
   CircularProgress, Alert, Snackbar, Switch, FormControlLabel, Divider
 } from '@mui/material';
-import { AttachMoney, Sync, Business } from '@mui/icons-material';
+import { AttachMoney, Sync, Business, Download, AccountBalance } from '@mui/icons-material';
 import api from '../../api/client';
 
 export default function PlatformSubscriptions() {
@@ -13,14 +13,19 @@ export default function PlatformSubscriptions() {
   const [syncing, setSyncing] = useState(false);
   const [saving, setSaving] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const [dac7Stats, setDac7Stats] = useState(null);
+  const [dac7Year, setDac7Year] = useState(new Date().getFullYear() - 1);
+  const [dac7Exporting, setDac7Exporting] = useState(false);
 
   const fetchData = () => {
     Promise.all([
       api.get('/platform/subscriptions/plans').then(r => r.data),
       api.get('/platform/subscriptions/overview').then(r => r.data).catch(() => null),
-    ]).then(([plansData, overviewData]) => {
+      api.get('/platform/dac7-stats').then(r => r.data).catch(() => null),
+    ]).then(([plansData, overviewData, dac7Data]) => {
       setPlans(plansData);
       setOverview(overviewData);
+      setDac7Stats(dac7Data);
     }).catch(console.error)
       .finally(() => setLoading(false));
   };
@@ -243,6 +248,82 @@ export default function PlatformSubscriptions() {
           );
         })}
       </Grid>
+
+      {/* DAC7 Compliance */}
+      <Divider sx={{ my: 4 }} />
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+        <Box display="flex" alignItems="center" gap={1}>
+          <AccountBalance />
+          <Typography variant="h6" fontWeight={600}>DAC7 Compliance</Typography>
+        </Box>
+      </Box>
+
+      {dac7Stats && (
+        <Grid container spacing={2} mb={3}>
+          <Grid item xs={6} sm={4}>
+            <Card>
+              <CardContent sx={{ textAlign: 'center', py: 2 }}>
+                <Typography variant="h4" fontWeight={800} color="success.main">{dac7Stats.completed}</Typography>
+                <Typography variant="caption" color="text.secondary">Tax Info Completed</Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={6} sm={4}>
+            <Card>
+              <CardContent sx={{ textAlign: 'center', py: 2 }}>
+                <Typography variant="h4" fontWeight={800} color={dac7Stats.incomplete > 0 ? 'warning.main' : 'text.secondary'}>{dac7Stats.incomplete}</Typography>
+                <Typography variant="caption" color="text.secondary">Incomplete</Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} sm={4}>
+            <Card>
+              <CardContent sx={{ py: 2 }}>
+                <Typography variant="subtitle2" fontWeight={600} mb={1}>Annual HMRC Export</Typography>
+                <Box display="flex" gap={1} alignItems="center">
+                  <TextField
+                    size="small" type="number" label="Year"
+                    value={dac7Year}
+                    onChange={e => setDac7Year(parseInt(e.target.value) || new Date().getFullYear() - 1)}
+                    sx={{ width: 100 }}
+                    inputProps={{ min: 2024 }}
+                  />
+                  <Button
+                    variant="contained" size="small" startIcon={<Download />}
+                    disabled={dac7Exporting}
+                    onClick={async () => {
+                      setDac7Exporting(true);
+                      try {
+                        const res = await api.get(`/platform/dac7-export?year=${dac7Year}`, { responseType: 'blob' });
+                        const url = window.URL.createObjectURL(new Blob([res.data]));
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.setAttribute('download', `dac7_report_${dac7Year}.csv`);
+                        document.body.appendChild(link);
+                        link.click();
+                        link.remove();
+                        window.URL.revokeObjectURL(url);
+                      } catch {
+                        setSnackbar({ open: true, message: 'Export failed', severity: 'error' });
+                      } finally {
+                        setDac7Exporting(false);
+                      }
+                    }}
+                  >
+                    {dac7Exporting ? 'Exporting...' : 'Download CSV'}
+                  </Button>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+      )}
+
+      <Alert severity="info">
+        DAC7 requires annual reporting to HMRC by 31 January for the previous calendar year.
+        The export includes all tenants with completed payments and their tax information.
+        Tenants with incomplete tax info are prompted to complete it after 14 days.
+      </Alert>
 
       <Snackbar open={snackbar.open} autoHideDuration={3000} onClose={() => setSnackbar(s => ({ ...s, open: false }))}>
         <Alert severity={snackbar.severity} variant="filled">{snackbar.message}</Alert>

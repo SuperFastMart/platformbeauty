@@ -5,7 +5,7 @@ import {
   Snackbar, Alert, CircularProgress, InputAdornment, Chip, Switch, FormControlLabel, Grid, MenuItem,
   useMediaQuery, useTheme, LinearProgress
 } from '@mui/material';
-import { Save, CreditCard, Store, Palette, Info, Schedule, Code, ContentCopy, Share, Delete, Add, DragIndicator, Gavel, Subscriptions, OpenInNew, CheckCircle, Security, Lock, LockOpen } from '@mui/icons-material';
+import { Save, CreditCard, Store, Palette, Info, Schedule, Code, ContentCopy, Share, Delete, Add, DragIndicator, Gavel, Subscriptions, OpenInNew, CheckCircle, Security, Lock, LockOpen, AccountBalance } from '@mui/icons-material';
 import api from '../../api/client';
 
 function TabPanel({ children, value, index }) {
@@ -495,12 +495,139 @@ function SecurityTab({ snackbar, setSnackbar }) {
   );
 }
 
+function TaxComplianceTab({ snackbar, setSnackbar }) {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [taxInfo, setTaxInfo] = useState({
+    legal_name: '', legal_entity_type: 'individual', tax_reference: '',
+    date_of_birth: '', address_line_1: '', address_line_2: '',
+    city: '', postcode: '', country: 'United Kingdom',
+    tax_info_completed_at: null,
+  });
+
+  useEffect(() => {
+    api.get('/admin/tax-info')
+      .then(r => setTaxInfo(prev => ({
+        ...prev, ...r.data,
+        date_of_birth: r.data.date_of_birth ? r.data.date_of_birth.split('T')[0] : '',
+      })))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await api.put('/admin/tax-info', taxInfo);
+      setTaxInfo(prev => ({ ...prev, tax_info_completed_at: prev.tax_info_completed_at || new Date().toISOString() }));
+      setSnackbar({ open: true, message: 'Tax information saved', severity: 'success' });
+    } catch (err) {
+      setSnackbar({ open: true, message: err.response?.data?.error || 'Failed to save', severity: 'error' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleChange = (field) => (e) => setTaxInfo(prev => ({ ...prev, [field]: e.target.value }));
+
+  if (loading) return <Box display="flex" justifyContent="center" py={4}><CircularProgress size={32} /></Box>;
+
+  return (
+    <Box>
+      <Alert severity="info" sx={{ mb: 3 }}>
+        <Typography variant="body2" fontWeight={600} mb={0.5}>Why do we need this?</Typography>
+        <Typography variant="body2">
+          Under UK Digital Platform Reporting rules (DAC7), Boukd is required to collect and report
+          seller identity and earnings information to HMRC annually. This is a legal requirement for
+          all digital platforms that facilitate services — your data is stored securely and used solely
+          for regulatory compliance.
+        </Typography>
+      </Alert>
+
+      <Card>
+        <CardContent>
+          <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+            <Typography variant="subtitle1" fontWeight={600}>Tax &amp; Identity Information</Typography>
+            {taxInfo.tax_info_completed_at && (
+              <Chip label="Completed" size="small" color="success" icon={<CheckCircle />} />
+            )}
+          </Box>
+
+          <Box display="flex" gap={2} mb={2}>
+            <Button
+              variant={taxInfo.legal_entity_type === 'individual' ? 'contained' : 'outlined'}
+              onClick={() => setTaxInfo(prev => ({ ...prev, legal_entity_type: 'individual' }))}
+              size="small"
+            >
+              Individual / Sole Trader
+            </Button>
+            <Button
+              variant={taxInfo.legal_entity_type === 'business' ? 'contained' : 'outlined'}
+              onClick={() => setTaxInfo(prev => ({ ...prev, legal_entity_type: 'business' }))}
+              size="small"
+            >
+              Registered Business
+            </Button>
+          </Box>
+
+          <TextField fullWidth label={taxInfo.legal_entity_type === 'business' ? 'Registered Company Name' : 'Full Legal Name'} margin="normal" required
+            value={taxInfo.legal_name} onChange={handleChange('legal_name')} />
+
+          <TextField fullWidth
+            label={taxInfo.legal_entity_type === 'business' ? 'Company Registration Number' : 'Unique Taxpayer Reference (UTR)'}
+            margin="normal"
+            value={taxInfo.tax_reference} onChange={handleChange('tax_reference')}
+            helperText={taxInfo.legal_entity_type === 'business'
+              ? 'Your Companies House registration number'
+              : 'Your 10-digit UTR from HMRC (optional but recommended)'}
+          />
+
+          {taxInfo.legal_entity_type === 'individual' && (
+            <TextField fullWidth type="date" label="Date of Birth" margin="normal" required
+              value={taxInfo.date_of_birth} onChange={handleChange('date_of_birth')}
+              InputLabelProps={{ shrink: true }}
+              helperText="Required for individual sellers under DAC7" />
+          )}
+
+          <Typography variant="subtitle2" fontWeight={600} mt={3} mb={1}>Registered Address</Typography>
+
+          <TextField fullWidth label="Address Line 1" margin="normal" required
+            value={taxInfo.address_line_1} onChange={handleChange('address_line_1')} />
+          <TextField fullWidth label="Address Line 2" margin="normal"
+            value={taxInfo.address_line_2} onChange={handleChange('address_line_2')} />
+          <Grid container spacing={2}>
+            <Grid item xs={12} sm={6}>
+              <TextField fullWidth label="City / Town" margin="normal" required
+                value={taxInfo.city} onChange={handleChange('city')} />
+            </Grid>
+            <Grid item xs={12} sm={3}>
+              <TextField fullWidth label="Postcode" margin="normal" required
+                value={taxInfo.postcode} onChange={handleChange('postcode')} />
+            </Grid>
+            <Grid item xs={12} sm={3}>
+              <TextField fullWidth label="Country" margin="normal"
+                value={taxInfo.country} onChange={handleChange('country')} />
+            </Grid>
+          </Grid>
+
+          <Box mt={3}>
+            <Button variant="contained" onClick={handleSave} disabled={saving}>
+              {saving ? 'Saving...' : 'Save Tax Information'}
+            </Button>
+          </Box>
+        </CardContent>
+      </Card>
+    </Box>
+  );
+}
+
 export default function Settings() {
   const [searchParams] = useSearchParams();
   const initialTab = useMemo(() => {
     const tabParam = searchParams.get('tab');
     if (tabParam === 'subscription') return 8;
     if (tabParam === 'security') return 9;
+    if (tabParam === 'tax') return 10;
     return 0;
   }, []);
   const [tab, setTab] = useState(initialTab);
@@ -616,6 +743,7 @@ export default function Settings() {
         <Tab icon={<Code />} label="Widget" iconPosition="start" />
         <Tab icon={<Subscriptions />} label="Subscription" iconPosition="start" />
         <Tab icon={<Security />} label="Security" iconPosition="start" />
+        <Tab icon={<AccountBalance />} label="Tax & Compliance" iconPosition="start" />
       </Tabs>
 
       {/* Business Info */}
@@ -1181,6 +1309,11 @@ window.addEventListener('message', function(e) {
       {/* Security */}
       <TabPanel value={tab} index={9}>
         <SecurityTab snackbar={snackbar} setSnackbar={setSnackbar} />
+      </TabPanel>
+
+      {/* Tax & Compliance */}
+      <TabPanel value={tab} index={10}>
+        <TaxComplianceTab snackbar={snackbar} setSnackbar={setSnackbar} />
       </TabPanel>
 
       <Snackbar open={snackbar.open} autoHideDuration={3000} onClose={() => setSnackbar(s => ({ ...s, open: false }))}>

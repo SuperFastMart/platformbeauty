@@ -203,4 +203,52 @@ router.get('/transactions', asyncHandler(async (req, res) => {
   });
 }));
 
+// GET /api/admin/reports/export — download transactions as CSV
+router.get('/export', asyncHandler(async (req, res) => {
+  const { from, to } = req.query;
+
+  let where = 'p.tenant_id = $1 AND p.payment_status = \'completed\'';
+  const params = [req.tenantId];
+  let paramIndex = 2;
+
+  if (from) {
+    where += ` AND p.paid_at >= $${paramIndex++}`;
+    params.push(from);
+  }
+  if (to) {
+    where += ` AND p.paid_at <= $${paramIndex++}`;
+    params.push(to + ' 23:59:59');
+  }
+
+  const transactions = await getAll(
+    `SELECT p.amount, p.payment_method, p.paid_at, p.created_at,
+            b.customer_name, b.customer_email, b.service_names, b.date as booking_date
+     FROM payments p
+     LEFT JOIN bookings b ON b.id = p.booking_id
+     WHERE ${where}
+     ORDER BY p.paid_at DESC`,
+    params
+  );
+
+  // Build CSV
+  const header = 'Date,Customer,Email,Service,Booking Date,Payment Method,Amount (£)';
+  const rows = transactions.map(t => {
+    const date = t.paid_at ? new Date(t.paid_at).toISOString().split('T')[0] : '';
+    const bookingDate = t.booking_date ? new Date(t.booking_date).toISOString().split('T')[0] : '';
+    const customer = (t.customer_name || '').replace(/"/g, '""');
+    const email = (t.customer_email || '').replace(/"/g, '""');
+    const service = (t.service_names || '').replace(/"/g, '""');
+    const method = t.payment_method || '';
+    const amount = parseFloat(t.amount).toFixed(2);
+    return `${date},"${customer}","${email}","${service}",${bookingDate},${method},${amount}`;
+  });
+
+  const csv = [header, ...rows].join('\n');
+  const filename = `transactions_${from || 'all'}_to_${to || 'now'}.csv`;
+
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.send(csv);
+}));
+
 module.exports = router;

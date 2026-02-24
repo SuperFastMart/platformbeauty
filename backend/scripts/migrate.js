@@ -721,6 +721,24 @@ const migrations = [
     `
   },
 
+  // 045 — DAC7 compliance: tax/identity info on tenants
+  {
+    name: '045_add_tenant_tax_info',
+    sql: `
+      ALTER TABLE tenants
+        ADD COLUMN IF NOT EXISTS legal_name VARCHAR(255),
+        ADD COLUMN IF NOT EXISTS legal_entity_type VARCHAR(20) DEFAULT 'individual',
+        ADD COLUMN IF NOT EXISTS tax_reference VARCHAR(50),
+        ADD COLUMN IF NOT EXISTS date_of_birth DATE,
+        ADD COLUMN IF NOT EXISTS address_line_1 VARCHAR(255),
+        ADD COLUMN IF NOT EXISTS address_line_2 VARCHAR(255),
+        ADD COLUMN IF NOT EXISTS city VARCHAR(100),
+        ADD COLUMN IF NOT EXISTS postcode VARCHAR(20),
+        ADD COLUMN IF NOT EXISTS country VARCHAR(100) DEFAULT 'United Kingdom',
+        ADD COLUMN IF NOT EXISTS tax_info_completed_at TIMESTAMP;
+    `
+  },
+
   // ============================================
   // MIGRATION TRACKING
   // ============================================

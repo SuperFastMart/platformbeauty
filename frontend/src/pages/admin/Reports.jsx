@@ -4,6 +4,7 @@ import {
   Table, TableHead, TableRow, TableCell, TableBody, Chip, Divider,
   TableContainer, useMediaQuery, useTheme
 } from '@mui/material';
+import { Download } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import api from '../../api/client';
 
@@ -18,6 +19,26 @@ export default function Reports() {
   const [bookingStats, setBookingStats] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const res = await api.get(`/admin/reports/export?from=${from}&to=${to}`, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `transactions_${from}_to_${to}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      console.error('Export failed');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const fetchData = () => {
     setLoading(true);
@@ -70,6 +91,12 @@ export default function Reports() {
           setTo(dayjs().format('YYYY-MM-DD'));
         }}>
           Last 7 Days
+        </Button>
+        <Button
+          variant="outlined" startIcon={<Download />}
+          onClick={handleExport} disabled={exporting || loading}
+        >
+          {exporting ? 'Exporting...' : 'Download CSV'}
         </Button>
       </Box>
 
