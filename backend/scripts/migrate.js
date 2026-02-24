@@ -799,6 +799,24 @@ const migrations = [
     `
   },
 
+  {
+    name: '050_trial_pro_defaults',
+    sql: `
+      -- New tenants should start on Pro trial
+      ALTER TABLE tenants ALTER COLUMN subscription_tier SET DEFAULT 'pro';
+
+      -- Existing 'basic' tenants still on active trial → give them pro
+      UPDATE tenants SET subscription_tier = 'pro'
+      WHERE subscription_tier = 'basic' AND subscription_status = 'trial'
+        AND (trial_ends_at IS NULL OR trial_ends_at >= NOW());
+
+      -- Expired 'basic' trial tenants → downgrade to free
+      UPDATE tenants SET subscription_tier = 'free', subscription_status = 'trial_expired'
+      WHERE subscription_tier = 'basic'
+        AND (subscription_status != 'trial' OR (trial_ends_at IS NOT NULL AND trial_ends_at < NOW()));
+    `
+  },
+
   // ============================================
   // MIGRATION TRACKING
   // ============================================

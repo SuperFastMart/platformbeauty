@@ -7,8 +7,11 @@ import {
 import { Visibility, VisibilityOff, Delete } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import api from '../../api/client';
+import useSubscriptionTier from '../../hooks/useSubscriptionTier';
+import FeatureGate from '../../components/FeatureGate';
 
 export default function ReviewsManagement() {
+  const { hasAccess } = useSubscriptionTier();
   const [reviews, setReviews] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -50,6 +53,7 @@ export default function ReviewsManagement() {
   };
 
   if (loading) return <Typography>Loading...</Typography>;
+  if (!hasAccess('pro')) return <FeatureGate requiredTier="pro" featureName="Review Collection" />;
 
   return (
     <Box>

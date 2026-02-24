@@ -7,6 +7,8 @@ import {
 import { Delete, NotificationsActive, HourglassEmpty, Email, Phone, CalendarMonth } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import api from '../../api/client';
+import useSubscriptionTier from '../../hooks/useSubscriptionTier';
+import FeatureGate from '../../components/FeatureGate';
 
 const statusConfig = {
   waiting: { label: 'Waiting', color: 'warning' },
@@ -17,6 +19,7 @@ const statusConfig = {
 };
 
 export default function Waitlist() {
+  const { hasAccess } = useSubscriptionTier();
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -59,6 +62,8 @@ export default function Waitlist() {
       setError(err.response?.data?.error || 'Failed to remove');
     }
   };
+
+  if (!hasAccess('pro')) return <FeatureGate requiredTier="pro" featureName="Waitlist Management" />;
 
   return (
     <Box>

@@ -46,11 +46,17 @@ adminRouter.get('/', asyncHandler(async (req, res) => {
     'SELECT id, name, tier, price_monthly, features, max_services, max_bookings_per_month, sms_enabled, display_order FROM subscription_plans WHERE is_active = TRUE ORDER BY display_order'
   );
 
-  // Get current plan details
-  const currentPlan = plans.find(p => p.tier === (tenant.subscription_tier || 'free')) || plans[0];
-
-  // Check if trial has expired
+  // Check if trial has expired — if so, persist the downgrade immediately
   const trialExpired = tenant.subscription_status === 'trial' && tenant.trial_ends_at && new Date(tenant.trial_ends_at) < new Date();
+  if (trialExpired) {
+    await run(
+      `UPDATE tenants SET subscription_tier = 'free', subscription_status = 'trial_expired'
+       WHERE id = $1 AND subscription_status = 'trial'`,
+      [req.tenantId]
+    );
+    tenant.subscription_tier = 'free';
+    tenant.subscription_status = 'trial_expired';
+  }
 
   // Usage counts
   const serviceCount = await getOne(
@@ -63,9 +69,12 @@ adminRouter.get('/', asyncHandler(async (req, res) => {
     [req.tenantId]
   );
 
+  // Refresh currentPlan after potential downgrade
+  const currentPlan = plans.find(p => p.tier === (tenant.subscription_tier || 'free')) || plans[0];
+
   res.json({
     current_tier: tenant.subscription_tier || 'free',
-    status: trialExpired ? 'trial_expired' : tenant.subscription_status,
+    status: tenant.subscription_status,
     trial_ends_at: tenant.trial_ends_at,
     current_period_end: tenant.subscription_current_period_end,
     stripe_subscription_id: tenant.stripe_subscription_id,
@@ -77,6 +86,31 @@ adminRouter.get('/', asyncHandler(async (req, res) => {
       bookings_this_month: bookingCount?.count || 0,
       max_bookings_per_month: currentPlan?.max_bookings_per_month || null,
     },
+  });
+}));
+
+// GET /api/admin/subscription/tier — lightweight tier check for feature gating
+adminRouter.get('/tier', asyncHandler(async (req, res) => {
+  const tenant = await getOne(
+    'SELECT subscription_tier, subscription_status, trial_ends_at FROM tenants WHERE id = $1',
+    [req.tenantId]
+  );
+
+  // Lazy enforcement: downgrade expired trials
+  if (tenant.subscription_status === 'trial' && tenant.trial_ends_at && new Date(tenant.trial_ends_at) < new Date()) {
+    await run(
+      `UPDATE tenants SET subscription_tier = 'free', subscription_status = 'trial_expired'
+       WHERE id = $1 AND subscription_status = 'trial'`,
+      [req.tenantId]
+    );
+    tenant.subscription_tier = 'free';
+    tenant.subscription_status = 'trial_expired';
+  }
+
+  res.json({
+    tier: tenant.subscription_tier || 'free',
+    status: tenant.subscription_status,
+    trial_ends_at: tenant.trial_ends_at,
   });
 }));
 

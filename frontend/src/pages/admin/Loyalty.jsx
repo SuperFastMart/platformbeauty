@@ -6,8 +6,11 @@ import {
   useMediaQuery, useTheme
 } from '@mui/material';
 import api from '../../api/client';
+import useSubscriptionTier from '../../hooks/useSubscriptionTier';
+import FeatureGate from '../../components/FeatureGate';
 
 export default function Loyalty() {
+  const { hasAccess } = useSubscriptionTier();
   const [config, setConfig] = useState(null);
   const [stats, setStats] = useState(null);
   const [customers, setCustomers] = useState([]);
@@ -69,6 +72,7 @@ export default function Loyalty() {
   };
 
   if (loading || !config) return <Typography>Loading...</Typography>;
+  if (!hasAccess('pro')) return <FeatureGate requiredTier="pro" featureName="Loyalty Programme" />;
 
   return (
     <Box>

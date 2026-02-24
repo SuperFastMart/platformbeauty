@@ -122,6 +122,8 @@ async function start() {
     // Init scheduled jobs
     const { initReminderJob } = require('./jobs/reminderJob');
     initReminderJob();
+    const { initTrialExpiryJob } = require('./jobs/trialExpiryJob');
+    initTrialExpiryJob();
 
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);

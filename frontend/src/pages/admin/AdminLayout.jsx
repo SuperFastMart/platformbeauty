@@ -46,6 +46,7 @@ export default function AdminLayout() {
   const [showMfaBanner, setShowMfaBanner] = useState(false);
   const [showTaxBanner, setShowTaxBanner] = useState(false);
   const [supportUnread, setSupportUnread] = useState(0);
+  const [trialBanner, setTrialBanner] = useState(null);
 
   // Poll support unread count
   useEffect(() => {
@@ -85,6 +86,21 @@ export default function AdminLayout() {
       })
       .catch(() => {});
   }, []);
+
+  // Check subscription trial status
+  useEffect(() => {
+    api.get('/admin/subscription/tier')
+      .then(({ data }) => {
+        if (data.status === 'trial' || data.status === 'trial_expired') {
+          setTrialBanner(data);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const trialDaysLeft = trialBanner?.trial_ends_at
+    ? Math.max(0, Math.ceil((new Date(trialBanner.trial_ends_at) - new Date()) / (1000 * 60 * 60 * 24)))
+    : 0;
 
   // Check DAC7 tax info completion (show after 14 days)
   useEffect(() => {
@@ -315,6 +331,42 @@ export default function AdminLayout() {
           >
             <Typography variant="body2">
               <strong>Tax information required</strong> — Under UK platform reporting rules, we need your identity and tax details to continue operating your account.
+            </Typography>
+          </Alert>
+        )}
+        {trialBanner?.status === 'trial' && !isImpersonating && (
+          <Alert
+            severity="info"
+            action={
+              <Button
+                color="inherit" size="small"
+                onClick={() => navigate('/admin/settings?tab=subscription')}
+              >
+                Subscribe now
+              </Button>
+            }
+            sx={{ mb: 2, borderRadius: 2 }}
+          >
+            <Typography variant="body2">
+              <strong>Pro Trial</strong> — {trialDaysLeft} day{trialDaysLeft !== 1 ? 's' : ''} remaining. Subscribe to keep all features.
+            </Typography>
+          </Alert>
+        )}
+        {trialBanner?.status === 'trial_expired' && !isImpersonating && (
+          <Alert
+            severity="warning"
+            action={
+              <Button
+                color="inherit" size="small"
+                onClick={() => navigate('/admin/settings?tab=subscription')}
+              >
+                Upgrade now
+              </Button>
+            }
+            sx={{ mb: 2, borderRadius: 2 }}
+          >
+            <Typography variant="body2">
+              <strong>Your trial has ended.</strong> You're now on the Free plan. Upgrade to unlock all features.
             </Typography>
           </Alert>
         )}

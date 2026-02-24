@@ -8,8 +8,11 @@ import {
 import { Send, Add, Delete, PersonAdd } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import api from '../../api/client';
+import useSubscriptionTier from '../../hooks/useSubscriptionTier';
+import FeatureGate from '../../components/FeatureGate';
 
 export default function Messages() {
+  const { hasAccess } = useSubscriptionTier();
   const [conversations, setConversations] = useState([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState(null);
   const [selectedCustomerInfo, setSelectedCustomerInfo] = useState(null);
@@ -137,6 +140,8 @@ export default function Messages() {
   const displayName = selectedConversation?.name || selectedCustomerInfo?.name || '';
   const displayEmail = selectedConversation?.email || selectedCustomerInfo?.email || '';
   const totalUnread = conversations.reduce((sum, c) => sum + parseInt(c.unread_count || 0), 0);
+
+  if (!hasAccess('growth')) return <FeatureGate requiredTier="growth" featureName="Customer Messages" />;
 
   return (
     <Box>

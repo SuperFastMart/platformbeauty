@@ -7,8 +7,11 @@ import {
 import { Add, Edit, Delete, Casino } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import api from '../../api/client';
+import useSubscriptionTier from '../../hooks/useSubscriptionTier';
+import FeatureGate from '../../components/FeatureGate';
 
 export default function DiscountCodes() {
+  const { hasAccess } = useSubscriptionTier();
   const [codes, setCodes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [dialog, setDialog] = useState(false);
@@ -102,6 +105,8 @@ export default function DiscountCodes() {
       setSnackbar({ open: true, message: err.response?.data?.error || 'Error', severity: 'error' });
     }
   };
+
+  if (!hasAccess('growth')) return <FeatureGate requiredTier="growth" featureName="Discount Codes" />;
 
   return (
     <Box>

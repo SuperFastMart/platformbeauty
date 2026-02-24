@@ -92,8 +92,8 @@ router.post('/signup', asyncHandler(async (req, res) => {
 
     // Create tenant
     const tenantResult = await client.query(
-      `INSERT INTO tenants (name, slug, owner_email, owner_name, trial_ends_at)
-       VALUES ($1, $2, $3, $4, NOW() + INTERVAL '14 days')
+      `INSERT INTO tenants (name, slug, owner_email, owner_name, subscription_tier, trial_ends_at)
+       VALUES ($1, $2, $3, $4, 'pro', NOW() + INTERVAL '14 days')
        RETURNING *`,
       [business_name, slug, owner_email, owner_name]
     );
@@ -268,8 +268,8 @@ router.post('/tenants', platformAuth, asyncHandler(async (req, res) => {
 
     // Create tenant
     const tenantResult = await client.query(
-      `INSERT INTO tenants (name, slug, owner_email, owner_name, business_phone, trial_ends_at)
-       VALUES ($1, $2, $3, $4, $5, NOW() + INTERVAL '14 days')
+      `INSERT INTO tenants (name, slug, owner_email, owner_name, business_phone, subscription_tier, trial_ends_at)
+       VALUES ($1, $2, $3, $4, $5, 'pro', NOW() + INTERVAL '14 days')
        RETURNING *`,
       [name, slug, owner_email, owner_name, business_phone || null]
     );

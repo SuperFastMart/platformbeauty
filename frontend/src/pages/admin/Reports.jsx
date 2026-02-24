@@ -7,8 +7,11 @@ import {
 import { Download } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import api from '../../api/client';
+import useSubscriptionTier from '../../hooks/useSubscriptionTier';
+import FeatureGate from '../../components/FeatureGate';
 
 export default function Reports() {
+  const { hasAccess } = useSubscriptionTier();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [from, setFrom] = useState(dayjs().startOf('month').format('YYYY-MM-DD'));
@@ -62,6 +65,8 @@ export default function Reports() {
   };
 
   useEffect(() => { fetchData(); }, []);
+
+  if (!hasAccess('growth')) return <FeatureGate requiredTier="growth" featureName="Reports & Analytics" />;
 
   return (
     <Box>
