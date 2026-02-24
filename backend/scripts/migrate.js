@@ -818,6 +818,227 @@ const migrations = [
   },
 
   // ============================================
+  // SPRINT 10 — Platform Analytics, Customer Mgmt, Reports, Payments
+  // ============================================
+  {
+    name: '051_create_platform_mrr_snapshots',
+    sql: `
+      CREATE TABLE IF NOT EXISTS platform_mrr_snapshots (
+        id SERIAL PRIMARY KEY,
+        month DATE NOT NULL UNIQUE,
+        total_mrr DECIMAL(12,2) DEFAULT 0,
+        tenant_count INTEGER DEFAULT 0,
+        free_count INTEGER DEFAULT 0,
+        growth_count INTEGER DEFAULT 0,
+        pro_count INTEGER DEFAULT 0,
+        churn_count INTEGER DEFAULT 0,
+        new_count INTEGER DEFAULT 0,
+        snapshot_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `
+  },
+  {
+    name: '052_create_customer_photos',
+    sql: `
+      CREATE TABLE IF NOT EXISTS customer_photos (
+        id SERIAL PRIMARY KEY,
+        tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+        customer_id INTEGER NOT NULL REFERENCES customers(id),
+        booking_id INTEGER REFERENCES bookings(id),
+        photo_type VARCHAR(20) NOT NULL CHECK (photo_type IN ('before', 'after')),
+        pair_id VARCHAR(50),
+        caption TEXT,
+        file_name VARCHAR(255) NOT NULL,
+        mime_type VARCHAR(100) NOT NULL,
+        file_size INTEGER NOT NULL,
+        file_data BYTEA NOT NULL,
+        taken_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_customer_photos_customer ON customer_photos(tenant_id, customer_id);
+      CREATE INDEX IF NOT EXISTS idx_customer_photos_pair ON customer_photos(pair_id);
+    `
+  },
+  {
+    name: '053_create_customer_segments',
+    sql: `
+      CREATE TABLE IF NOT EXISTS customer_segments (
+        id SERIAL PRIMARY KEY,
+        tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        filters JSONB NOT NULL,
+        customer_count INTEGER DEFAULT 0,
+        last_computed_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_customer_segments_tenant ON customer_segments(tenant_id);
+    `
+  },
+  {
+    name: '054_add_booking_source',
+    sql: `
+      ALTER TABLE bookings ADD COLUMN IF NOT EXISTS booking_source VARCHAR(50) DEFAULT 'direct';
+      CREATE INDEX IF NOT EXISTS idx_bookings_source ON bookings(tenant_id, booking_source);
+    `
+  },
+  {
+    name: '055_create_gift_cards',
+    sql: `
+      CREATE TABLE IF NOT EXISTS gift_cards (
+        id SERIAL PRIMARY KEY,
+        tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+        code VARCHAR(20) NOT NULL,
+        initial_balance DECIMAL(10,2) NOT NULL,
+        remaining_balance DECIMAL(10,2) NOT NULL,
+        sender_name VARCHAR(255),
+        sender_email VARCHAR(255),
+        recipient_name VARCHAR(255),
+        recipient_email VARCHAR(255),
+        message TEXT,
+        purchased_by_customer_id INTEGER REFERENCES customers(id),
+        stripe_payment_intent_id TEXT,
+        status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'redeemed', 'expired', 'cancelled')),
+        expires_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_gift_cards_code ON gift_cards(tenant_id, code);
+      CREATE INDEX IF NOT EXISTS idx_gift_cards_tenant ON gift_cards(tenant_id);
+
+      CREATE TABLE IF NOT EXISTS gift_card_transactions (
+        id SERIAL PRIMARY KEY,
+        tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+        gift_card_id INTEGER NOT NULL REFERENCES gift_cards(id),
+        booking_id INTEGER REFERENCES bookings(id),
+        amount DECIMAL(10,2) NOT NULL,
+        transaction_type VARCHAR(20) NOT NULL CHECK (transaction_type IN ('purchase', 'redemption', 'refund')),
+        balance_after DECIMAL(10,2) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      ALTER TABLE bookings ADD COLUMN IF NOT EXISTS gift_card_id INTEGER;
+      ALTER TABLE bookings ADD COLUMN IF NOT EXISTS gift_card_amount DECIMAL(10,2) DEFAULT 0;
+    `
+  },
+  {
+    name: '056_create_service_packages',
+    sql: `
+      CREATE TABLE IF NOT EXISTS service_packages (
+        id SERIAL PRIMARY KEY,
+        tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        package_price DECIMAL(10,2) NOT NULL,
+        original_price DECIMAL(10,2),
+        session_count INTEGER NOT NULL,
+        category VARCHAR(100),
+        valid_days INTEGER DEFAULT 365,
+        active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_service_packages_tenant ON service_packages(tenant_id);
+
+      CREATE TABLE IF NOT EXISTS package_services (
+        id SERIAL PRIMARY KEY,
+        package_id INTEGER NOT NULL REFERENCES service_packages(id) ON DELETE CASCADE,
+        service_id INTEGER NOT NULL REFERENCES services(id),
+        UNIQUE(package_id, service_id)
+      );
+
+      CREATE TABLE IF NOT EXISTS customer_packages (
+        id SERIAL PRIMARY KEY,
+        tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+        customer_id INTEGER NOT NULL REFERENCES customers(id),
+        package_id INTEGER NOT NULL REFERENCES service_packages(id),
+        sessions_remaining INTEGER NOT NULL,
+        sessions_used INTEGER DEFAULT 0,
+        stripe_payment_intent_id TEXT,
+        payment_status VARCHAR(20) DEFAULT 'pending',
+        purchased_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        expires_at TIMESTAMP NOT NULL,
+        status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'expired', 'exhausted', 'cancelled'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_customer_packages_customer ON customer_packages(tenant_id, customer_id);
+
+      CREATE TABLE IF NOT EXISTS package_usage (
+        id SERIAL PRIMARY KEY,
+        customer_package_id INTEGER NOT NULL REFERENCES customer_packages(id),
+        booking_id INTEGER REFERENCES bookings(id),
+        used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      ALTER TABLE bookings ADD COLUMN IF NOT EXISTS customer_package_id INTEGER;
+    `
+  },
+  {
+    name: '057_create_memberships',
+    sql: `
+      CREATE TABLE IF NOT EXISTS membership_plans (
+        id SERIAL PRIMARY KEY,
+        tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        price_monthly DECIMAL(10,2) NOT NULL,
+        included_sessions INTEGER DEFAULT 0,
+        discount_percent INTEGER DEFAULT 0,
+        priority_booking BOOLEAN DEFAULT FALSE,
+        stripe_product_id TEXT,
+        stripe_price_id TEXT,
+        active BOOLEAN DEFAULT TRUE,
+        display_order INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_membership_plans_tenant ON membership_plans(tenant_id);
+
+      CREATE TABLE IF NOT EXISTS membership_included_services (
+        id SERIAL PRIMARY KEY,
+        membership_plan_id INTEGER NOT NULL REFERENCES membership_plans(id) ON DELETE CASCADE,
+        service_id INTEGER REFERENCES services(id),
+        category VARCHAR(100),
+        sessions_per_month INTEGER DEFAULT 1
+      );
+
+      CREATE TABLE IF NOT EXISTS customer_memberships (
+        id SERIAL PRIMARY KEY,
+        tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+        customer_id INTEGER NOT NULL REFERENCES customers(id),
+        membership_plan_id INTEGER NOT NULL REFERENCES membership_plans(id),
+        stripe_subscription_id TEXT,
+        stripe_customer_id TEXT,
+        status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'past_due', 'cancelled', 'cancelling')),
+        current_period_start TIMESTAMP,
+        current_period_end TIMESTAMP,
+        sessions_used_this_period INTEGER DEFAULT 0,
+        cancel_at_period_end BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        cancelled_at TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_customer_memberships_customer ON customer_memberships(tenant_id, customer_id);
+      CREATE INDEX IF NOT EXISTS idx_customer_memberships_stripe ON customer_memberships(stripe_subscription_id);
+
+      CREATE TABLE IF NOT EXISTS membership_usage (
+        id SERIAL PRIMARY KEY,
+        customer_membership_id INTEGER NOT NULL REFERENCES customer_memberships(id),
+        booking_id INTEGER REFERENCES bookings(id),
+        service_id INTEGER REFERENCES services(id),
+        used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      ALTER TABLE bookings ADD COLUMN IF NOT EXISTS membership_id INTEGER;
+      ALTER TABLE bookings ADD COLUMN IF NOT EXISTS membership_discount_amount DECIMAL(10,2) DEFAULT 0;
+      ALTER TABLE tenants ADD COLUMN IF NOT EXISTS stripe_webhook_secret TEXT;
+    `
+  },
+  {
+    name: '058_add_tips',
+    sql: `
+      ALTER TABLE bookings ADD COLUMN IF NOT EXISTS tip_amount DECIMAL(10,2) DEFAULT 0;
+      ALTER TABLE payments ADD COLUMN IF NOT EXISTS tip_amount DECIMAL(10,2) DEFAULT 0;
+    `
+  },
+
+  // ============================================
   // MIGRATION TRACKING
   // ============================================
   {

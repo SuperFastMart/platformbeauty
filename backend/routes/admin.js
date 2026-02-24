@@ -1458,6 +1458,191 @@ router.delete('/customers/:id', asyncHandler(async (req, res) => {
   res.json({ message: 'Customer data deleted. Revenue records preserved with anonymised data.' });
 }));
 
+// POST /api/admin/customers/import — bulk import customers from CSV
+router.post('/customers/import', asyncHandler(async (req, res) => {
+  const { customers: rows } = req.body;
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return res.status(400).json({ error: 'customers array is required' });
+  }
+  if (rows.length > 500) {
+    return res.status(400).json({ error: 'Maximum 500 customers per import' });
+  }
+
+  let imported = 0, updated = 0, skipped = 0;
+  const errors = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const rowErrors = [];
+
+    if (!row.name || !row.name.trim()) rowErrors.push('Name is required');
+    if (!row.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email.trim())) rowErrors.push('Valid email is required');
+    if (row.phone) {
+      const clean = row.phone.replace(/[\s\-\(\)]/g, '');
+      if (!/^\+?[0-9]{7,15}$/.test(clean)) rowErrors.push('Invalid phone format');
+    }
+
+    if (rowErrors.length > 0) {
+      errors.push({ row: i + 1, name: row.name || '', errors: rowErrors });
+      skipped++;
+      continue;
+    }
+
+    try {
+      const result = await getOne(
+        `INSERT INTO customers (tenant_id, name, email, phone, admin_notes, tags)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (tenant_id, email) DO UPDATE SET
+           name = COALESCE(NULLIF($2, ''), customers.name),
+           phone = COALESCE(NULLIF($4, ''), customers.phone),
+           admin_notes = CASE WHEN $5 IS NOT NULL AND $5 != '' THEN COALESCE(customers.admin_notes || E'\n' || $5, $5) ELSE customers.admin_notes END,
+           tags = CASE WHEN $6 IS NOT NULL AND $6 != '' THEN $6 ELSE customers.tags END
+         RETURNING id, (xmax = 0) as is_new`,
+        [req.tenantId, row.name.trim(), row.email.trim().toLowerCase(),
+         row.phone?.trim() || null, row.notes?.trim() || null, row.tags?.trim() || null]
+      );
+      if (result.is_new) imported++; else updated++;
+    } catch (err) {
+      errors.push({ row: i + 1, name: row.name || '', errors: [err.message] });
+      skipped++;
+    }
+  }
+
+  res.json({ message: `Import complete: ${imported} created, ${updated} updated, ${skipped} skipped`, imported, updated, skipped, errors });
+}));
+
+// GET /api/admin/customers/filter — filter customers with dynamic criteria
+router.get('/customers/filter', asyncHandler(async (req, res) => {
+  const { min_spent, max_spent, min_visits, max_visits, last_visit_after, last_visit_before, tags, has_allergies, min_bookings, max_bookings } = req.query;
+
+  let where = 'c.tenant_id = $1';
+  const params = [req.tenantId];
+  let idx = 2;
+
+  if (min_visits) { where += ` AND c.total_visits >= $${idx++}`; params.push(parseInt(min_visits)); }
+  if (max_visits) { where += ` AND c.total_visits <= $${idx++}`; params.push(parseInt(max_visits)); }
+  if (last_visit_after) { where += ` AND c.last_visit_date >= $${idx++}`; params.push(last_visit_after); }
+  if (last_visit_before) { where += ` AND c.last_visit_date <= $${idx++}`; params.push(last_visit_before); }
+  if (has_allergies === 'true') { where += ` AND c.allergies IS NOT NULL AND c.allergies != ''`; }
+  if (tags) {
+    const tagList = tags.split(',').map(t => t.trim());
+    for (const tag of tagList) {
+      where += ` AND c.tags ILIKE $${idx++}`;
+      params.push(`%${tag}%`);
+    }
+  }
+
+  let having = '';
+  const havingClauses = [];
+  if (min_spent) { havingClauses.push(`COALESCE(SUM(b.total_price), 0) >= $${idx++}`); params.push(parseFloat(min_spent)); }
+  if (max_spent) { havingClauses.push(`COALESCE(SUM(b.total_price), 0) <= $${idx++}`); params.push(parseFloat(max_spent)); }
+  if (min_bookings) { havingClauses.push(`COUNT(b.id) >= $${idx++}`); params.push(parseInt(min_bookings)); }
+  if (max_bookings) { havingClauses.push(`COUNT(b.id) <= $${idx++}`); params.push(parseInt(max_bookings)); }
+  if (havingClauses.length) having = ' HAVING ' + havingClauses.join(' AND ');
+
+  const customers = await getAll(
+    `SELECT c.id, c.name, c.email, c.phone, c.tags, c.allergies, c.total_visits, c.last_visit_date,
+       COUNT(b.id)::int as booking_count,
+       COALESCE(SUM(b.total_price), 0)::numeric as total_spent
+     FROM customers c
+     LEFT JOIN bookings b ON b.customer_id = c.id AND b.tenant_id = c.tenant_id AND b.status IN ('confirmed','completed')
+     WHERE ${where}
+     GROUP BY c.id, c.name, c.email, c.phone, c.tags, c.allergies, c.total_visits, c.last_visit_date
+     ${having}
+     ORDER BY c.name ASC`,
+    params
+  );
+
+  res.json(customers.map(c => ({ ...c, total_spent: parseFloat(c.total_spent) })));
+}));
+
+// CRUD for customer segments
+router.get('/segments', asyncHandler(async (req, res) => {
+  const segments = await getAll(
+    'SELECT * FROM customer_segments WHERE tenant_id = $1 ORDER BY created_at DESC',
+    [req.tenantId]
+  );
+  res.json(segments);
+}));
+
+router.post('/segments', asyncHandler(async (req, res) => {
+  const { name, description, filters } = req.body;
+  if (!name || !filters) return res.status(400).json({ error: 'name and filters are required' });
+  const segment = await getOne(
+    `INSERT INTO customer_segments (tenant_id, name, description, filters, last_computed_at)
+     VALUES ($1, $2, $3, $4, NOW()) RETURNING *`,
+    [req.tenantId, name, description || null, JSON.stringify(filters)]
+  );
+  res.status(201).json(segment);
+}));
+
+router.put('/segments/:id', asyncHandler(async (req, res) => {
+  const { name, description, filters } = req.body;
+  const segment = await getOne(
+    `UPDATE customer_segments SET name = COALESCE($3, name), description = $4, filters = COALESCE($5, filters), updated_at = NOW()
+     WHERE id = $1 AND tenant_id = $2 RETURNING *`,
+    [req.params.id, req.tenantId, name, description || null, filters ? JSON.stringify(filters) : null]
+  );
+  if (!segment) return res.status(404).json({ error: 'Segment not found' });
+  res.json(segment);
+}));
+
+router.delete('/segments/:id', asyncHandler(async (req, res) => {
+  await run('DELETE FROM customer_segments WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenantId]);
+  res.json({ message: 'Segment deleted' });
+}));
+
+// Customer photo routes
+router.get('/customers/:customerId/photos', asyncHandler(async (req, res) => {
+  const photos = await getAll(
+    `SELECT id, customer_id, booking_id, photo_type, pair_id, caption, file_name, mime_type, file_size, taken_at, created_at
+     FROM customer_photos WHERE tenant_id = $1 AND customer_id = $2
+     ORDER BY created_at DESC`,
+    [req.tenantId, req.params.customerId]
+  );
+  res.json(photos);
+}));
+
+router.post('/customers/:customerId/photos', upload.single('photo'), asyncHandler(async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Photo file is required' });
+  if (!['image/png', 'image/jpeg'].includes(req.file.mimetype)) {
+    return res.status(400).json({ error: 'Only PNG and JPEG images are allowed' });
+  }
+
+  const { photo_type, pair_id, caption, booking_id } = req.body;
+  if (!photo_type || !['before', 'after'].includes(photo_type)) {
+    return res.status(400).json({ error: 'photo_type must be "before" or "after"' });
+  }
+
+  const resolvedPairId = pair_id || (photo_type === 'before' ? require('crypto').randomUUID().slice(0, 8) : null);
+
+  const photo = await getOne(
+    `INSERT INTO customer_photos (tenant_id, customer_id, booking_id, photo_type, pair_id, caption, file_name, mime_type, file_size, file_data)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id, photo_type, pair_id, caption, file_name, mime_type, file_size, created_at`,
+    [req.tenantId, req.params.customerId, booking_id || null, photo_type, resolvedPairId,
+     caption || null, req.file.originalname, req.file.mimetype, req.file.size, req.file.buffer]
+  );
+
+  res.status(201).json(photo);
+}));
+
+router.get('/customers/:customerId/photos/:photoId', asyncHandler(async (req, res) => {
+  const photo = await getOne(
+    'SELECT file_data, mime_type, file_name FROM customer_photos WHERE id = $1 AND tenant_id = $2 AND customer_id = $3',
+    [req.params.photoId, req.tenantId, req.params.customerId]
+  );
+  if (!photo) return res.status(404).json({ error: 'Photo not found' });
+  res.setHeader('Content-Type', photo.mime_type);
+  res.setHeader('Content-Disposition', `inline; filename="${photo.file_name}"`);
+  res.send(photo.file_data);
+}));
+
+router.delete('/customers/:customerId/photos/:photoId', asyncHandler(async (req, res) => {
+  await run('DELETE FROM customer_photos WHERE id = $1 AND tenant_id = $2 AND customer_id = $3',
+    [req.params.photoId, req.tenantId, req.params.customerId]);
+  res.json({ message: 'Photo deleted' });
+}));
+
 // ============================================
 // ADMIN SLOTS (for admin booking creation)
 // ============================================
@@ -1588,7 +1773,7 @@ router.get('/next-available', asyncHandler(async (req, res) => {
 
 // POST /api/admin/bookings/admin-create
 router.post('/bookings/admin-create', asyncHandler(async (req, res) => {
-  const { customerId, customerName, customerEmail, customerPhone, serviceIds, date, startTime, notes } = req.body;
+  const { customerId, customerName, customerEmail, customerPhone, serviceIds, date, startTime, notes, bookingSource } = req.body;
 
   if (!serviceIds?.length || !date || !startTime) {
     return res.status(400).json({ error: 'serviceIds, date, and startTime are required' });
@@ -1665,12 +1850,12 @@ router.post('/bookings/admin-create', asyncHandler(async (req, res) => {
   const booking = await getOne(
     `INSERT INTO bookings (tenant_id, customer_id, customer_name, customer_email, customer_phone,
        service_ids, service_names, date, start_time, end_time,
-       total_price, total_duration, status, notes, created_by)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'confirmed', $13, 'admin')
+       total_price, total_duration, status, notes, created_by, booking_source)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'confirmed', $13, 'admin', $14)
      RETURNING *`,
     [req.tenantId, customer.id, customer.name, customer.email, customer.phone || null,
      serviceIds.join(','), serviceNames, date, startTime, endTime,
-     totalPrice, totalDuration, notes || null]
+     totalPrice, totalDuration, notes || null, bookingSource || 'walk_in']
   );
 
   // Mark time slots as unavailable
@@ -1762,6 +1947,7 @@ router.post('/bookings/admin-create-recurring', asyncHandler(async (req, res) =>
 
 // POST /api/admin/bookings/:id/cash-payment
 router.post('/bookings/:id/cash-payment', asyncHandler(async (req, res) => {
+  const { tipAmount } = req.body;
   const booking = await getOne(
     'SELECT * FROM bookings WHERE id = $1 AND tenant_id = $2',
     [req.params.id, req.tenantId]
@@ -1769,17 +1955,20 @@ router.post('/bookings/:id/cash-payment', asyncHandler(async (req, res) => {
 
   if (!booking) return res.status(404).json({ error: 'Booking not found' });
 
+  const tip = tipAmount && parseFloat(tipAmount) > 0 ? Math.round(parseFloat(tipAmount) * 100) / 100 : 0;
+  const paymentAmount = parseFloat(booking.total_price) + tip;
+
   // Record payment
   await getOne(
-    `INSERT INTO payments (tenant_id, booking_id, amount, payment_method, payment_status, paid_at)
-     VALUES ($1, $2, $3, 'cash', 'completed', NOW()) RETURNING *`,
-    [req.tenantId, booking.id, booking.total_price]
+    `INSERT INTO payments (tenant_id, booking_id, amount, payment_method, payment_status, paid_at, tip_amount)
+     VALUES ($1, $2, $3, 'cash', 'completed', NOW(), $4) RETURNING *`,
+    [req.tenantId, booking.id, paymentAmount, tip]
   );
 
-  // Update booking status
+  // Update booking status and tip
   await run(
-    `UPDATE bookings SET status = 'completed', payment_status = 'paid' WHERE id = $1`,
-    [booking.id]
+    `UPDATE bookings SET status = 'completed', payment_status = 'paid', tip_amount = $2 WHERE id = $1`,
+    [booking.id, tip]
   );
 
   // Update customer visit tracking
@@ -1844,7 +2033,7 @@ router.post('/bookings/:id/charge-noshow', asyncHandler(async (req, res) => {
 
 // POST /api/admin/bookings/:id/charge-complete — charge card and mark service completed
 router.post('/bookings/:id/charge-complete', asyncHandler(async (req, res) => {
-  const { paymentMethodId } = req.body;
+  const { paymentMethodId, tipAmount } = req.body;
 
   if (!paymentMethodId) {
     return res.status(400).json({ error: 'paymentMethodId is required' });
@@ -1858,22 +2047,23 @@ router.post('/bookings/:id/charge-complete', asyncHandler(async (req, res) => {
   if (!booking) return res.status(404).json({ error: 'Booking not found' });
 
   const tenant = await getOne('SELECT * FROM tenants WHERE id = $1', [req.tenantId]);
-  const amount = parseFloat(booking.total_price);
+  const tip = tipAmount && parseFloat(tipAmount) > 0 ? Math.round(parseFloat(tipAmount) * 100) / 100 : 0;
+  const amount = parseFloat(booking.total_price) + tip;
 
   try {
     const paymentIntent = await chargeNoShow(tenant, booking.customer_email, paymentMethodId, amount, booking.id);
 
     // Record payment
     await getOne(
-      `INSERT INTO payments (tenant_id, booking_id, amount, payment_method, payment_status, stripe_payment_id, paid_at)
-       VALUES ($1, $2, $3, 'card', 'completed', $4, NOW()) RETURNING *`,
-      [req.tenantId, booking.id, amount, paymentIntent.id]
+      `INSERT INTO payments (tenant_id, booking_id, amount, payment_method, payment_status, stripe_payment_id, paid_at, tip_amount)
+       VALUES ($1, $2, $3, 'card', 'completed', $4, NOW(), $5) RETURNING *`,
+      [req.tenantId, booking.id, amount, paymentIntent.id, tip]
     );
 
     // Mark booking completed
     await run(
-      `UPDATE bookings SET status = 'completed', payment_status = 'paid' WHERE id = $1`,
-      [booking.id]
+      `UPDATE bookings SET status = 'completed', payment_status = 'paid', tip_amount = $2 WHERE id = $1`,
+      [booking.id, tip]
     );
 
     // Update customer visit tracking

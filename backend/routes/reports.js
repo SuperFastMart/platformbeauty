@@ -251,4 +251,199 @@ router.get('/export', asyncHandler(async (req, res) => {
   res.send(csv);
 }));
 
+// GET /api/admin/reports/source-breakdown — bookings by source
+router.get('/source-breakdown', asyncHandler(async (req, res) => {
+  const { from, to } = req.query;
+
+  let dateFilter = '';
+  const params = [req.tenantId];
+
+  if (from && to) {
+    dateFilter = ' AND b.date >= $2 AND b.date <= $3';
+    params.push(from, to);
+  }
+
+  const breakdown = await getAll(
+    `SELECT
+       COALESCE(b.booking_source, 'direct') as source,
+       COUNT(*)::int as count,
+       COALESCE(SUM(b.total_price), 0)::numeric as revenue
+     FROM bookings b
+     WHERE b.tenant_id = $1${dateFilter}
+     GROUP BY COALESCE(b.booking_source, 'direct')
+     ORDER BY count DESC`,
+    params
+  );
+
+  res.json(breakdown.map(r => ({
+    source: r.source,
+    count: r.count,
+    revenue: parseFloat(r.revenue),
+  })));
+}));
+
+// GET /api/admin/reports/tips — tips summary
+router.get('/tips', asyncHandler(async (req, res) => {
+  const { from, to } = req.query;
+
+  let dateFilter = '';
+  const params = [req.tenantId];
+
+  if (from && to) {
+    dateFilter = ' AND b.date >= $2 AND b.date <= $3';
+    params.push(from, to);
+  }
+
+  const stats = await getOne(
+    `SELECT
+       COALESCE(SUM(b.tip_amount), 0)::numeric as total_tips,
+       COALESCE(AVG(CASE WHEN b.tip_amount > 0 THEN b.tip_amount END), 0)::numeric as avg_tip,
+       COUNT(CASE WHEN b.tip_amount > 0 THEN 1 END)::int as bookings_with_tips,
+       COUNT(*)::int as total_bookings
+     FROM bookings b
+     WHERE b.tenant_id = $1 AND b.status IN ('confirmed', 'completed')${dateFilter}`,
+    params
+  );
+
+  res.json({
+    total_tips: parseFloat(stats.total_tips),
+    avg_tip: parseFloat(parseFloat(stats.avg_tip).toFixed(2)),
+    bookings_with_tips: stats.bookings_with_tips,
+    total_bookings: stats.total_bookings,
+  });
+}));
+
+// GET /api/admin/reports/retention — retention analytics
+router.get('/retention', asyncHandler(async (req, res) => {
+  const { days = 60 } = req.query;
+
+  // Rebooking rates
+  const rebooking = await getOne(
+    `WITH customer_bookings AS (
+       SELECT customer_email, date,
+         LAG(date) OVER (PARTITION BY customer_email ORDER BY date) as prev_date
+       FROM bookings
+       WHERE tenant_id = $1 AND status IN ('confirmed', 'completed')
+     ),
+     gaps AS (
+       SELECT customer_email, (date - prev_date) as gap_days
+       FROM customer_bookings WHERE prev_date IS NOT NULL
+     )
+     SELECT
+       COUNT(CASE WHEN gap_days <= 30 THEN 1 END)::int as rebooked_30d,
+       COUNT(CASE WHEN gap_days <= 60 THEN 1 END)::int as rebooked_60d,
+       COUNT(CASE WHEN gap_days <= 90 THEN 1 END)::int as rebooked_90d,
+       COUNT(*)::int as total_rebookings,
+       COALESCE(AVG(gap_days), 0)::numeric as avg_gap_days
+     FROM gaps`,
+    [req.tenantId]
+  );
+
+  // Average LTV
+  const ltv = await getOne(
+    `SELECT COALESCE(AVG(total_spent), 0)::numeric as avg_ltv
+     FROM (
+       SELECT customer_email, SUM(total_price) as total_spent
+       FROM bookings
+       WHERE tenant_id = $1 AND status IN ('confirmed', 'completed')
+       GROUP BY customer_email
+     ) sub`,
+    [req.tenantId]
+  );
+
+  // At-risk customers
+  const atRisk = await getOne(
+    `SELECT COUNT(DISTINCT customer_email)::int as count
+     FROM (
+       SELECT customer_email, MAX(date) as last_visit, COUNT(*) as visits
+       FROM bookings
+       WHERE tenant_id = $1 AND status IN ('confirmed', 'completed')
+       GROUP BY customer_email
+       HAVING COUNT(*) >= 2 AND MAX(date) < CURRENT_DATE - $2::int
+     ) sub`,
+    [req.tenantId, parseInt(days)]
+  );
+
+  res.json({
+    rebooked_30d: rebooking.rebooked_30d,
+    rebooked_60d: rebooking.rebooked_60d,
+    rebooked_90d: rebooking.rebooked_90d,
+    total_rebookings: rebooking.total_rebookings,
+    avg_gap_days: parseFloat(parseFloat(rebooking.avg_gap_days).toFixed(1)),
+    avg_ltv: parseFloat(parseFloat(ltv.avg_ltv).toFixed(2)),
+    at_risk_count: atRisk.count,
+  });
+}));
+
+// GET /api/admin/reports/cohort — cohort retention matrix
+router.get('/cohort', asyncHandler(async (req, res) => {
+  const cohorts = await getAll(
+    `WITH first_bookings AS (
+       SELECT customer_email, MIN(date) as first_date
+       FROM bookings
+       WHERE tenant_id = $1 AND status IN ('confirmed', 'completed')
+       GROUP BY customer_email
+     ),
+     cohort_data AS (
+       SELECT
+         TO_CHAR(DATE_TRUNC('month', fb.first_date), 'YYYY-MM') as cohort_month,
+         fb.customer_email,
+         DATE_PART('month', AGE(b.date, fb.first_date))::int as months_since
+       FROM first_bookings fb
+       JOIN bookings b ON b.customer_email = fb.customer_email AND b.tenant_id = $1
+         AND b.status IN ('confirmed', 'completed')
+       WHERE fb.first_date >= CURRENT_DATE - INTERVAL '12 months'
+     )
+     SELECT
+       cohort_month,
+       months_since,
+       COUNT(DISTINCT customer_email)::int as customers
+     FROM cohort_data
+     GROUP BY cohort_month, months_since
+     ORDER BY cohort_month, months_since`,
+    [req.tenantId]
+  );
+
+  // Build matrix
+  const matrix = {};
+  for (const row of cohorts) {
+    if (!matrix[row.cohort_month]) matrix[row.cohort_month] = { month: row.cohort_month, size: 0, retention: [] };
+    if (row.months_since === 0) matrix[row.cohort_month].size = row.customers;
+    matrix[row.cohort_month].retention[row.months_since] = row.customers;
+  }
+
+  // Convert to percentages
+  const result = Object.values(matrix).map(c => ({
+    ...c,
+    retention: c.retention.map(v => c.size > 0 ? Math.round((v / c.size) * 100) : 0),
+  }));
+
+  res.json(result);
+}));
+
+// GET /api/admin/reports/at-risk — at-risk customer list
+router.get('/at-risk', asyncHandler(async (req, res) => {
+  const { days = 60 } = req.query;
+
+  const customers = await getAll(
+    `SELECT c.id, c.name, c.email, c.phone, c.last_visit_date, c.total_visits,
+       COALESCE(SUM(b.total_price), 0)::numeric as total_spent,
+       (CURRENT_DATE - MAX(b.date))::int as days_since_last_visit
+     FROM customers c
+     JOIN bookings b ON b.customer_id = c.id AND b.tenant_id = c.tenant_id
+       AND b.status IN ('confirmed', 'completed')
+     WHERE c.tenant_id = $1
+     GROUP BY c.id, c.name, c.email, c.phone, c.last_visit_date, c.total_visits
+     HAVING COUNT(b.id) >= 2 AND MAX(b.date) < CURRENT_DATE - $2::int
+     ORDER BY MAX(b.date) DESC
+     LIMIT 50`,
+    [req.tenantId, parseInt(days)]
+  );
+
+  res.json(customers.map(c => ({
+    ...c,
+    total_spent: parseFloat(c.total_spent),
+  })));
+}));
+
 module.exports = router;

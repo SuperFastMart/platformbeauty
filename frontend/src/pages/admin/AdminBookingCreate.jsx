@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import {
   Box, Typography, Stepper, Step, StepLabel, Button, Card, CardContent,
   TextField, Chip, Alert, CircularProgress, Autocomplete, Checkbox,
-  FormControlLabel, ToggleButton, ToggleButtonGroup, Divider,
+  FormControlLabel, ToggleButton, ToggleButtonGroup, Divider, MenuItem,
   useMediaQuery, useTheme,
 } from '@mui/material';
 import { ArrowBack, Search } from '@mui/icons-material';
@@ -55,6 +55,9 @@ export default function AdminBookingCreate() {
   const [findingNext, setFindingNext] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(dayjs().startOf('month'));
   const [showManualTime, setShowManualTime] = useState(false);
+
+  // Booking source
+  const [bookingSource, setBookingSource] = useState('walk_in');
 
   // Recurring
   const [isRecurring, setIsRecurring] = useState(false);
@@ -164,6 +167,7 @@ export default function AdminBookingCreate() {
         customerPhone,
         serviceIds: selectedServiceIds,
         notes,
+        bookingSource,
       };
 
       if (isRecurring && allRecurringDates.length > 0) {
@@ -505,6 +509,20 @@ export default function AdminBookingCreate() {
 
               <TextField fullWidth label="Notes (optional)" margin="normal" multiline rows={2}
                 value={notes} onChange={e => setNotes(e.target.value)} />
+
+              <TextField
+                select fullWidth label="Booking Source" margin="normal" size="small"
+                value={bookingSource} onChange={e => setBookingSource(e.target.value)}
+              >
+                <MenuItem value="walk_in">Walk-in</MenuItem>
+                <MenuItem value="phone">Phone call</MenuItem>
+                <MenuItem value="google">Google</MenuItem>
+                <MenuItem value="instagram">Instagram</MenuItem>
+                <MenuItem value="facebook">Facebook</MenuItem>
+                <MenuItem value="referral">Referral</MenuItem>
+                <MenuItem value="website">Website</MenuItem>
+                <MenuItem value="other">Other</MenuItem>
+              </TextField>
 
               <Alert severity="info" sx={{ mt: 1 }}>
                 {isRecurring

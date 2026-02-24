@@ -95,6 +95,27 @@ export default function BookingFlow() {
   const [waitlistSuccess, setWaitlistSuccess] = useState(false);
   const [waitlistError, setWaitlistError] = useState('');
 
+  // Tip
+  const [tipOption, setTipOption] = useState('none');
+  const [customTip, setCustomTip] = useState('');
+
+  // Gift card
+  const [giftCardInput, setGiftCardInput] = useState('');
+  const [giftCardResult, setGiftCardResult] = useState(null);
+  const [giftCardError, setGiftCardError] = useState('');
+  const [giftCardLoading, setGiftCardLoading] = useState(false);
+
+  // Booking source (from UTM params)
+  const [bookingSource] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    const utm = params.get('utm_source');
+    if (utm) {
+      const map = { google: 'google', instagram: 'instagram', facebook: 'facebook' };
+      return map[utm.toLowerCase()] || utm.toLowerCase();
+    }
+    return null; // backend will default to 'direct' or 'returning'
+  });
+
   // Deposit
   const [depositIntent, setDepositIntent] = useState(null); // { clientSecret, paymentIntentId, depositAmount, stripePublishableKey }
 
@@ -163,6 +184,14 @@ export default function BookingFlow() {
   const totalDuration = selectedServices.reduce((sum, s) => sum + s.duration, 0);
   const discountAmount = discountResult?.discount_amount || 0;
   const finalPrice = Math.max(0, totalPrice - discountAmount);
+
+  // Tip calculation
+  const tipAmountCalc = tipOption === 'custom'
+    ? (parseFloat(customTip) || 0)
+    : tipOption === 'none' ? 0 : (finalPrice * parseInt(tipOption) / 100);
+  const tipRounded = Math.round(tipAmountCalc * 100) / 100;
+  const giftCardApplied = giftCardResult ? Math.min(giftCardResult.remaining_balance, finalPrice) : 0;
+  const grandTotal = finalPrice - giftCardApplied + tipRounded;
 
   // Deposit calculation
   const totalDeposit = useMemo(() => {
@@ -255,6 +284,27 @@ export default function BookingFlow() {
     setDiscountInput('');
     setDiscountResult(null);
     setDiscountError('');
+  };
+
+  const validateGiftCard = async () => {
+    if (!giftCardInput.trim()) return;
+    setGiftCardLoading(true);
+    setGiftCardError('');
+    setGiftCardResult(null);
+    try {
+      const { data } = await api.post(`/t/${slug}/gift-cards/validate`, { code: giftCardInput });
+      setGiftCardResult(data);
+    } catch (err) {
+      setGiftCardError(err.response?.data?.error || 'Invalid gift card code');
+    } finally {
+      setGiftCardLoading(false);
+    }
+  };
+
+  const clearGiftCard = () => {
+    setGiftCardInput('');
+    setGiftCardResult(null);
+    setGiftCardError('');
   };
 
   const toggleService = (id) => {
@@ -361,6 +411,9 @@ export default function BookingFlow() {
         discountCode: discountResult?.code || null,
         depositPaymentIntentId,
         intakeResponses: formattedResponses,
+        bookingSource: bookingSource || undefined,
+        tipAmount: tipRounded > 0 ? tipRounded : undefined,
+        giftCardCode: giftCardResult?.code || undefined,
       });
       setBookingResult(data);
       setActiveStep(STEP_SUCCESS);
@@ -1254,9 +1307,99 @@ export default function BookingFlow() {
                 </Box>
               )}
               <Box display="flex" justifyContent="space-between" pt={1} mt={1} borderTop={1} borderColor="divider">
-                <Typography fontWeight={600}>Total</Typography>
+                <Typography fontWeight={600}>Subtotal</Typography>
                 <Typography fontWeight={600}>£{finalPrice.toFixed(2)} — {totalDuration} min</Typography>
               </Box>
+
+              {/* Tip selection */}
+              <Box mt={2}>
+                <Typography variant="body2" color="text.secondary" mb={1}>
+                  Would you like to add a tip?
+                </Typography>
+                <ToggleButtonGroup
+                  value={tipOption} exclusive size="small"
+                  onChange={(_, v) => { if (v !== null) setTipOption(v); }}
+                  sx={{ flexWrap: 'wrap', gap: 0.5 }}
+                >
+                  <ToggleButton value="none">No Tip</ToggleButton>
+                  <ToggleButton value="10">10%</ToggleButton>
+                  <ToggleButton value="15">15%</ToggleButton>
+                  <ToggleButton value="20">20%</ToggleButton>
+                  <ToggleButton value="custom">Custom</ToggleButton>
+                </ToggleButtonGroup>
+                {tipOption === 'custom' && (
+                  <TextField
+                    size="small" type="number" placeholder="0.00"
+                    value={customTip} onChange={e => setCustomTip(e.target.value)}
+                    InputProps={{ startAdornment: <Typography sx={{ mr: 0.5 }}>£</Typography> }}
+                    sx={{ mt: 1, width: 120 }}
+                    inputProps={{ min: 0, step: 0.5 }}
+                  />
+                )}
+                {tipRounded > 0 && (
+                  <Box display="flex" justifyContent="space-between" mt={1}>
+                    <Typography variant="body2">Tip</Typography>
+                    <Typography variant="body2">£{tipRounded.toFixed(2)}</Typography>
+                  </Box>
+                )}
+                {tipRounded > 0 && (
+                  <Box display="flex" justifyContent="space-between" pt={0.5}>
+                    <Typography fontWeight={700}>Total with tip</Typography>
+                    <Typography fontWeight={700}>£{grandTotal.toFixed(2)}</Typography>
+                  </Box>
+                )}
+              </Box>
+
+              {/* Gift card */}
+              <Box mt={2} p={2} bgcolor="grey.50" borderRadius={2}>
+                <Typography variant="body2" color="text.secondary" mb={1}>
+                  Have a gift card?
+                </Typography>
+                <Box display="flex" gap={1}>
+                  <TextField
+                    size="small" placeholder="XXXX-XXXX-XXXX-XXXX"
+                    value={giftCardInput}
+                    onChange={e => setGiftCardInput(e.target.value.toUpperCase())}
+                    disabled={!!giftCardResult}
+                    inputProps={{ style: { fontFamily: 'monospace', fontWeight: 600, letterSpacing: 1 } }}
+                    fullWidth
+                  />
+                  {!giftCardResult ? (
+                    <Button variant="outlined" size="small"
+                      onClick={validateGiftCard}
+                      disabled={!giftCardInput.trim() || giftCardLoading}
+                      sx={{ minWidth: 80, minHeight: 40 }}
+                    >
+                      {giftCardLoading ? '...' : 'Apply'}
+                    </Button>
+                  ) : (
+                    <Button variant="outlined" size="small" color="error"
+                      onClick={clearGiftCard} sx={{ minWidth: 80, minHeight: 40 }}
+                    >
+                      Remove
+                    </Button>
+                  )}
+                </Box>
+                {giftCardError && (
+                  <Typography variant="caption" color="error" mt={0.5} display="block">{giftCardError}</Typography>
+                )}
+                {giftCardResult && (
+                  <Alert severity="success" sx={{ mt: 1 }} variant="outlined">
+                    Gift card applied — £{giftCardApplied.toFixed(2)} off
+                    {giftCardResult.remaining_balance > giftCardApplied && (
+                      <> (£{(giftCardResult.remaining_balance - giftCardApplied).toFixed(2)} will remain on card)</>
+                    )}
+                  </Alert>
+                )}
+              </Box>
+
+              {/* Grand total with gift card */}
+              {giftCardApplied > 0 && (
+                <Box display="flex" justifyContent="space-between" mt={1.5} pt={1} borderTop={1} borderColor="divider">
+                  <Typography fontWeight={700} color="primary">Amount to pay</Typography>
+                  <Typography fontWeight={700} color="primary">£{grandTotal.toFixed(2)}</Typography>
+                </Box>
+              )}
 
               {depositRequired && (
                 <Box mt={1.5} p={1.5} borderRadius={2} sx={{ bgcolor: 'rgba(25, 118, 210, 0.08)' }}>

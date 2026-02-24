@@ -6,9 +6,14 @@ import {
   ToggleButton
 } from '@mui/material';
 import {
-  Business, People, CalendarMonth, AttachMoney, TrendingUp,
-  FiberNew, SupportAgent, PersonOutline, AccessTime
+  Business, People, CalendarMonth, TrendingUp,
+  FiberNew, SupportAgent, PersonOutline, AccessTime, Analytics,
+  ShowChart, Percent, CurrencyPound
 } from '@mui/icons-material';
+import {
+  Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
+  LinearProgress, Tooltip
+} from '@mui/material';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import api from '../../api/client';
@@ -122,6 +127,8 @@ export default function PlatformDashboard() {
   const [stats, setStats] = useState(null);
   const [trends, setTrends] = useState([]);
   const [notifications, setNotifications] = useState([]);
+  const [advanced, setAdvanced] = useState(null);
+  const [mrrTrend, setMrrTrend] = useState([]);
   const [loading, setLoading] = useState(true);
   const [trendDays, setTrendDays] = useState(30);
 
@@ -136,10 +143,14 @@ export default function PlatformDashboard() {
       api.get('/platform/analytics').then(r => r.data),
       api.get('/platform/analytics/trends?days=30').then(r => r.data).catch(() => []),
       api.get('/platform/notifications').then(r => r.data).catch(() => ({ notifications: [], unread_count: 0 })),
-    ]).then(([analyticsData, trendsData, notifData]) => {
+      api.get('/platform/analytics/advanced').then(r => r.data).catch(() => null),
+      api.get('/platform/analytics/mrr-trend').then(r => r.data).catch(() => []),
+    ]).then(([analyticsData, trendsData, notifData, advancedData, mrrData]) => {
       setStats(analyticsData);
       setTrends(trendsData);
       setNotifications(notifData.notifications?.slice(0, 10) || []);
+      setAdvanced(advancedData);
+      setMrrTrend(mrrData);
     }).catch(console.error)
       .finally(() => setLoading(false));
   }, []);
@@ -156,7 +167,7 @@ export default function PlatformDashboard() {
     { label: 'Total Tenants', value: stats?.total_tenants || 0, icon: <Business fontSize="large" />, color: '#8B2635' },
     { label: 'Active (30d)', value: stats?.active_tenants || 0, icon: <People fontSize="large" />, color: '#1976d2' },
     { label: 'Total Bookings', value: stats?.total_bookings || 0, icon: <CalendarMonth fontSize="large" />, color: '#2e7d32' },
-    { label: 'Total Revenue', value: `£${parseFloat(stats?.total_revenue || 0).toFixed(2)}`, icon: <AttachMoney fontSize="large" />, color: '#D4A853' },
+    { label: 'Total Revenue', value: `£${parseFloat(stats?.total_revenue || 0).toFixed(2)}`, icon: <CurrencyPound fontSize="large" />, color: '#D4A853' },
     { label: 'Customers', value: stats?.total_customers || 0, icon: <PersonOutline fontSize="large" />, color: '#0288d1' },
     { label: 'New This Month', value: stats?.new_this_month || 0, icon: <TrendingUp fontSize="large" />, color: '#7b1fa2' },
   ];
@@ -325,6 +336,158 @@ export default function PlatformDashboard() {
           </Card>
         </Grid>
       </Grid>
+
+      {/* Advanced Analytics */}
+      {advanced && (
+        <>
+          <Typography variant="h6" fontWeight={700} mb={2} display="flex" alignItems="center" gap={1}>
+            <Analytics fontSize="small" /> Advanced Analytics
+          </Typography>
+
+          {/* KPI Cards */}
+          <Grid container spacing={2} mb={3}>
+            <Grid item xs={6} sm={3}>
+              <Card sx={{ borderTop: '3px solid #8B2635' }}>
+                <CardContent sx={{ textAlign: 'center', py: 2 }}>
+                  <CurrencyPound sx={{ color: '#8B2635', mb: 0.5 }} />
+                  <Typography variant="h5" fontWeight={700} color="#8B2635">
+                    £{advanced.active_mrr?.toLocaleString() || 0}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">Active MRR</Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={6} sm={3}>
+              <Card sx={{ borderTop: '3px solid #d32f2f' }}>
+                <CardContent sx={{ textAlign: 'center', py: 2 }}>
+                  <Percent sx={{ color: '#d32f2f', mb: 0.5 }} />
+                  <Typography variant="h5" fontWeight={700} color="#d32f2f">
+                    {advanced.churn_rate || 0}%
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">Churn Rate (30d)</Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={6} sm={3}>
+              <Card sx={{ borderTop: '3px solid #D4A853' }}>
+                <CardContent sx={{ textAlign: 'center', py: 2 }}>
+                  <CurrencyPound sx={{ color: '#D4A853', mb: 0.5 }} />
+                  <Typography variant="h5" fontWeight={700} color="#D4A853">
+                    £{advanced.arpt || 0}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">ARPT (30d)</Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={6} sm={3}>
+              <Card sx={{ borderTop: '3px solid #2e7d32' }}>
+                <CardContent sx={{ textAlign: 'center', py: 2 }}>
+                  <ShowChart sx={{ color: '#2e7d32', mb: 0.5 }} />
+                  <Typography variant="h5" fontWeight={700} color="#2e7d32">
+                    {advanced.trial_conversion || 0}%
+                  </Typography>
+                  <Tooltip title={`${advanced.converted_to_paid || 0} of ${advanced.total_trialed || 0} trialled`}>
+                    <Typography variant="caption" color="text.secondary" sx={{ cursor: 'help' }}>
+                      Trial → Paid
+                    </Typography>
+                  </Tooltip>
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+
+          <Grid container spacing={3} mb={3}>
+            {/* MRR Trend */}
+            <Grid item xs={12} md={5}>
+              <Card sx={{ height: '100%' }}>
+                <CardContent>
+                  <Typography variant="h6" fontWeight={600} mb={2}>MRR Trend</Typography>
+                  {mrrTrend.length > 0 ? (
+                    <BarChart
+                      data={mrrTrend}
+                      xKey="month"
+                      yKey="total_mrr"
+                      color="#8B2635"
+                      height={220}
+                      formatX={m => dayjs(m).format('MMM')}
+                      formatY={v => `£${parseFloat(v).toFixed(0)}`}
+                    />
+                  ) : (
+                    <Typography color="text.secondary" variant="body2">
+                      No snapshot data yet. Snapshots are taken on the 1st of each month.
+                    </Typography>
+                  )}
+                </CardContent>
+              </Card>
+            </Grid>
+
+            {/* Tenant Engagement */}
+            <Grid item xs={12} md={7}>
+              <Card sx={{ height: '100%' }}>
+                <CardContent>
+                  <Typography variant="h6" fontWeight={600} mb={2}>Tenant Engagement</Typography>
+                  {(advanced.engagement?.length || 0) > 0 ? (
+                    <TableContainer sx={{ maxHeight: 320 }}>
+                      <Table size="small" stickyHeader>
+                        <TableHead>
+                          <TableRow>
+                            <TableCell sx={{ fontWeight: 600 }}>Tenant</TableCell>
+                            <TableCell sx={{ fontWeight: 600 }} align="center">Tier</TableCell>
+                            <TableCell sx={{ fontWeight: 600 }} align="center">Bookings (30d)</TableCell>
+                            <TableCell sx={{ fontWeight: 600 }} align="center">Customers</TableCell>
+                            <TableCell sx={{ fontWeight: 600 }} align="center">Last Login</TableCell>
+                            <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>Score</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {advanced.engagement.map(e => (
+                            <TableRow key={e.id} hover sx={{ cursor: 'pointer' }} onClick={() => navigate(`/platform/tenants/${e.id}`)}>
+                              <TableCell>
+                                <Typography variant="body2" fontWeight={500}>{e.name}</Typography>
+                              </TableCell>
+                              <TableCell align="center">
+                                <Chip label={e.subscription_tier || 'free'} size="small" variant="outlined" sx={{ textTransform: 'capitalize', fontSize: 11 }} />
+                              </TableCell>
+                              <TableCell align="center">{e.bookings_30d}</TableCell>
+                              <TableCell align="center">{e.customer_count}</TableCell>
+                              <TableCell align="center">
+                                <Typography variant="caption" color={e.last_login ? 'text.secondary' : 'error'}>
+                                  {e.last_login ? dayjs(e.last_login).fromNow() : 'Never'}
+                                </Typography>
+                              </TableCell>
+                              <TableCell>
+                                <Box display="flex" alignItems="center" gap={1}>
+                                  <LinearProgress
+                                    variant="determinate"
+                                    value={e.engagement_score}
+                                    sx={{
+                                      flex: 1, height: 8, borderRadius: 4,
+                                      bgcolor: 'grey.100',
+                                      '& .MuiLinearProgress-bar': {
+                                        bgcolor: e.engagement_score >= 60 ? '#2e7d32' : e.engagement_score >= 30 ? '#D4A853' : '#d32f2f',
+                                        borderRadius: 4,
+                                      },
+                                    }}
+                                  />
+                                  <Typography variant="caption" fontWeight={600} sx={{ minWidth: 24 }}>
+                                    {e.engagement_score}
+                                  </Typography>
+                                </Box>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  ) : (
+                    <Typography color="text.secondary" variant="body2">No active tenants</Typography>
+                  )}
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+        </>
+      )}
 
       {/* Recent Notifications */}
       <Card>

@@ -41,6 +41,9 @@ const Support = lazy(() => import('./pages/admin/Support'));
 const SupportTicketDetail = lazy(() => import('./pages/admin/SupportTicketDetail'));
 const SetupWizard = lazy(() => import('./pages/admin/SetupWizard'));
 const Waitlist = lazy(() => import('./pages/admin/Waitlist'));
+const GiftCards = lazy(() => import('./pages/admin/GiftCards'));
+const Packages = lazy(() => import('./pages/admin/Packages'));
+const Memberships = lazy(() => import('./pages/admin/Memberships'));
 
 // Public booking
 const TenantPublicLayout = lazy(() => import('./pages/public/TenantPublicLayout'));
@@ -104,6 +107,9 @@ export default function App() {
           <Route path="support" element={<Support />} />
           <Route path="support/:id" element={<SupportTicketDetail />} />
           <Route path="waitlist" element={<Waitlist />} />
+          <Route path="gift-cards" element={<GiftCards />} />
+          <Route path="packages" element={<Packages />} />
+          <Route path="memberships" element={<Memberships />} />
           <Route path="setup" element={<SetupWizard />} />
         </Route>
 

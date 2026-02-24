@@ -461,7 +461,7 @@ export default function LandingPage() {
                         <Typography variant="h6" fontWeight={700} mb={0.5}>{plan.name}</Typography>
                         <Box display="flex" alignItems="baseline" gap={0.5} mb={2}>
                           <Typography variant="h3" fontWeight={800} sx={{ color: PRIMARY }}>
-                            {plan.price_monthly > 0 ? `£${parseFloat(plan.price_monthly).toFixed(0)}` : 'Free'}
+                            {plan.price_monthly > 0 ? `£${parseFloat(plan.price_monthly).toFixed(2)}` : 'Free'}
                           </Typography>
                           {plan.price_monthly > 0 && (
                             <Typography variant="body1" color="text.secondary">/month</Typography>

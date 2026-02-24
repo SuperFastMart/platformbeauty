@@ -738,4 +738,90 @@ router.get('/dac7-stats', platformAuth, asyncHandler(async (req, res) => {
   res.json({ total: total.count, completed: completed.count, incomplete });
 }));
 
+// ============================================
+// ADVANCED ANALYTICS
+// ============================================
+
+// GET /api/platform/analytics/advanced — churn, ARPT, trial conversion, engagement
+router.get('/analytics/advanced', platformAuth, asyncHandler(async (req, res) => {
+  const TIER_PRICES = { free: 0, growth: 29, pro: 59 };
+
+  // Active MRR from current tier distribution
+  const activeTenants = await getAll(
+    "SELECT subscription_tier FROM tenants WHERE active = TRUE AND subscription_status = 'active'"
+  );
+  const activeMRR = activeTenants.reduce((sum, t) => sum + (TIER_PRICES[t.subscription_tier] || 0), 0);
+
+  // Churn rate (last 30 days)
+  const churnedCount = await getOne(
+    "SELECT COUNT(*)::int as count FROM tenants WHERE active = FALSE AND updated_at > NOW() - INTERVAL '30 days'"
+  );
+  const totalAtStart = await getOne(
+    "SELECT COUNT(*)::int as count FROM tenants WHERE active = TRUE OR (active = FALSE AND updated_at > NOW() - INTERVAL '30 days')"
+  );
+  const churnRate = totalAtStart.count > 0
+    ? ((churnedCount.count / totalAtStart.count) * 100).toFixed(1)
+    : 0;
+
+  // ARPT (Average Revenue Per Tenant) — last 30 days
+  const revenueResult = await getOne(
+    "SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE payment_status = 'succeeded' AND created_at > NOW() - INTERVAL '30 days'"
+  );
+  const activeCount = await getOne('SELECT COUNT(*)::int as count FROM tenants WHERE active = TRUE');
+  const arpt = activeCount.count > 0
+    ? (parseFloat(revenueResult.total) / activeCount.count).toFixed(2)
+    : 0;
+
+  // Trial-to-paid conversion
+  const totalTrialed = await getOne(
+    "SELECT COUNT(*)::int as count FROM tenants WHERE trial_ends_at IS NOT NULL"
+  );
+  const convertedToPaid = await getOne(
+    "SELECT COUNT(*)::int as count FROM tenants WHERE trial_ends_at IS NOT NULL AND subscription_status = 'active' AND subscription_tier != 'free'"
+  );
+  const trialConversion = totalTrialed.count > 0
+    ? ((convertedToPaid.count / totalTrialed.count) * 100).toFixed(1)
+    : 0;
+
+  // Tenant engagement scores (top 20 by recent bookings)
+  const engagement = await getAll(
+    `SELECT t.id, t.name, t.slug, t.subscription_tier,
+       (SELECT MAX(tu.last_login_at) FROM tenant_users tu WHERE tu.tenant_id = t.id) as last_login,
+       (SELECT COUNT(*)::int FROM bookings b WHERE b.tenant_id = t.id AND b.created_at > NOW() - INTERVAL '30 days') as bookings_30d,
+       (SELECT COUNT(*)::int FROM customers c WHERE c.tenant_id = t.id) as customer_count
+     FROM tenants t
+     WHERE t.active = TRUE
+     ORDER BY bookings_30d DESC
+     LIMIT 20`
+  );
+
+  const maxBookings = Math.max(...engagement.map(e => e.bookings_30d || 0), 1);
+  const maxCustomers = Math.max(...engagement.map(e => e.customer_count || 0), 1);
+  const engagementWithScore = engagement.map(e => {
+    const loginRecency = e.last_login ? (Date.now() - new Date(e.last_login).getTime()) / 86400000 : 999;
+    const loginScore = loginRecency <= 7 ? 30 : loginRecency <= 30 ? 15 : 0;
+    const bookingScore = ((e.bookings_30d || 0) / maxBookings) * 40;
+    const customerScore = ((e.customer_count || 0) / maxCustomers) * 30;
+    return { ...e, engagement_score: Math.round(loginScore + bookingScore + customerScore) };
+  });
+
+  res.json({
+    active_mrr: activeMRR,
+    churn_rate: parseFloat(churnRate),
+    arpt: parseFloat(arpt),
+    trial_conversion: parseFloat(trialConversion),
+    total_trialed: totalTrialed.count,
+    converted_to_paid: convertedToPaid.count,
+    engagement: engagementWithScore,
+  });
+}));
+
+// GET /api/platform/analytics/mrr-trend — last 12 months from snapshots
+router.get('/analytics/mrr-trend', platformAuth, asyncHandler(async (req, res) => {
+  const snapshots = await getAll(
+    'SELECT month, total_mrr, tenant_count, free_count, growth_count, pro_count, churn_count, new_count FROM platform_mrr_snapshots ORDER BY month DESC LIMIT 12'
+  );
+  res.json(snapshots.reverse());
+}));
+
 module.exports = router;

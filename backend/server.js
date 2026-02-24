@@ -25,6 +25,10 @@ app.use(cors({
 const { handleStripeWebhook } = require('./routes/subscriptions');
 app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), handleStripeWebhook);
 
+// Tenant Stripe webhook (membership billing) — also needs raw body
+const { handleTenantStripeWebhook } = require('./routes/memberships');
+app.post('/api/webhooks/tenant-stripe/:tenantId', express.raw({ type: 'application/json' }), handleTenantStripeWebhook);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -88,6 +92,19 @@ const { adminRouter: supportAdminRoutes, platformRouter: supportPlatformRoutes }
 app.use('/api/admin/support', tenantAuth, supportAdminRoutes);
 app.use('/api/platform/support', platformAuth, supportPlatformRoutes);
 
+// --- Sprint 10: Gift Cards, Packages, Memberships ---
+const { adminRouter: giftCardAdminRoutes, publicRouter: giftCardPublicRoutes } = require('./routes/giftCards');
+app.use('/api/admin/gift-cards', giftCardAdminRoutes);
+app.use('/api/t/:tenant/gift-cards', giftCardPublicRoutes);
+
+const { adminRouter: packageAdminRoutes, publicRouter: packagePublicRoutes } = require('./routes/packages');
+app.use('/api/admin/packages', packageAdminRoutes);
+app.use('/api/t/:tenant/packages', packagePublicRoutes);
+
+const { adminRouter: membershipAdminRoutes, publicRouter: membershipPublicRoutes } = require('./routes/memberships');
+app.use('/api/admin/memberships', membershipAdminRoutes);
+app.use('/api/t/:tenant/memberships', membershipPublicRoutes);
+
 // --- Subscriptions ---
 const { adminRouter: subscriptionAdminRoutes, publicRouter: subscriptionPublicRoutes, platformRouter: subscriptionPlatformRoutes } = require('./routes/subscriptions');
 app.use('/api/admin/subscription', subscriptionAdminRoutes);
@@ -124,6 +141,8 @@ async function start() {
     initReminderJob();
     const { initTrialExpiryJob } = require('./jobs/trialExpiryJob');
     initTrialExpiryJob();
+    const { initMRRSnapshotJob } = require('./jobs/mrrSnapshotJob');
+    initMRRSnapshotJob();
 
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);

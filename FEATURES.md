@@ -24,8 +24,8 @@
 - [x] Deposit collection at booking time (Stripe)
 - [x] Intake form questions per service (text, yes/no, checkbox)
 - [x] Service document/form attachments (PDF/DOC sent with confirmation email)
-- [ ] Waitlist management — auto-notify on cancellation *(Sprint 9)*
-- [ ] Service add-ons / upsells *(Sprint 9)*
+- [x] Waitlist management — auto-notify on cancellation *(Sprint 9)*
+- [x] Service add-ons / upsells *(Sprint 9)*
 - [ ] Buffer/processing time between appointments
 - [ ] Group bookings
 - [ ] Room/resource scheduling
@@ -58,10 +58,10 @@
 - [x] Stripe customer ID linking
 - [x] Saved payment methods per customer
 - [x] Admin impersonation of customer portal (with permission)
-- [ ] Allergies / alerts field with visual indicators *(Sprint 9)*
-- [ ] Structured preferences (colour formulas, products) *(Sprint 9)*
-- [ ] Client tags / labels *(Sprint 9)*
-- [ ] GDPR self-service account deletion *(Sprint 9)*
+- [x] Allergies / alerts field with visual indicators *(Sprint 9)*
+- [x] Structured preferences (colour formulas, products) *(Sprint 9)*
+- [x] Client tags / labels *(Sprint 9)*
+- [x] GDPR self-service account deletion *(Sprint 9)*
 - [ ] Before/after photo storage
 - [ ] Client segmentation / filtering for campaigns
 - [ ] Client import (CSV bulk upload)
@@ -78,7 +78,7 @@
 - [x] Reward redemption
 - [x] Customer-admin messaging
 - [x] Profile management
-- [ ] Self-service account deletion (GDPR) *(Sprint 9)*
+- [x] Self-service account deletion (GDPR) *(Sprint 9)*
 
 ## Loyalty & Discounts
 
@@ -107,8 +107,8 @@
 - [x] Password reset emails
 - [x] Service form attachments in confirmation emails
 - [x] Email logging (all sent emails tracked)
-- [ ] SMS settings admin UI *(Sprint 9)*
-- [ ] 2-hour SMS reminder *(Sprint 9)*
+- [x] SMS settings admin UI *(Sprint 9)*
+- [x] 2-hour SMS reminder *(Sprint 9)*
 - [ ] Email marketing campaigns (blast)
 - [ ] Automated campaigns (birthday, win-back)
 - [ ] WhatsApp notifications
@@ -147,7 +147,7 @@
 - [x] MFA (two-factor authentication)
 - [x] Password management
 - [x] DAC7 tax compliance (legal name, tax reference, address)
-- [ ] SMS notification toggles *(Sprint 9)*
+- [x] SMS notification toggles *(Sprint 9)*
 
 ## Services Management
 
@@ -158,7 +158,7 @@
 - [x] Intake form questions per service
 - [x] Document/form file attachments per service
 - [x] Form count badge indicator
-- [ ] Service add-ons / upsells *(Sprint 9)*
+- [x] Service add-ons / upsells *(Sprint 9)*
 - [ ] Service variants (different durations/prices)
 
 ## Platform Administration
@@ -189,7 +189,7 @@
 - [x] DAC7 tax information collection
 - [x] Activity logging
 - [x] Stripe PCI compliance (no card data stored)
-- [ ] GDPR customer self-service deletion *(Sprint 9)*
+- [x] GDPR customer self-service deletion *(Sprint 9)*
 
 ## Mobile & Accessibility
 

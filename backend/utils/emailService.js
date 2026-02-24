@@ -615,10 +615,39 @@ async function sendWaitlistSMS(entry, tenant) {
   return sendSMS(entry.customer_phone, message, tenant);
 }
 
+async function sendGiftCardEmail(recipientEmail, recipientName, code, amount, senderName, message, tenant) {
+  const platformUrl = process.env.PLATFORM_URL || 'https://boukd.com';
+  const html = `
+    <h2 style="margin:0 0 16px;color:#D4A853;">You've received a gift card!</h2>
+    ${senderName ? `<p style="color:#555;">${senderName} has sent you a gift card for <strong>${tenant.name}</strong>.</p>` : `<p style="color:#555;">You've received a gift card for <strong>${tenant.name}</strong>.</p>`}
+    ${message ? `<div style="background:#f9f9f9;border-radius:8px;padding:16px;margin:16px 0;font-style:italic;color:#666;">"${message}"</div>` : ''}
+    <div style="background:#fff8e1;border-radius:12px;padding:24px;margin:20px 0;text-align:center;border:2px dashed #D4A853;">
+      <p style="margin:0 0 8px;color:#888;font-size:13px;">Your Gift Card Code</p>
+      <p style="margin:0;font-size:24px;font-weight:700;letter-spacing:2px;color:#333;">${code}</p>
+      <p style="margin:12px 0 0;font-size:20px;font-weight:700;color:#D4A853;">&pound;${amount.toFixed(2)}</p>
+    </div>
+    <p style="color:#555;text-align:center;">
+      <a href="${platformUrl}/t/${tenant.slug}/book" style="display:inline-block;background:${tenant.primary_color || '#8B2635'};color:#fff;padding:12px 32px;border-radius:8px;text-decoration:none;font-weight:600;">
+        Book Now
+      </a>
+    </p>
+    <p style="color:#999;font-size:12px;text-align:center;">Enter the code above during checkout to redeem your gift card.</p>`;
+
+  return sendEmail({
+    to: recipientEmail,
+    toName: recipientName || recipientEmail,
+    subject: `You've received a gift card from ${tenant.name}!`,
+    html,
+    tenant,
+    emailType: 'gift_card',
+  });
+}
+
 module.exports = {
   sendEmail,
   sendPlatformEmail,
   sendVerificationEmail,
+  sendGiftCardEmail,
   sendBookingPendingNotification,
   sendBookingApprovedNotification,
   sendBookingRejectedNotification,

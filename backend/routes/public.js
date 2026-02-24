@@ -187,7 +187,7 @@ router.get('/next-available', asyncHandler(async (req, res) => {
 // POST /api/t/:tenant/bookings - create a booking
 const { bookingLimiter } = require('../middleware/rateLimit');
 router.post('/bookings', bookingLimiter, asyncHandler(async (req, res) => {
-  const { customerName, customerEmail, customerPhone, serviceIds, date, startTime, notes, discountCode, depositPaymentIntentId, intakeResponses } = req.body;
+  const { customerName, customerEmail, customerPhone, serviceIds, date, startTime, notes, discountCode, depositPaymentIntentId, intakeResponses, bookingSource, tipAmount, giftCardCode, customerPackageId } = req.body;
 
   if (!customerName || !customerEmail || !serviceIds?.length || !date || !startTime) {
     return res.status(400).json({
@@ -265,6 +265,47 @@ router.post('/bookings', bookingLimiter, asyncHandler(async (req, res) => {
 
   const totalPrice = subtotal - discountAmount;
 
+  // Validate and apply gift card
+  let giftCardId = null;
+  let giftCardAmount = 0;
+  if (giftCardCode) {
+    const giftCard = await getOne(
+      "SELECT id, remaining_balance, expires_at FROM gift_cards WHERE tenant_id = $1 AND code = $2 AND status = 'active'",
+      [req.tenantId, giftCardCode.toUpperCase().trim()]
+    );
+    if (giftCard) {
+      const notExpired = !giftCard.expires_at || new Date(giftCard.expires_at) > new Date();
+      if (notExpired && parseFloat(giftCard.remaining_balance) > 0) {
+        giftCardAmount = Math.min(parseFloat(giftCard.remaining_balance), totalPrice);
+        giftCardAmount = Math.round(giftCardAmount * 100) / 100;
+        giftCardId = giftCard.id;
+      }
+    }
+  }
+
+  // Validate package session usage
+  let validPackageId = null;
+  let packageCoveredPrice = 0;
+  if (customerPackageId) {
+    const cp = await getOne(
+      "SELECT cp.*, sp.session_count FROM customer_packages cp JOIN service_packages sp ON sp.id = cp.package_id WHERE cp.id = $1 AND cp.tenant_id = $2 AND cp.status = 'active' AND cp.sessions_remaining > 0 AND cp.expires_at > NOW()",
+      [customerPackageId, req.tenantId]
+    );
+    if (cp) {
+      // Verify package covers at least one of the selected services
+      const packageServices = await getAll(
+        'SELECT service_id FROM package_services WHERE package_id = $1',
+        [cp.package_id]
+      );
+      const packageServiceIds = packageServices.map(ps => ps.service_id);
+      const covered = serviceIds.some(id => packageServiceIds.includes(id));
+      if (covered) {
+        validPackageId = cp.id;
+        packageCoveredPrice = totalPrice; // Package covers full session
+      }
+    }
+  }
+
   // Calculate deposit amount from services
   let depositAmount = 0;
   let depositRequired = false;
@@ -326,20 +367,76 @@ router.post('/bookings', bookingLimiter, asyncHandler(async (req, res) => {
     return res.status(409).json({ error: 'Selected time slot is no longer available' });
   }
 
+  // Determine booking source
+  let resolvedSource = bookingSource || 'direct';
+  if (!bookingSource || bookingSource === 'direct') {
+    // Check if returning customer
+    const existingBooking = await getOne(
+      'SELECT id FROM bookings WHERE tenant_id = $1 AND customer_email = $2 LIMIT 1',
+      [req.tenantId, customerEmail]
+    );
+    if (existingBooking) resolvedSource = 'returning';
+  }
+
+  // Validate tip
+  const validTip = tipAmount && parseFloat(tipAmount) > 0 ? Math.round(parseFloat(tipAmount) * 100) / 100 : 0;
+
   // Create booking
   const booking = await getOne(
     `INSERT INTO bookings (tenant_id, customer_name, customer_email, customer_phone,
        service_ids, service_names, date, start_time, end_time,
        total_price, total_duration, status, notes, discount_code_id, discount_amount,
-       deposit_amount, deposit_status, deposit_payment_intent_id, intake_responses)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'pending', $12, $13, $14, $15, $16, $17, $18)
+       deposit_amount, deposit_status, deposit_payment_intent_id, intake_responses, booking_source, tip_amount,
+       gift_card_id, gift_card_amount, customer_package_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'pending', $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
      RETURNING *`,
     [req.tenantId, customerName, customerEmail, customerPhone || null,
      serviceIds.join(','), serviceNames, date, startTime, endTime,
-     totalPrice, totalDuration, notes || null, discountCodeId, discountAmount,
+     validPackageId ? 0 : totalPrice, totalDuration, notes || null, discountCodeId, discountAmount,
      depositAmount, depositStatus, depositPaymentIntentId || null,
-     intakeResponses ? JSON.stringify(intakeResponses) : null]
+     intakeResponses ? JSON.stringify(intakeResponses) : null, resolvedSource, validTip,
+     giftCardId, giftCardAmount, validPackageId]
   );
+
+  // Deduct gift card balance atomically
+  if (giftCardId && giftCardAmount > 0) {
+    const deducted = await getOne(
+      `UPDATE gift_cards SET remaining_balance = remaining_balance - $1
+       WHERE id = $2 AND remaining_balance >= $1
+       RETURNING id, remaining_balance`,
+      [giftCardAmount, giftCardId]
+    );
+    if (deducted) {
+      await run(
+        `INSERT INTO gift_card_transactions (tenant_id, gift_card_id, booking_id, amount, transaction_type, balance_after)
+         VALUES ($1, $2, $3, $4, 'redemption', $5)`,
+        [req.tenantId, giftCardId, booking.id, giftCardAmount, parseFloat(deducted.remaining_balance)]
+      );
+      // Mark as redeemed if balance is zero
+      if (parseFloat(deducted.remaining_balance) <= 0) {
+        await run("UPDATE gift_cards SET status = 'redeemed' WHERE id = $1", [giftCardId]);
+      }
+    }
+  }
+
+  // Deduct package session atomically
+  if (validPackageId) {
+    const deducted = await getOne(
+      `UPDATE customer_packages SET sessions_remaining = sessions_remaining - 1, sessions_used = sessions_used + 1
+       WHERE id = $1 AND sessions_remaining > 0
+       RETURNING id, sessions_remaining`,
+      [validPackageId]
+    );
+    if (deducted) {
+      await run(
+        'INSERT INTO package_usage (customer_package_id, booking_id, used_at) VALUES ($1, $2, NOW())',
+        [validPackageId, booking.id]
+      );
+      if (deducted.sessions_remaining <= 0) {
+        await run("UPDATE customer_packages SET status = 'exhausted' WHERE id = $1", [validPackageId]);
+      }
+    }
+  }
 
   // Mark time slots as unavailable
   if (neededSlots.length > 0) {

@@ -6,12 +6,14 @@ import {
   Card, CardContent, CardActionArea, Grid, useMediaQuery, useTheme,
   Button, Dialog, DialogTitle, DialogContent, DialogActions, Snackbar, Alert
 } from '@mui/material';
-import { Search, ChevronRight, Add } from '@mui/icons-material';
+import { Search, ChevronRight, Add, Upload, Download, FilterList, Save, Close } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import api from '../../api/client';
+import useSubscriptionTier from '../../hooks/useSubscriptionTier';
 
 export default function Customers() {
   const navigate = useNavigate();
+  const { hasAccess } = useSubscriptionTier();
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -23,6 +25,21 @@ export default function Customers() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
+  // CSV Import
+  const [importOpen, setImportOpen] = useState(false);
+  const [importData, setImportData] = useState([]);
+  const [importResult, setImportResult] = useState(null);
+  const [importing, setImporting] = useState(false);
+
+  // Filters / Segmentation
+  const [showFilters, setShowFilters] = useState(false);
+  const [filters, setFilters] = useState({});
+  const [filteredCustomers, setFilteredCustomers] = useState(null);
+  const [filtering, setFiltering] = useState(false);
+  const [segments, setSegments] = useState([]);
+  const [segmentName, setSegmentName] = useState('');
+  const [saveSegOpen, setSaveSegOpen] = useState(false);
+
   const fetchCustomers = () => {
     api.get('/admin/customers')
       .then(({ data }) => setCustomers(data))
@@ -32,13 +49,104 @@ export default function Customers() {
 
   useEffect(() => { fetchCustomers(); }, []);
 
+  useEffect(() => {
+    if (hasAccess('growth')) {
+      api.get('/admin/segments').then(({ data }) => setSegments(data)).catch(() => {});
+    }
+  }, []);
+
+  const handleCsvFile = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const text = evt.target.result;
+      const lines = text.split(/\r?\n/).filter(l => l.trim());
+      if (lines.length < 2) { setSnackbar({ open: true, message: 'CSV has no data rows', severity: 'error' }); return; }
+      const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/['"]/g, ''));
+      const rows = lines.slice(1).map(line => {
+        const vals = line.match(/("([^"]|"")*"|[^,]*)/g)?.map(v => v.replace(/^"|"$/g, '').replace(/""/g, '"').trim()) || [];
+        const obj = {};
+        headers.forEach((h, i) => { obj[h] = vals[i] || ''; });
+        return obj;
+      });
+      setImportData(rows);
+      setImportResult(null);
+    };
+    reader.readAsText(file);
+  };
+
+  const handleImport = async () => {
+    setImporting(true);
+    try {
+      const { data } = await api.post('/admin/customers/import', { customers: importData });
+      setImportResult(data);
+      if (data.imported > 0 || data.updated > 0) fetchCustomers();
+    } catch (err) {
+      setSnackbar({ open: true, message: err.response?.data?.error || 'Import failed', severity: 'error' });
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const downloadTemplate = () => {
+    const csv = 'name,email,phone,notes,tags\nJane Doe,jane@example.com,+447123456789,Regular client,"vip,loyal"';
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'customer_import_template.csv';
+    a.click();
+  };
+
+  const applyFilters = async () => {
+    setFiltering(true);
+    try {
+      const params = new URLSearchParams();
+      Object.entries(filters).forEach(([k, v]) => { if (v) params.append(k, v); });
+      const { data } = await api.get(`/admin/customers/filter?${params.toString()}`);
+      setFilteredCustomers(data);
+    } catch {
+      setSnackbar({ open: true, message: 'Filter failed', severity: 'error' });
+    } finally {
+      setFiltering(false);
+    }
+  };
+
+  const clearFilters = () => {
+    setFilters({});
+    setFilteredCustomers(null);
+  };
+
+  const saveSegment = async () => {
+    if (!segmentName) return;
+    try {
+      await api.post('/admin/segments', { name: segmentName, filters });
+      setSnackbar({ open: true, message: 'Segment saved', severity: 'success' });
+      setSaveSegOpen(false);
+      setSegmentName('');
+      const { data } = await api.get('/admin/segments');
+      setSegments(data);
+    } catch (err) {
+      setSnackbar({ open: true, message: err.response?.data?.error || 'Failed to save', severity: 'error' });
+    }
+  };
+
+  const loadSegment = (seg) => {
+    const f = typeof seg.filters === 'string' ? JSON.parse(seg.filters) : seg.filters;
+    setFilters(f);
+    setShowFilters(true);
+    // auto-apply
+    setTimeout(() => applyFilters(), 100);
+  };
+
+  const displayList = filteredCustomers || customers;
   const filtered = search
-    ? customers.filter(c =>
+    ? displayList.filter(c =>
         c.name?.toLowerCase().includes(search.toLowerCase()) ||
         c.email?.toLowerCase().includes(search.toLowerCase()) ||
         c.phone?.includes(search)
       )
-    : customers;
+    : displayList;
 
   const handleCreateCustomer = async () => {
     if (!form.name || !form.email) {
@@ -71,13 +179,73 @@ export default function Customers() {
     <Box>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Typography variant="h5" fontWeight={600}>Customers</Typography>
-        <Box display="flex" alignItems="center" gap={1}>
-          <Chip label={`${customers.length} total`} size="small" />
+        <Box display="flex" alignItems="center" gap={1} flexWrap="wrap">
+          <Chip label={`${filteredCustomers ? filteredCustomers.length : customers.length} ${filteredCustomers ? 'filtered' : 'total'}`} size="small" />
+          {hasAccess('growth') && (
+            <Button variant="outlined" size="small" startIcon={<FilterList />} onClick={() => setShowFilters(!showFilters)}>
+              Filter
+            </Button>
+          )}
+          {hasAccess('growth') && (
+            <Button variant="outlined" size="small" startIcon={<Upload />} onClick={() => { setImportOpen(true); setImportData([]); setImportResult(null); }}>
+              Import
+            </Button>
+          )}
           <Button variant="contained" size="small" startIcon={<Add />} onClick={() => setDialogOpen(true)}>
-            Add Customer
+            Add
           </Button>
         </Box>
       </Box>
+
+      {/* Segmentation filters */}
+      {showFilters && hasAccess('growth') && (
+        <Card sx={{ mb: 2 }}>
+          <CardContent sx={{ py: 2 }}>
+            <Box display="flex" justifyContent="space-between" alignItems="center" mb={1.5}>
+              <Typography variant="subtitle2" fontWeight={600}>Filter Customers</Typography>
+              <Box display="flex" gap={1}>
+                {segments.length > 0 && (
+                  <TextField
+                    select size="small" label="Load Segment" sx={{ minWidth: 140 }}
+                    SelectProps={{ native: true }}
+                    onChange={e => { const s = segments.find(s => s.id === parseInt(e.target.value)); if (s) loadSegment(s); }}
+                  >
+                    <option value="">—</option>
+                    {segments.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </TextField>
+                )}
+              </Box>
+            </Box>
+            <Grid container spacing={1.5}>
+              <Grid item xs={6} sm={3}>
+                <TextField fullWidth size="small" label="Min spent (£)" type="number"
+                  value={filters.min_spent || ''} onChange={e => setFilters(f => ({ ...f, min_spent: e.target.value }))} />
+              </Grid>
+              <Grid item xs={6} sm={3}>
+                <TextField fullWidth size="small" label="Max spent (£)" type="number"
+                  value={filters.max_spent || ''} onChange={e => setFilters(f => ({ ...f, max_spent: e.target.value }))} />
+              </Grid>
+              <Grid item xs={6} sm={3}>
+                <TextField fullWidth size="small" label="Min visits" type="number"
+                  value={filters.min_visits || ''} onChange={e => setFilters(f => ({ ...f, min_visits: e.target.value }))} />
+              </Grid>
+              <Grid item xs={6} sm={3}>
+                <TextField fullWidth size="small" label="Tags (comma-sep)" size="small"
+                  value={filters.tags || ''} onChange={e => setFilters(f => ({ ...f, tags: e.target.value }))} />
+              </Grid>
+            </Grid>
+            <Box display="flex" gap={1} mt={1.5}>
+              <Button variant="contained" size="small" onClick={applyFilters} disabled={filtering}>
+                {filtering ? 'Filtering...' : 'Apply'}
+              </Button>
+              {filteredCustomers && <Button size="small" onClick={clearFilters}>Clear</Button>}
+              {Object.values(filters).some(v => v) && (
+                <Button size="small" startIcon={<Save />} onClick={() => setSaveSegOpen(true)}>Save Segment</Button>
+              )}
+            </Box>
+          </CardContent>
+        </Card>
+      )}
 
       <TextField
         placeholder="Search by name, email, or phone..."
@@ -196,6 +364,83 @@ export default function Customers() {
           <Button variant="contained" onClick={handleCreateCustomer} disabled={submitting}>
             {submitting ? 'Creating...' : 'Create'}
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* CSV Import Dialog */}
+      <Dialog open={importOpen} onClose={() => setImportOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Import Customers</DialogTitle>
+        <DialogContent>
+          <Box display="flex" gap={1} mb={2}>
+            <Button variant="outlined" size="small" startIcon={<Download />} onClick={downloadTemplate}>
+              Download Template
+            </Button>
+          </Box>
+          <input type="file" accept=".csv" onChange={handleCsvFile} style={{ marginBottom: 16 }} />
+          {importData.length > 0 && !importResult && (
+            <Box>
+              <Typography variant="body2" mb={1}>{importData.length} row{importData.length !== 1 ? 's' : ''} found</Typography>
+              <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 200 }}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Name</TableCell>
+                      <TableCell>Email</TableCell>
+                      <TableCell>Phone</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {importData.slice(0, 10).map((r, i) => (
+                      <TableRow key={i}>
+                        <TableCell>{r.name || '—'}</TableCell>
+                        <TableCell>{r.email || '—'}</TableCell>
+                        <TableCell>{r.phone || '—'}</TableCell>
+                      </TableRow>
+                    ))}
+                    {importData.length > 10 && (
+                      <TableRow><TableCell colSpan={3}>...and {importData.length - 10} more</TableCell></TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Box>
+          )}
+          {importResult && (
+            <Box mt={2}>
+              <Alert severity="success" sx={{ mb: 1 }}>
+                {importResult.imported} created, {importResult.updated} updated, {importResult.skipped} skipped
+              </Alert>
+              {importResult.errors?.length > 0 && (
+                <Box>
+                  <Typography variant="subtitle2" color="error" mb={0.5}>Errors:</Typography>
+                  {importResult.errors.slice(0, 5).map((e, i) => (
+                    <Typography key={i} variant="caption" display="block">Row {e.row} ({e.name}): {e.errors.join(', ')}</Typography>
+                  ))}
+                </Box>
+              )}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setImportOpen(false)}>Close</Button>
+          {importData.length > 0 && !importResult && (
+            <Button variant="contained" onClick={handleImport} disabled={importing}>
+              {importing ? 'Importing...' : `Import ${importData.length} Rows`}
+            </Button>
+          )}
+        </DialogActions>
+      </Dialog>
+
+      {/* Save Segment Dialog */}
+      <Dialog open={saveSegOpen} onClose={() => setSaveSegOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Save Segment</DialogTitle>
+        <DialogContent>
+          <TextField fullWidth label="Segment Name" margin="normal"
+            value={segmentName} onChange={e => setSegmentName(e.target.value)} placeholder="e.g. High Spenders" />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSaveSegOpen(false)}>Cancel</Button>
+          <Button variant="contained" onClick={saveSegment} disabled={!segmentName}>Save</Button>
         </DialogActions>
       </Dialog>
 

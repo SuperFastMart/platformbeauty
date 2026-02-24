@@ -10,7 +10,8 @@ import {
   Schedule, Logout, People, AddCircle, Settings as SettingsIcon,
   Loyalty as LoyaltyIcon, LocalOffer, Assessment,
   Chat, StarBorder, Menu as MenuIcon, SupportAgent,
-  DarkMode, LightMode, Security, Close, AccountBalance, HourglassEmpty
+  DarkMode, LightMode, Security, Close, AccountBalance, HourglassEmpty,
+  CardGiftcard, Inventory2, WorkspacePremium
 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
 import { useThemeMode } from '../../contexts/ThemeContext';
@@ -28,6 +29,9 @@ const navItems = [
   { label: 'Customers', path: '/admin/customers', icon: <People /> },
   { label: 'Loyalty', path: '/admin/loyalty', icon: <LoyaltyIcon /> },
   { label: 'Discount Codes', path: '/admin/discount-codes', icon: <LocalOffer /> },
+  { label: 'Gift Cards', path: '/admin/gift-cards', icon: <CardGiftcard /> },
+  { label: 'Packages', path: '/admin/packages', icon: <Inventory2 /> },
+  { label: 'Memberships', path: '/admin/memberships', icon: <WorkspacePremium /> },
   { label: 'Reports', path: '/admin/reports', icon: <Assessment /> },
   { label: 'Messages', path: '/admin/messages', icon: <Chat /> },
   { label: 'Reviews', path: '/admin/reviews', icon: <StarBorder /> },

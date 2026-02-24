@@ -6,10 +6,12 @@ import {
   Grid, Alert, Snackbar, Dialog, DialogTitle, DialogContent, DialogActions,
   IconButton, useMediaQuery, useTheme, Tooltip
 } from '@mui/material';
-import { ArrowBack, Delete, PersonOutline, ReportProblem, LocalOffer, Add } from '@mui/icons-material';
+import { ArrowBack, Delete, PersonOutline, ReportProblem, LocalOffer, Add, CameraAlt, Close } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import api from '../../api/client';
 import { useAuth } from '../../contexts/AuthContext';
+import useSubscriptionTier from '../../hooks/useSubscriptionTier';
+import FeatureGate from '../../components/FeatureGate';
 
 const statusColors = {
   pending: 'warning', confirmed: 'success', rejected: 'error',
@@ -34,6 +36,17 @@ export default function CustomerDetail() {
   const [deleteDialog, setDeleteDialog] = useState(false);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const { hasAccess } = useSubscriptionTier();
+
+  // Photos
+  const [photos, setPhotos] = useState([]);
+  const [photoUploadOpen, setPhotoUploadOpen] = useState(false);
+  const [photoType, setPhotoType] = useState('before');
+  const [photoPairId, setPhotoPairId] = useState('');
+  const [photoCaption, setPhotoCaption] = useState('');
+  const [photoFile, setPhotoFile] = useState(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [viewPhoto, setViewPhoto] = useState(null);
 
   useEffect(() => {
     api.get(`/admin/customers/${id}`)
@@ -51,6 +64,56 @@ export default function CustomerDetail() {
       })
       .finally(() => setLoading(false));
   }, [id]);
+
+  const fetchPhotos = () => {
+    if (hasAccess('growth')) {
+      api.get(`/admin/customers/${id}/photos`).then(({ data }) => setPhotos(data)).catch(() => {});
+    }
+  };
+  useEffect(() => { fetchPhotos(); }, [id]);
+
+  const handlePhotoUpload = async () => {
+    if (!photoFile) return;
+    setUploadingPhoto(true);
+    try {
+      const fd = new FormData();
+      fd.append('photo', photoFile);
+      fd.append('photo_type', photoType);
+      if (photoPairId) fd.append('pair_id', photoPairId);
+      if (photoCaption) fd.append('caption', photoCaption);
+      await api.post(`/admin/customers/${id}/photos`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      setSnackbar({ open: true, message: 'Photo uploaded', severity: 'success' });
+      setPhotoUploadOpen(false);
+      setPhotoFile(null);
+      setPhotoCaption('');
+      setPhotoPairId('');
+      fetchPhotos();
+    } catch (err) {
+      setSnackbar({ open: true, message: err.response?.data?.error || 'Upload failed', severity: 'error' });
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  const deletePhoto = async (photoId) => {
+    try {
+      await api.delete(`/admin/customers/${id}/photos/${photoId}`);
+      setPhotos(photos.filter(p => p.id !== photoId));
+      setSnackbar({ open: true, message: 'Photo deleted', severity: 'success' });
+    } catch {
+      setSnackbar({ open: true, message: 'Failed to delete', severity: 'error' });
+    }
+  };
+
+  // Group photos by pair_id
+  const photoPairs = photos.reduce((acc, p) => {
+    const key = p.pair_id || `single-${p.id}`;
+    if (!acc[key]) acc[key] = {};
+    acc[key][p.photo_type] = p;
+    return acc;
+  }, {});
+
+  const unpairedBefores = photos.filter(p => p.photo_type === 'before' && !photos.some(a => a.photo_type === 'after' && a.pair_id === p.pair_id));
 
   const saveAll = async () => {
     try {
@@ -270,6 +333,120 @@ export default function CustomerDetail() {
         </TableContainer>
         )
       )}
+
+      {/* Photos */}
+      {hasAccess('growth') && (
+        <Box mt={3}>
+          <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+            <Typography variant="h6" fontWeight={600}>Before / After Photos</Typography>
+            <Button size="small" variant="outlined" startIcon={<CameraAlt />}
+              onClick={() => { setPhotoUploadOpen(true); setPhotoType('before'); setPhotoPairId(''); }}>
+              Upload Photo
+            </Button>
+          </Box>
+          {Object.entries(photoPairs).length === 0 ? (
+            <Typography color="text.secondary" variant="body2">No photos yet</Typography>
+          ) : (
+            <Grid container spacing={2}>
+              {Object.entries(photoPairs).map(([key, pair]) => (
+                <Grid item xs={12} sm={6} key={key}>
+                  <Card variant="outlined">
+                    <CardContent sx={{ p: 1.5 }}>
+                      <Box display="flex" gap={1}>
+                        {pair.before && (
+                          <Box sx={{ flex: 1, textAlign: 'center' }}>
+                            <Typography variant="caption" fontWeight={600} display="block" mb={0.5}>Before</Typography>
+                            <Box
+                              component="img"
+                              src={`/api/admin/customers/${id}/photos/${pair.before.id}`}
+                              alt="Before"
+                              sx={{ width: '100%', maxHeight: 150, objectFit: 'cover', borderRadius: 1, cursor: 'pointer' }}
+                              onClick={() => setViewPhoto(pair.before)}
+                            />
+                            <IconButton size="small" color="error" onClick={() => deletePhoto(pair.before.id)}>
+                              <Delete sx={{ fontSize: 16 }} />
+                            </IconButton>
+                          </Box>
+                        )}
+                        {pair.after && (
+                          <Box sx={{ flex: 1, textAlign: 'center' }}>
+                            <Typography variant="caption" fontWeight={600} display="block" mb={0.5}>After</Typography>
+                            <Box
+                              component="img"
+                              src={`/api/admin/customers/${id}/photos/${pair.after.id}`}
+                              alt="After"
+                              sx={{ width: '100%', maxHeight: 150, objectFit: 'cover', borderRadius: 1, cursor: 'pointer' }}
+                              onClick={() => setViewPhoto(pair.after)}
+                            />
+                            <IconButton size="small" color="error" onClick={() => deletePhoto(pair.after.id)}>
+                              <Delete sx={{ fontSize: 16 }} />
+                            </IconButton>
+                          </Box>
+                        )}
+                        {pair.before && !pair.after && (
+                          <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <Button size="small" variant="outlined" onClick={() => {
+                              setPhotoType('after');
+                              setPhotoPairId(pair.before.pair_id);
+                              setPhotoUploadOpen(true);
+                            }}>
+                              + Add After
+                            </Button>
+                          </Box>
+                        )}
+                      </Box>
+                      {(pair.before?.caption || pair.after?.caption) && (
+                        <Typography variant="caption" color="text.secondary" display="block" mt={0.5}>
+                          {pair.before?.caption || pair.after?.caption}
+                        </Typography>
+                      )}
+                    </CardContent>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+          )}
+        </Box>
+      )}
+
+      {/* Photo Upload Dialog */}
+      <Dialog open={photoUploadOpen} onClose={() => setPhotoUploadOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Upload {photoType === 'before' ? 'Before' : 'After'} Photo</DialogTitle>
+        <DialogContent>
+          {photoType === 'after' && unpairedBefores.length > 0 && !photoPairId && (
+            <Box mb={2}>
+              <Typography variant="body2" mb={1}>Link to an existing "before" photo:</Typography>
+              {unpairedBefores.map(p => (
+                <Chip key={p.id} label={`${p.file_name} (${dayjs(p.created_at).format('D MMM')})`} size="small"
+                  onClick={() => setPhotoPairId(p.pair_id)} variant={photoPairId === p.pair_id ? 'filled' : 'outlined'}
+                  sx={{ mr: 0.5, mb: 0.5 }} />
+              ))}
+            </Box>
+          )}
+          <input type="file" accept="image/png,image/jpeg" onChange={e => setPhotoFile(e.target.files?.[0] || null)} />
+          <TextField fullWidth size="small" label="Caption (optional)" margin="normal"
+            value={photoCaption} onChange={e => setPhotoCaption(e.target.value)} />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPhotoUploadOpen(false)}>Cancel</Button>
+          <Button variant="contained" onClick={handlePhotoUpload} disabled={!photoFile || uploadingPhoto}>
+            {uploadingPhoto ? 'Uploading...' : 'Upload'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Photo Viewer */}
+      <Dialog open={!!viewPhoto} onClose={() => setViewPhoto(null)} maxWidth="md">
+        <DialogContent sx={{ p: 1, position: 'relative' }}>
+          <IconButton onClick={() => setViewPhoto(null)} sx={{ position: 'absolute', top: 4, right: 4, bgcolor: 'rgba(0,0,0,0.5)', color: '#fff' }}>
+            <Close />
+          </IconButton>
+          {viewPhoto && (
+            <Box component="img" src={`/api/admin/customers/${id}/photos/${viewPhoto.id}`}
+              alt={viewPhoto.photo_type} sx={{ width: '100%', maxHeight: '80vh', objectFit: 'contain' }} />
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Delete */}
       <Box mt={4} pt={3} borderTop={1} borderColor="divider">
