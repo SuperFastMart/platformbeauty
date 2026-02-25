@@ -133,7 +133,10 @@ export default function BookingFlow() {
       .then(({ data }) => setSiteSettings(data))
       .catch(() => {});
     api.get(`/t/${slug}/addon-links`)
-      .then(({ data }) => setAddonLinks(data))
+      .then(({ data }) => {
+        if (data.length > 0) console.log(`[BookingFlow] Loaded ${data.length} addon link(s):`, data.map(l => `${l.parent_service_id} → ${l.id} (${l.name})`));
+        setAddonLinks(data);
+      })
       .catch(err => console.error('Failed to load add-on links:', err));
   }, [slug]);
 
@@ -675,9 +678,8 @@ export default function BookingFlow() {
                   <AccordionDetails sx={{ p: 0 }}>
                     {services.map((s, idx) => {
                       const isSelected = selectedIds.includes(s.id);
-                      const serviceAddons = isSelected
-                        ? addonLinks.filter(l => l.parent_service_id === s.id)
-                        : [];
+                      const serviceAddonLinks = addonLinks.filter(l => l.parent_service_id === s.id);
+                      const serviceAddons = isSelected ? serviceAddonLinks : [];
                       return (
                         <Box key={s.id}>
                           <Box
@@ -706,15 +708,24 @@ export default function BookingFlow() {
                               }}
                             />
                             <Box sx={{ flex: 1, pr: 2 }}>
-                              <Typography
-                                fontWeight={isSelected ? 600 : 500}
-                                sx={{
-                                  fontSize: { xs: '0.9rem', sm: '1rem' },
-                                  color: isSelected ? 'success.dark' : 'text.primary',
-                                }}
-                              >
-                                {s.name}
-                              </Typography>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Typography
+                                  fontWeight={isSelected ? 600 : 500}
+                                  sx={{
+                                    fontSize: { xs: '0.9rem', sm: '1rem' },
+                                    color: isSelected ? 'success.dark' : 'text.primary',
+                                  }}
+                                >
+                                  {s.name}
+                                </Typography>
+                                {serviceAddonLinks.length > 0 && !isSelected && (
+                                  <Chip
+                                    label={`${serviceAddonLinks.length} add-on${serviceAddonLinks.length > 1 ? 's' : ''}`}
+                                    size="small"
+                                    sx={{ height: 18, fontSize: '0.65rem', bgcolor: '#D4A85320', color: '#8a7020', fontWeight: 600 }}
+                                  />
+                                )}
+                              </Box>
                               {s.description && (
                                 <Typography
                                   variant="body2"

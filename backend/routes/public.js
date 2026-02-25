@@ -51,7 +51,8 @@ router.get('/services', asyncHandler(async (req, res) => {
 router.get('/addon-links', asyncHandler(async (req, res) => {
   const links = await getAll(
     `SELECT sal.parent_service_id, sal.addon_service_id, sal.display_order,
-       s.id, s.name, s.description, s.duration, s.price, s.category
+       s.id AS id, s.name AS name, s.description AS description,
+       s.duration AS duration, s.price AS price, s.category AS category
      FROM service_addon_links sal
      JOIN services s ON s.id = sal.addon_service_id AND s.active = TRUE
      WHERE sal.tenant_id = $1
