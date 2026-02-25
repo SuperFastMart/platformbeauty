@@ -64,6 +64,13 @@ Multi-tenant booking platform for beauty/wellness professionals. Monorepo: `back
 - `boxShadow: 'none'`, `border: '1px solid'`, `borderColor: 'divider'`
 - `borderRadius: '12px !important'`, `mb: 1.5`
 
+**Confirmation Dialogs:**
+- **Never use `window.confirm()` or `window.alert()`** — always use the `ConfirmDialog` component (`src/components/ConfirmDialog.jsx`)
+- Props: `title`, `message`, `confirmLabel`, `confirmColor`, `warning` (optional alert banner)
+- Destructive actions: `confirmColor="error"`, `confirmLabel="Delete"` or `"Yes, Cancel"`
+- Non-destructive: `confirmColor="primary"`, `confirmLabel="Confirm"` or `"Deactivate"`
+- Pattern: `const [confirmOpen, setConfirmOpen] = useState(false);` → button sets `true` → dialog calls handler on confirm
+
 ### Spacing
 | Context | Value |
 |---------|-------|

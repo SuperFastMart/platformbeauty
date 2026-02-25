@@ -15,6 +15,7 @@ import api from '../../api/client';
 import { useTenant } from './TenantPublicLayout';
 import CardSetupForm from '../../components/CardSetupForm';
 import DepositPaymentForm from '../../components/DepositPaymentForm';
+import ConfirmDialog from '../../components/ConfirmDialog';
 
 // Cache Stripe instance per publishable key
 const stripeCache = {};
@@ -63,6 +64,7 @@ export default function BookingFlow() {
   const [error, setError] = useState('');
   const [cardSetup, setCardSetup] = useState(null);
   const [cardSaved, setCardSaved] = useState(false);
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
 
   // Discount code
   const [discountInput, setDiscountInput] = useState('');
@@ -242,19 +244,29 @@ export default function BookingFlow() {
 
   // Dynamic steps
   const hasIntake = intakeQuestions.length > 0;
+  // Addons step shows only when selected services have available addons
+  const selectedAddonsAvailable = useMemo(() => {
+    return addonLinks.filter(l => selectedIds.includes(l.parent_service_id));
+  }, [addonLinks, selectedIds]);
+  const hasAddons = selectedAddonsAvailable.length > 0;
+
   const stepsArr = useMemo(() => {
-    const s = ['Services', 'Date', 'Time'];
+    const s = ['Services'];
+    if (hasAddons) s.push('Add-ons');
+    s.push('Date', 'Time');
     if (hasIntake) s.push('Questions');
     s.push('Details', 'Confirm');
     return s;
-  }, [hasIntake]);
+  }, [hasAddons, hasIntake]);
 
+  const addonOffset = hasAddons ? 1 : 0;
   const STEP_SERVICES = 0;
-  const STEP_DATE = 1;
-  const STEP_TIME = 2;
-  const STEP_INTAKE = hasIntake ? 3 : -1;
-  const STEP_DETAILS = hasIntake ? 4 : 3;
-  const STEP_CONFIRM = hasIntake ? 5 : 4;
+  const STEP_ADDONS = hasAddons ? 1 : -1;
+  const STEP_DATE = 1 + addonOffset;
+  const STEP_TIME = 2 + addonOffset;
+  const STEP_INTAKE = hasIntake ? 3 + addonOffset : -1;
+  const STEP_DETAILS = 3 + addonOffset + (hasIntake ? 1 : 0);
+  const STEP_CONFIRM = 4 + addonOffset + (hasIntake ? 1 : 0);
   const STEP_SUCCESS = STEP_CONFIRM + 1;
 
   // Filter slots to only show those with enough consecutive availability
@@ -504,6 +516,7 @@ export default function BookingFlow() {
 
   const canProceed = () => {
     if (activeStep === STEP_SERVICES) return selectedIds.length > 0;
+    if (activeStep === STEP_ADDONS) return true; // Addons are optional
     if (activeStep === STEP_DATE) return !!selectedDate;
     if (activeStep === STEP_TIME) return !!selectedSlot;
     if (activeStep === STEP_INTAKE) {
@@ -695,8 +708,7 @@ export default function BookingFlow() {
                   <AccordionDetails sx={{ p: 0 }}>
                     {services.map((s, idx) => {
                       const isSelected = selectedIds.includes(s.id);
-                      const serviceAddonLinks = addonLinks.filter(l => l.parent_service_id === s.id);
-                      const serviceAddons = isSelected ? serviceAddonLinks : [];
+                      const serviceAddonCount = addonLinks.filter(l => l.parent_service_id === s.id).length;
                       return (
                         <Box key={s.id}>
                           <Box
@@ -735,9 +747,9 @@ export default function BookingFlow() {
                                 >
                                   {s.name}
                                 </Typography>
-                                {serviceAddonLinks.length > 0 && !isSelected && (
+                                {serviceAddonCount > 0 && (
                                   <Chip
-                                    label={`${serviceAddonLinks.length} add-on${serviceAddonLinks.length > 1 ? 's' : ''}`}
+                                    label={`${serviceAddonCount} add-on${serviceAddonCount > 1 ? 's' : ''}`}
                                     size="small"
                                     sx={{ height: 18, fontSize: '0.65rem', bgcolor: '#D4A85320', color: '#8a7020', fontWeight: 600 }}
                                   />
@@ -776,60 +788,6 @@ export default function BookingFlow() {
                               <Add sx={{ ml: 1, color: 'grey.400', fontSize: 20 }} />
                             )}
                           </Box>
-                          {/* Add-on sub-items */}
-                          {serviceAddons.map(addon => {
-                            const addonSelected = selectedIds.includes(addon.id);
-                            return (
-                              <Box
-                                key={`addon-${addon.id}`}
-                                onClick={() => toggleAddon(addon.id)}
-                                sx={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  p: 1.5,
-                                  pl: 5,
-                                  cursor: 'pointer',
-                                  borderBottom: '1px solid',
-                                  borderColor: 'divider',
-                                  borderLeft: '3px solid #D4A853',
-                                  bgcolor: addonSelected ? 'rgba(212, 168, 83, 0.1)' : 'rgba(0,0,0,0.02)',
-                                  transition: 'all 0.15s ease',
-                                  '&:hover': {
-                                    bgcolor: addonSelected ? 'rgba(212, 168, 83, 0.15)' : 'rgba(0,0,0,0.04)',
-                                  },
-                                }}
-                              >
-                                <Checkbox
-                                  checked={addonSelected}
-                                  size="small"
-                                  sx={{
-                                    mr: 1,
-                                    color: 'grey.400',
-                                    '&.Mui-checked': { color: '#D4A853' },
-                                  }}
-                                />
-                                <Box sx={{ flex: 1, pr: 2 }}>
-                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                    <Add sx={{ fontSize: 14, color: '#D4A853' }} />
-                                    <Typography
-                                      fontWeight={addonSelected ? 600 : 500}
-                                      sx={{ fontSize: { xs: '0.85rem', sm: '0.9rem' }, color: addonSelected ? '#8a7020' : 'text.primary' }}
-                                    >
-                                      {addon.name}
-                                    </Typography>
-                                  </Box>
-                                </Box>
-                                <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
-                                  <Typography fontWeight={600} color="#D4A853" sx={{ fontSize: { xs: '0.85rem', sm: '0.95rem' } }}>
-                                    +£{parseFloat(addon.price).toFixed(2)}
-                                  </Typography>
-                                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
-                                    +{addon.duration} min
-                                  </Typography>
-                                </Box>
-                              </Box>
-                            );
-                          })}
                         </Box>
                       );
                     })}
@@ -880,7 +838,7 @@ export default function BookingFlow() {
               <Button
                 variant="contained"
                 size="large"
-                onClick={() => setActiveStep(STEP_DATE)}
+                onClick={() => setActiveStep(hasAddons ? STEP_ADDONS : STEP_DATE)}
                 sx={{ px: 4, py: 1.5, minHeight: 48 }}
               >
                 Continue
@@ -893,7 +851,95 @@ export default function BookingFlow() {
         </Box>
       )}
 
-      {/* Step 1: Date — Calendar Grid */}
+      {/* Add-ons Step */}
+      {activeStep === STEP_ADDONS && STEP_ADDONS >= 0 && (
+        <Box>
+          <Typography variant="h6" fontWeight={600} mb={0.5}>Add-on Extras</Typography>
+          <Typography variant="body2" color="text.secondary" mb={2}>
+            Enhance your appointment with optional add-ons. These are entirely optional — skip if you'd prefer not to add any.
+          </Typography>
+
+          {(() => {
+            // Group available addons by parent service
+            const groups = [];
+            const selectedNonAddon = selectedIds.filter(id => !addonLinks.some(l => l.addon_service_id === id));
+            for (const svcId of selectedNonAddon) {
+              const svc = allServices.find(s => s.id === svcId);
+              const addons = addonLinks.filter(l => l.parent_service_id === svcId);
+              if (svc && addons.length > 0) groups.push({ service: svc, addons });
+            }
+            return groups.map(({ service, addons }) => (
+              <Box key={service.id} mb={2}>
+                <Typography variant="subtitle2" fontWeight={600} mb={1} color="text.secondary">
+                  For {service.name}
+                </Typography>
+                <Card variant="outlined" sx={{ borderRadius: 2 }}>
+                  {addons.map((addon, idx) => {
+                    const addonSelected = selectedIds.includes(addon.id);
+                    return (
+                      <Box
+                        key={addon.id}
+                        onClick={() => toggleAddon(addon.id)}
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          p: 2,
+                          cursor: 'pointer',
+                          borderTop: idx > 0 ? '1px solid' : 'none',
+                          borderColor: 'divider',
+                          bgcolor: addonSelected ? 'rgba(212, 168, 83, 0.08)' : 'transparent',
+                          transition: 'all 0.15s ease',
+                          '&:hover': { bgcolor: addonSelected ? 'rgba(212, 168, 83, 0.12)' : 'action.hover' },
+                        }}
+                      >
+                        <Checkbox
+                          checked={addonSelected}
+                          sx={{ mr: 1, color: 'grey.400', '&.Mui-checked': { color: '#D4A853' } }}
+                        />
+                        <Box sx={{ flex: 1, pr: 2 }}>
+                          <Typography fontWeight={addonSelected ? 600 : 500} sx={{ fontSize: '0.95rem' }}>
+                            {addon.name}
+                          </Typography>
+                          {addon.description && (
+                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8rem', mt: 0.25 }}>
+                              {addon.description}
+                            </Typography>
+                          )}
+                        </Box>
+                        <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
+                          <Typography fontWeight={600} color="#D4A853" sx={{ fontSize: '0.95rem' }}>
+                            +£{parseFloat(addon.price).toFixed(2)}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            +{addon.duration} min
+                          </Typography>
+                        </Box>
+                      </Box>
+                    );
+                  })}
+                </Card>
+              </Box>
+            ));
+          })()}
+
+          {/* Summary of selected addons */}
+          {(() => {
+            const selectedAddonIds = selectedIds.filter(id => addonLinks.some(l => l.addon_service_id === id));
+            const selectedAddonServices = addonServices.filter(s => selectedAddonIds.includes(s.id));
+            if (selectedAddonServices.length === 0) return null;
+            const addonTotal = selectedAddonServices.reduce((sum, s) => sum + parseFloat(s.price), 0);
+            return (
+              <Box mt={2} p={2} bgcolor="rgba(212, 168, 83, 0.08)" borderRadius={2}>
+                <Typography variant="body2" fontWeight={600} color="#8a7020">
+                  {selectedAddonServices.length} add-on{selectedAddonServices.length !== 1 ? 's' : ''} selected — +£{addonTotal.toFixed(2)}
+                </Typography>
+              </Box>
+            );
+          })()}
+        </Box>
+      )}
+
+      {/* Date — Calendar Grid */}
       {activeStep === STEP_DATE && (
         <Box>
           <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
@@ -1588,9 +1634,7 @@ export default function BookingFlow() {
           variant="text" size="small" color="inherit"
           onClick={() => {
             if (selectedIds.length > 0 || selectedDate || selectedSlot) {
-              if (window.confirm('Are you sure you want to cancel? Your selections will be lost.')) {
-                navigate(`/t/${slug}`);
-              }
+              setCancelConfirmOpen(true);
             } else {
               navigate(`/t/${slug}`);
             }
@@ -1600,6 +1644,16 @@ export default function BookingFlow() {
           Cancel Booking
         </Button>
       </Box>
+
+      <ConfirmDialog
+        open={cancelConfirmOpen}
+        title="Cancel Booking?"
+        message="Are you sure you want to cancel? Your selections will be lost."
+        confirmLabel="Yes, Cancel"
+        confirmColor="error"
+        onConfirm={() => navigate(`/t/${slug}`)}
+        onClose={() => setCancelConfirmOpen(false)}
+      />
     </Container>
   );
 }

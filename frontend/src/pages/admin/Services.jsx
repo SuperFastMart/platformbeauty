@@ -31,6 +31,7 @@ export default function Services() {
   const [addonLinks, setAddonLinks] = useState([]);
   const [addonLinkLoading, setAddonLinkLoading] = useState(false);
   const [selectedAddonId, setSelectedAddonId] = useState('');
+  const [deleteConfirm, setDeleteConfirm] = useState(null); // { id, name, active }
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
@@ -97,14 +98,16 @@ export default function Services() {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Deactivate this service?')) return;
+  const handleDeleteConfirm = async () => {
+    if (!deleteConfirm) return;
     try {
-      await api.delete(`/admin/services/${id}`);
-      setSnackbar({ open: true, message: 'Service deactivated', severity: 'success' });
+      const { data } = await api.delete(`/admin/services/${deleteConfirm.id}`);
+      setSnackbar({ open: true, message: data.message || 'Done', severity: 'success' });
       fetchServices();
     } catch (err) {
-      setSnackbar({ open: true, message: 'Error deactivating service', severity: 'error' });
+      setSnackbar({ open: true, message: err.response?.data?.error || 'Failed to delete service', severity: 'error' });
+    } finally {
+      setDeleteConfirm(null);
     }
   };
 
@@ -293,7 +296,7 @@ export default function Services() {
                       </Box>
                       <Box display="flex" gap={0.5} ml={1} flexShrink={0}>
                         {!s.is_addon && (
-                          <IconButton size="small" onClick={() => openAddons(s)} title="Add-ons">
+                          <IconButton size="small" onClick={() => openAddons(s)} title="Manage add-on exclusions">
                             <Extension fontSize="small" />
                           </IconButton>
                         )}
@@ -310,11 +313,10 @@ export default function Services() {
                         <IconButton size="small" onClick={() => handleOpen(s)}>
                           <Edit fontSize="small" />
                         </IconButton>
-                        {s.active && (
-                          <IconButton size="small" onClick={() => handleDelete(s.id)}>
-                            <Delete fontSize="small" />
-                          </IconButton>
-                        )}
+                        <IconButton size="small" color={s.active ? 'default' : 'error'}
+                          onClick={() => setDeleteConfirm({ id: s.id, name: s.name, active: s.active })}>
+                          <Delete fontSize="small" />
+                        </IconButton>
                       </Box>
                     </Box>
                   </CardContent>
@@ -364,7 +366,7 @@ export default function Services() {
                         </TableCell>
                         <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
                           {!s.is_addon && (
-                            <IconButton size="small" onClick={() => openAddons(s)} title="Add-ons">
+                            <IconButton size="small" onClick={() => openAddons(s)} title="Manage add-on exclusions">
                               <Extension fontSize="small" />
                             </IconButton>
                           )}
@@ -381,11 +383,10 @@ export default function Services() {
                           <IconButton size="small" onClick={() => handleOpen(s)}>
                             <Edit fontSize="small" />
                           </IconButton>
-                          {s.active && (
-                            <IconButton size="small" onClick={() => handleDelete(s.id)}>
-                              <Delete fontSize="small" />
-                            </IconButton>
-                          )}
+                          <IconButton size="small" color={s.active ? 'default' : 'error'}
+                            onClick={() => setDeleteConfirm({ id: s.id, name: s.name, active: s.active })}>
+                            <Delete fontSize="small" />
+                          </IconButton>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -563,58 +564,109 @@ export default function Services() {
       <Dialog open={!!addonsOpen} onClose={() => setAddonsOpen(null)} maxWidth="sm" fullWidth>
         <DialogTitle>Add-ons — {addonsOpen?.name}</DialogTitle>
         <DialogContent>
+          <Alert severity="info" variant="outlined" sx={{ mb: 2 }}>
+            Add-on services are available on all services by default. Use this panel to exclude add-ons that don't apply to <strong>{addonsOpen?.name}</strong>.
+          </Alert>
           {addonLinkLoading ? (
             <Typography color="text.secondary" py={2}>Loading...</Typography>
+          ) : addonServices.length === 0 ? (
+            <Typography color="text.secondary" py={2}>
+              No add-on services exist yet. Create a service with "This is an add-on" enabled first.
+            </Typography>
           ) : (
             <>
-              {addonLinks.length === 0 ? (
-                <Typography color="text.secondary" py={2}>No add-ons linked to this service yet.</Typography>
-              ) : (
-                addonLinks.map(link => (
-                  <Box key={link.link_id} display="flex" justifyContent="space-between" alignItems="center" py={1} borderBottom="1px solid" borderColor="divider">
-                    <Box>
-                      <Typography fontWeight={500}>{link.name}</Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {link.duration} min — £{parseFloat(link.price).toFixed(2)}
-                      </Typography>
+              {/* Currently linked add-ons (included) */}
+              {addonLinks.length > 0 && (
+                <>
+                  <Typography variant="subtitle2" fontWeight={600} mb={1} color="success.main">
+                    Included ({addonLinks.length})
+                  </Typography>
+                  {addonLinks.map(link => (
+                    <Box key={link.link_id} display="flex" justifyContent="space-between" alignItems="center" py={1} borderBottom="1px solid" borderColor="divider">
+                      <Box>
+                        <Typography fontWeight={500}>{link.name}</Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {link.duration} min — £{parseFloat(link.price).toFixed(2)}
+                        </Typography>
+                      </Box>
+                      <Button size="small" color="error" variant="outlined" onClick={() => unlinkAddon(link.link_id)}
+                        sx={{ minWidth: 70, textTransform: 'none' }}>
+                        Exclude
+                      </Button>
                     </Box>
-                    <IconButton size="small" color="error" onClick={() => unlinkAddon(link.link_id)}>
-                      <Delete fontSize="small" />
-                    </IconButton>
-                  </Box>
-                ))
+                  ))}
+                </>
               )}
 
-              <Divider sx={{ my: 2 }} />
-              <Typography variant="subtitle2" fontWeight={600} mb={1}>Link an Add-on</Typography>
-              {availableAddons.length === 0 ? (
-                <Typography variant="body2" color="text.secondary">
-                  No add-on services available. Create a service with "This is an add-on" enabled first.
-                </Typography>
-              ) : (
-                <Box display="flex" gap={1} alignItems="flex-start">
-                  <TextField
-                    select fullWidth size="small"
-                    value={selectedAddonId}
-                    onChange={e => setSelectedAddonId(e.target.value)}
-                    label="Select add-on"
-                  >
-                    {availableAddons.map(a => (
-                      <MenuItem key={a.id} value={a.id}>
-                        {a.name} — £{parseFloat(a.price).toFixed(2)} ({a.duration} min)
-                      </MenuItem>
-                    ))}
-                  </TextField>
-                  <Button variant="contained" onClick={linkAddon} disabled={!selectedAddonId} sx={{ minWidth: 80 }}>
-                    Link
-                  </Button>
-                </Box>
+              {/* Excluded add-ons (not linked) — can be re-included */}
+              {availableAddons.length > 0 && (
+                <>
+                  <Typography variant="subtitle2" fontWeight={600} mt={2} mb={1} color="text.secondary">
+                    Excluded ({availableAddons.length})
+                  </Typography>
+                  {availableAddons.map(a => (
+                    <Box key={a.id} display="flex" justifyContent="space-between" alignItems="center" py={1} borderBottom="1px solid" borderColor="divider"
+                      sx={{ opacity: 0.6 }}>
+                      <Box>
+                        <Typography fontWeight={500}>{a.name}</Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {a.duration} min — £{parseFloat(a.price).toFixed(2)}
+                        </Typography>
+                      </Box>
+                      <Button size="small" variant="outlined"
+                        sx={{ minWidth: 70, textTransform: 'none' }}
+                        onClick={async () => {
+                          try {
+                            await api.post(`/admin/services/${addonsOpen.id}/addons`, { addon_service_id: a.id });
+                            const { data } = await api.get(`/admin/services/${addonsOpen.id}/addons`);
+                            setAddonLinks(data);
+                            setSnackbar({ open: true, message: 'Add-on re-included', severity: 'success' });
+                          } catch (err) {
+                            setSnackbar({ open: true, message: err.response?.data?.error || 'Failed', severity: 'error' });
+                          }
+                        }}>
+                        Include
+                      </Button>
+                    </Box>
+                  ))}
+                </>
               )}
             </>
           )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setAddonsOpen(null)}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete / Deactivate Confirmation Dialog */}
+      <Dialog open={!!deleteConfirm} onClose={() => setDeleteConfirm(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>
+          {deleteConfirm?.active ? 'Deactivate Service?' : 'Permanently Delete Service?'}
+        </DialogTitle>
+        <DialogContent>
+          {deleteConfirm?.active ? (
+            <Typography>
+              <strong>{deleteConfirm?.name}</strong> will be deactivated and hidden from the booking page. You can re-activate it later, or delete it permanently once inactive.
+            </Typography>
+          ) : (
+            <>
+              <Alert severity="warning" sx={{ mb: 2 }}>This action cannot be undone.</Alert>
+              <Typography>
+                <strong>{deleteConfirm?.name}</strong> is currently inactive. This will permanently remove it and all its add-on links from the system.
+              </Typography>
+            </>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteConfirm(null)}>Cancel</Button>
+          <Button
+            variant="contained"
+            color={deleteConfirm?.active ? 'primary' : 'error'}
+            onClick={handleDeleteConfirm}
+          >
+            {deleteConfirm?.active ? 'Deactivate' : 'Delete Permanently'}
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>

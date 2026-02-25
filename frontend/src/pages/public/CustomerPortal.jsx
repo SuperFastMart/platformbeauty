@@ -12,6 +12,7 @@ import api from '../../api/client';
 import { useTenant } from './TenantPublicLayout';
 import CalendarGrid from '../../components/CalendarGrid';
 import TimeSlotPicker from '../../components/TimeSlotPicker';
+import ConfirmDialog from '../../components/ConfirmDialog';
 
 const statusColors = {
   pending: 'warning', confirmed: 'success', rejected: 'error',
@@ -256,8 +257,9 @@ export default function CustomerPortal() {
     }
   };
 
+  const [cancelMembershipOpen, setCancelMembershipOpen] = useState(false);
   const handleCancelMembership = async () => {
-    if (!window.confirm('Are you sure you want to cancel your membership? It will remain active until the end of your current billing period.')) return;
+    setCancelMembershipOpen(false);
     setCancellingMembership(true);
     try {
       await authApi('post', `/t/${slug}/memberships/cancel`);
@@ -537,7 +539,7 @@ export default function CustomerPortal() {
                 )}
                 {myMembership.status !== 'cancelling' && myMembership.status !== 'cancelled' && (
                   <Button variant="outlined" color="error" size="small"
-                    onClick={handleCancelMembership} disabled={cancellingMembership}>
+                    onClick={() => setCancelMembershipOpen(true)} disabled={cancellingMembership}>
                     {cancellingMembership ? 'Cancelling...' : 'Cancel Membership'}
                   </Button>
                 )}
@@ -869,6 +871,16 @@ export default function CustomerPortal() {
         onClose={() => setSnackbar(s => ({ ...s, open: false }))}>
         <Alert severity={snackbar.severity} variant="filled">{snackbar.message}</Alert>
       </Snackbar>
+
+      <ConfirmDialog
+        open={cancelMembershipOpen}
+        title="Cancel Membership?"
+        message="Your membership will remain active until the end of your current billing period. After that, it will not renew."
+        confirmLabel="Yes, Cancel"
+        confirmColor="error"
+        onConfirm={handleCancelMembership}
+        onClose={() => setCancelMembershipOpen(false)}
+      />
     </Container>
   );
 }

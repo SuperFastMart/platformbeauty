@@ -536,18 +536,26 @@ router.put('/services/:id', asyncHandler(async (req, res) => {
   res.json(service);
 }));
 
-// DELETE /api/admin/services/:id (soft delete)
+// DELETE /api/admin/services/:id (soft delete for active, hard delete for inactive)
 router.delete('/services/:id', asyncHandler(async (req, res) => {
-  const service = await getOne(
-    'UPDATE services SET active = FALSE WHERE id = $1 AND tenant_id = $2 RETURNING id',
+  const existing = await getOne(
+    'SELECT id, active FROM services WHERE id = $1 AND tenant_id = $2',
     [req.params.id, req.tenantId]
   );
-
-  if (!service) {
+  if (!existing) {
     return res.status(404).json({ error: 'Service not found' });
   }
 
-  res.json({ message: 'Service deactivated' });
+  if (existing.active) {
+    // Soft delete: deactivate
+    await run('UPDATE services SET active = FALSE WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenantId]);
+    res.json({ message: 'Service deactivated', action: 'deactivated' });
+  } else {
+    // Hard delete: remove inactive service and its addon links
+    await run('DELETE FROM service_addon_links WHERE (parent_service_id = $1 OR addon_service_id = $1) AND tenant_id = $2', [req.params.id, req.tenantId]);
+    await run('DELETE FROM services WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenantId]);
+    res.json({ message: 'Service permanently deleted', action: 'deleted' });
+  }
 }));
 
 // ── Service Add-on Links ──
