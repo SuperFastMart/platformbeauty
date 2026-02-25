@@ -473,14 +473,21 @@ export default function Services() {
             control={
               <Switch
                 checked={form.is_addon}
-                onChange={e => setForm(f => ({ ...f, is_addon: e.target.checked }))}
+                onChange={e => {
+                  const checked = e.target.checked;
+                  setForm(f => ({
+                    ...f,
+                    is_addon: checked,
+                    ...(checked ? { category: 'Add-ons' } : {}),
+                  }));
+                }}
               />
             }
             label="This is an add-on service"
           />
           {form.is_addon && (
             <Typography variant="body2" color="text.secondary" sx={{ ml: 4, mt: -0.5, mb: 1 }}>
-              Add-on services don't appear in the main booking list. They can be linked to parent services and offered as extras during booking.
+              Add-on services are automatically categorised as "Add-ons" and linked to all your services. Customers can add them as extras when booking.
             </Typography>
           )}
 

@@ -404,13 +404,48 @@ router.post('/services', asyncHandler(async (req, res) => {
     }
   }
 
+  // Force category to 'Add-ons' for addon services
+  const effectiveCategory = is_addon ? 'Add-ons' : (category || null);
+
   const service = await getOne(
     `INSERT INTO services (tenant_id, name, description, duration, price, category, display_order, deposit_enabled, deposit_type, deposit_value, is_addon)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
      RETURNING *`,
-    [req.tenantId, name, description || null, numDuration, numPrice, category || null, display_order || 0,
+    [req.tenantId, name, description || null, numDuration, numPrice, effectiveCategory, display_order || 0,
      deposit_enabled || false, deposit_type || 'fixed', deposit_enabled ? parseFloat(deposit_value) || 0 : 0, is_addon || false]
   );
+
+  // Auto-link addon to all existing non-addon services
+  if (is_addon && service) {
+    const parentServices = await getAll(
+      `SELECT id FROM services WHERE tenant_id = $1 AND active = TRUE AND (is_addon = FALSE OR is_addon IS NULL) AND id != $2`,
+      [req.tenantId, service.id]
+    );
+    for (const parent of parentServices) {
+      await run(
+        `INSERT INTO service_addon_links (tenant_id, parent_service_id, addon_service_id, display_order)
+         VALUES ($1, $2, $3, 0)
+         ON CONFLICT (tenant_id, parent_service_id, addon_service_id) DO NOTHING`,
+        [req.tenantId, parent.id, service.id]
+      );
+    }
+  }
+
+  // Auto-link existing addons to this new non-addon service
+  if (!is_addon && service) {
+    const addonServices = await getAll(
+      `SELECT id FROM services WHERE tenant_id = $1 AND active = TRUE AND is_addon = TRUE AND id != $2`,
+      [req.tenantId, service.id]
+    );
+    for (const addon of addonServices) {
+      await run(
+        `INSERT INTO service_addon_links (tenant_id, parent_service_id, addon_service_id, display_order)
+         VALUES ($1, $2, $3, 0)
+         ON CONFLICT (tenant_id, parent_service_id, addon_service_id) DO NOTHING`,
+        [req.tenantId, service.id, addon.id]
+      );
+    }
+  }
 
   res.status(201).json(service);
 }));
@@ -447,6 +482,9 @@ router.put('/services/:id', asyncHandler(async (req, res) => {
     }
   }
 
+  // Force category to 'Add-ons' when marking as addon
+  const effectiveCategory = (is_addon === true) ? 'Add-ons' : category;
+
   const service = await getOne(
     `UPDATE services SET
       name = COALESCE($1, name),
@@ -462,7 +500,7 @@ router.put('/services/:id', asyncHandler(async (req, res) => {
       is_addon = COALESCE($13, is_addon)
      WHERE id = $8 AND tenant_id = $9
      RETURNING *`,
-    [name, description, duration, price, category, display_order, active, req.params.id, req.tenantId,
+    [name, description, duration, price, effectiveCategory, display_order, active, req.params.id, req.tenantId,
      deposit_enabled !== undefined ? deposit_enabled : null,
      deposit_type !== undefined ? deposit_type : null,
      deposit_value !== undefined ? parseFloat(deposit_value) : null,
@@ -471,6 +509,28 @@ router.put('/services/:id', asyncHandler(async (req, res) => {
 
   if (!service) {
     return res.status(404).json({ error: 'Service not found' });
+  }
+
+  // Auto-link addon to all existing non-addon services when is_addon is toggled on
+  if (is_addon === true && service) {
+    const existingLinks = await getAll(
+      `SELECT parent_service_id FROM service_addon_links WHERE tenant_id = $1 AND addon_service_id = $2`,
+      [req.tenantId, service.id]
+    );
+    if (existingLinks.length === 0) {
+      const parentServices = await getAll(
+        `SELECT id FROM services WHERE tenant_id = $1 AND active = TRUE AND (is_addon = FALSE OR is_addon IS NULL) AND id != $2`,
+        [req.tenantId, service.id]
+      );
+      for (const parent of parentServices) {
+        await run(
+          `INSERT INTO service_addon_links (tenant_id, parent_service_id, addon_service_id, display_order)
+           VALUES ($1, $2, $3, 0)
+           ON CONFLICT (tenant_id, parent_service_id, addon_service_id) DO NOTHING`,
+          [req.tenantId, parent.id, service.id]
+        );
+      }
+    }
   }
 
   res.json(service);
