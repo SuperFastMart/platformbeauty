@@ -1,7 +1,7 @@
 import { useState, useEffect, createContext, useContext } from 'react';
-import { Outlet, useParams, useNavigate } from 'react-router-dom';
-import { Box, Typography, AppBar, Toolbar, CircularProgress, createTheme, ThemeProvider, Button } from '@mui/material';
-import { Person } from '@mui/icons-material';
+import { Outlet, useParams, useNavigate, useLocation } from 'react-router-dom';
+import { Box, Typography, AppBar, Toolbar, CircularProgress, createTheme, ThemeProvider, Button, IconButton } from '@mui/material';
+import { Person, ArrowBack } from '@mui/icons-material';
 import api from '../../api/client';
 
 const TenantContext = createContext(null);
@@ -10,6 +10,8 @@ export const useTenant = () => useContext(TenantContext);
 export default function TenantPublicLayout() {
   const { slug } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const isLanding = location.pathname === `/t/${slug}` || location.pathname === `/t/${slug}/`;
   const [tenant, setTenant] = useState(null);
   const [siteSettings, setSiteSettings] = useState({});
   const [loading, setLoading] = useState(true);
@@ -102,6 +104,16 @@ export default function TenantPublicLayout() {
         <Box minHeight="100vh" bgcolor="background.default" display="flex" flexDirection="column">
           <AppBar position="static" elevation={0}>
             <Toolbar>
+              {!isLanding && (
+                <IconButton
+                  color="inherit" edge="start" size="small"
+                  onClick={() => navigate(`/t/${slug}`)}
+                  sx={{ mr: 1 }}
+                  aria-label="Back to home"
+                >
+                  <ArrowBack fontSize="small" />
+                </IconButton>
+              )}
               <Box
                 onClick={() => navigate(`/t/${slug}`)}
                 sx={{ flexGrow: 1, cursor: 'pointer', display: 'flex', alignItems: 'center' }}
