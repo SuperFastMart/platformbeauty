@@ -56,6 +56,7 @@ const BookingWidget = lazy(() => import('./pages/public/BookingWidget'));
 const TipPage = lazy(() => import('./pages/public/TipPage'));
 const GiftCardPurchase = lazy(() => import('./pages/public/GiftCardPurchase'));
 const MembershipSignup = lazy(() => import('./pages/public/MembershipSignup'));
+const PackagePurchase = lazy(() => import('./pages/public/PackagePurchase'));
 const LandingPage = lazy(() => import('./pages/public/LandingPage'));
 const EmailVerification = lazy(() => import('./pages/public/EmailVerification'));
 
@@ -126,6 +127,7 @@ export default function App() {
           <Route path="tip/:token" element={<TipPage />} />
           <Route path="gift-cards" element={<GiftCardPurchase />} />
           <Route path="memberships" element={<MembershipSignup />} />
+          <Route path="packages" element={<PackagePurchase />} />
         </Route>
 
         {/* Embeddable widget (no layout wrapper) */}

@@ -4,7 +4,7 @@ import {
   Box, Typography, Card, CardContent, Button, Checkbox, Chip, Divider, Container,
   Rating, Grid, Accordion, AccordionSummary, AccordionDetails
 } from '@mui/material';
-import { AccessTime, Schedule, Star, Place, Gavel, ExpandMore, EventBusy, ReportProblem, Security, Article, CardGiftcard, WorkspacePremium } from '@mui/icons-material';
+import { AccessTime, Schedule, Star, Place, Gavel, ExpandMore, EventBusy, ReportProblem, Security, Article, CardGiftcard, WorkspacePremium, Inventory2 } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import api from '../../api/client';
 import { useTenant } from './TenantPublicLayout';
@@ -248,9 +248,9 @@ export default function TenantLanding() {
         </Box>
       )}
 
-      {/* Quick links — Gift Cards & Memberships */}
+      {/* Quick links — Gift Cards, Packages & Memberships */}
       <Grid container spacing={2} mb={3}>
-        <Grid item xs={6}>
+        <Grid item xs={4}>
           <Card
             onClick={() => navigate(`/t/${slug}/gift-cards`)}
             sx={{
@@ -265,7 +265,22 @@ export default function TenantLanding() {
             <Typography variant="caption" color="text.secondary">Send to a friend</Typography>
           </Card>
         </Grid>
-        <Grid item xs={6}>
+        <Grid item xs={4}>
+          <Card
+            onClick={() => navigate(`/t/${slug}/packages`)}
+            sx={{
+              cursor: 'pointer', textAlign: 'center', p: 2,
+              border: '1px solid', borderColor: 'divider',
+              transition: 'all 0.3s ease',
+              '&:hover': { borderColor: '#D4A853', boxShadow: '0 4px 16px rgba(212, 168, 83, 0.15)', transform: 'translateY(-2px)' },
+            }}
+          >
+            <Inventory2 sx={{ fontSize: 32, color: '#D4A853', mb: 0.5 }} />
+            <Typography variant="body2" fontWeight={600}>Packages</Typography>
+            <Typography variant="caption" color="text.secondary">Save on sessions</Typography>
+          </Card>
+        </Grid>
+        <Grid item xs={4}>
           <Card
             onClick={() => navigate(`/t/${slug}/memberships`)}
             sx={{

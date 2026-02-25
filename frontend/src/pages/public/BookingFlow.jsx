@@ -145,8 +145,12 @@ export default function BookingFlow() {
     const token = localStorage.getItem('customer_token');
     if (token) {
       api.get(`/t/${slug}/packages/my-packages`, { headers: { Authorization: `Bearer ${token}` } })
-        .then(({ data }) => setCustomerPackages((data || []).filter(p => p.status === 'active' && p.sessions_remaining > 0)))
-        .catch(() => {});
+        .then(({ data }) => {
+          const active = (data || []).filter(p => p.status === 'active' && p.sessions_remaining > 0);
+          if (active.length > 0) console.log(`[BookingFlow] Customer has ${active.length} active package(s)`);
+          setCustomerPackages(active);
+        })
+        .catch(err => console.error('Failed to load customer packages:', err));
     }
   }, [slug]);
 

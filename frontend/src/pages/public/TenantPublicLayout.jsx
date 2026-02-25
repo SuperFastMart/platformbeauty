@@ -102,33 +102,37 @@ export default function TenantPublicLayout() {
         <Box minHeight="100vh" bgcolor="background.default" display="flex" flexDirection="column">
           <AppBar position="static" elevation={0}>
             <Toolbar>
-              {siteSettings.header_display === 'logo' && siteSettings.header_logo_url ? (
-                <Box
-                  component="img"
-                  src={siteSettings.header_logo_url}
-                  alt={tenant.name}
-                  sx={{ height: 40, maxWidth: 200, objectFit: 'contain', mr: 2, flexGrow: 1, objectPosition: 'left' }}
-                />
-              ) : (
-                <>
-                  {tenant.logo_url && (
-                    <Box component="img" src={tenant.logo_url} alt={tenant.name}
-                      sx={{ height: 36, mr: 2, borderRadius: 1 }} />
-                  )}
-                  <Typography
-                    variant="h6"
-                    fontWeight={600}
-                    sx={{
-                      flexGrow: 1,
-                      ...(siteSettings.header_font && siteSettings.header_font !== 'Inter'
-                        ? { fontFamily: `"${siteSettings.header_font}", serif` }
-                        : {}),
-                    }}
-                  >
-                    {tenant.name}
-                  </Typography>
-                </>
-              )}
+              <Box
+                onClick={() => navigate(`/t/${slug}`)}
+                sx={{ flexGrow: 1, cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+              >
+                {siteSettings.header_display === 'logo' && siteSettings.header_logo_url ? (
+                  <Box
+                    component="img"
+                    src={siteSettings.header_logo_url}
+                    alt={tenant.name}
+                    sx={{ height: 40, maxWidth: 200, objectFit: 'contain', objectPosition: 'left' }}
+                  />
+                ) : (
+                  <>
+                    {tenant.logo_url && (
+                      <Box component="img" src={tenant.logo_url} alt={tenant.name}
+                        sx={{ height: 36, mr: 2, borderRadius: 1 }} />
+                    )}
+                    <Typography
+                      variant="h6"
+                      fontWeight={600}
+                      sx={{
+                        ...(siteSettings.header_font && siteSettings.header_font !== 'Inter'
+                          ? { fontFamily: `"${siteSettings.header_font}", serif` }
+                          : {}),
+                      }}
+                    >
+                      {tenant.name}
+                    </Typography>
+                  </>
+                )}
+              </Box>
               <Button
                 color="inherit" size="small" startIcon={<Person />}
                 onClick={() => {

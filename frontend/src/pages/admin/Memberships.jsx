@@ -62,7 +62,7 @@ export default function Memberships() {
       discountPercent: String(plan.discount_percent || 0),
       priorityBooking: plan.priority_booking || false,
       includedServices: plan.included_services?.map(s => ({
-        serviceId: s.service_id, category: s.category, sessionsPerMonth: s.sessions_per_month,
+        serviceId: s.service_id || '__any__', category: s.category, sessionsPerMonth: s.sessions_per_month,
       })) || [],
     });
     setError('');
@@ -77,10 +77,17 @@ export default function Memberships() {
     setSaving(true);
     setError('');
     try {
+      const payload = {
+        ...form,
+        includedServices: form.includedServices.map(s => ({
+          ...s,
+          serviceId: s.serviceId === '__any__' ? '' : s.serviceId,
+        })),
+      };
       if (editId) {
-        await api.put(`/admin/memberships/${editId}`, form);
+        await api.put(`/admin/memberships/${editId}`, payload);
       } else {
-        await api.post('/admin/memberships', form);
+        await api.post('/admin/memberships', payload);
       }
       setDialogOpen(false);
       fetchData();
@@ -123,7 +130,7 @@ export default function Memberships() {
   const addIncludedService = () => {
     setForm(f => ({
       ...f,
-      includedServices: [...f.includedServices, { serviceId: '', category: '', sessionsPerMonth: 1 }],
+      includedServices: [...f.includedServices, { serviceId: '__any__', category: '', sessionsPerMonth: 1 }],
     }));
   };
 
@@ -294,9 +301,9 @@ export default function Memberships() {
                 <Box key={i} display="flex" gap={1} mb={1} alignItems="center">
                   <FormControl size="small" sx={{ flex: 2 }}>
                     <InputLabel>Service</InputLabel>
-                    <Select value={svc.serviceId || ''} label="Service"
+                    <Select value={svc.serviceId || '__any__'} label="Service"
                       onChange={e => updateIncludedService(i, 'serviceId', e.target.value)}>
-                      <MenuItem value="">Any</MenuItem>
+                      <MenuItem value="__any__">Any Service</MenuItem>
                       {services.filter(s => s.active !== false).map(s => (
                         <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>
                       ))}

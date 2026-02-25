@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   Box, Typography, Card, CardContent, Button, Grid, CircularProgress,
   Alert, Chip, List, ListItem, ListItemIcon, ListItemText
@@ -181,6 +181,9 @@ export default function MembershipSignup() {
       {plans.length === 0 ? (
         <Box textAlign="center" py={6}>
           <Typography color="text.secondary">No membership plans are currently available.</Typography>
+          <Button variant="outlined" onClick={() => navigate(`/t/${slug}`)} sx={{ mt: 2 }}>
+            Back to Home
+          </Button>
         </Box>
       ) : (
         <Grid container spacing={3} justifyContent="center">
