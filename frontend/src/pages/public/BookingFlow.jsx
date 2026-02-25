@@ -125,8 +125,14 @@ export default function BookingFlow() {
   useEffect(() => {
     api.get(`/t/${slug}/services`)
       .then(({ data }) => {
-        setAllServices(data.services);
-        setGrouped(data.grouped);
+        // Ensure service IDs are numbers for consistent comparisons
+        const services = data.services.map(s => ({ ...s, id: Number(s.id) }));
+        const grouped = {};
+        for (const [cat, catServices] of Object.entries(data.grouped)) {
+          grouped[cat] = catServices.map(s => ({ ...s, id: Number(s.id) }));
+        }
+        setAllServices(services);
+        setGrouped(grouped);
       })
       .catch(console.error);
     api.get(`/t/${slug}/settings`)
@@ -134,8 +140,15 @@ export default function BookingFlow() {
       .catch(() => {});
     api.get(`/t/${slug}/addon-links`)
       .then(({ data }) => {
-        if (data.length > 0) console.log(`[BookingFlow] Loaded ${data.length} addon link(s):`, data.map(l => `${l.parent_service_id} → ${l.id} (${l.name})`));
-        setAddonLinks(data);
+        // Ensure IDs are numbers for strict equality comparisons
+        const links = data.map(l => ({
+          ...l,
+          parent_service_id: Number(l.parent_service_id),
+          addon_service_id: Number(l.addon_service_id),
+          id: Number(l.id),
+        }));
+        if (links.length > 0) console.log(`[BookingFlow] Loaded ${links.length} addon link(s):`, links.map(l => `${l.parent_service_id} → ${l.id} (${l.name})`));
+        setAddonLinks(links);
       })
       .catch(err => console.error('Failed to load add-on links:', err));
   }, [slug]);
