@@ -1037,6 +1037,35 @@ const migrations = [
       ALTER TABLE payments ADD COLUMN IF NOT EXISTS tip_amount DECIMAL(10,2) DEFAULT 0;
     `
   },
+  {
+    name: '059_platform_broadcasts',
+    sql: `
+      CREATE TABLE IF NOT EXISTS platform_broadcasts (
+        id SERIAL PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        body TEXT NOT NULL,
+        type VARCHAR(30) NOT NULL DEFAULT 'feature'
+          CHECK (type IN ('feature', 'downtime', 'news', 'update')),
+        priority VARCHAR(20) DEFAULT 'normal'
+          CHECK (priority IN ('low', 'normal', 'high')),
+        published BOOLEAN DEFAULT FALSE,
+        published_at TIMESTAMP,
+        expires_at TIMESTAMP,
+        created_by INTEGER REFERENCES platform_admins(id),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS platform_broadcast_reads (
+        id SERIAL PRIMARY KEY,
+        broadcast_id INTEGER NOT NULL REFERENCES platform_broadcasts(id) ON DELETE CASCADE,
+        tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        read_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(broadcast_id, tenant_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_broadcast_reads_tenant ON platform_broadcast_reads(tenant_id);
+    `
+  },
 
   // ============================================
   // MIGRATION TRACKING

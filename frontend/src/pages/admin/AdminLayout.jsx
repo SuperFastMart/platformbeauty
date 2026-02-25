@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   Box, AppBar, Toolbar, Typography, Drawer, List,
   ListItemButton, ListItemIcon, ListItemText, Button, Chip, Badge,
-  IconButton, useMediaQuery, useTheme, Alert
+  IconButton, useMediaQuery, useTheme, Alert, Popover, Divider
 } from '@mui/material';
 import {
   Dashboard as DashboardIcon, ContentCut, CalendarMonth,
@@ -11,11 +11,16 @@ import {
   Loyalty as LoyaltyIcon, LocalOffer, Assessment,
   Chat, StarBorder, Menu as MenuIcon, SupportAgent,
   DarkMode, LightMode, Security, Close, AccountBalance, HourglassEmpty,
-  CardGiftcard, Inventory2, WorkspacePremium
+  CardGiftcard, Inventory2, WorkspacePremium, Notifications, Campaign,
+  DoneAll, NewReleases, Build, Newspaper, Warning
 } from '@mui/icons-material';
+import dayjs from 'dayjs';
+import relativeTime from 'dayjs/plugin/relativeTime';
 import { useAuth } from '../../contexts/AuthContext';
 import { useThemeMode } from '../../contexts/ThemeContext';
 import api from '../../api/client';
+
+dayjs.extend(relativeTime);
 
 const DRAWER_WIDTH = 240;
 
@@ -52,6 +57,15 @@ export default function AdminLayout() {
   const [supportUnread, setSupportUnread] = useState(0);
   const [trialBanner, setTrialBanner] = useState(null);
 
+  // Broadcast notification state
+  const [broadcastAnchor, setBroadcastAnchor] = useState(null);
+  const [broadcasts, setBroadcasts] = useState([]);
+  const [broadcastUnread, setBroadcastUnread] = useState(0);
+  const [dismissedHighPriority, setDismissedHighPriority] = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem('dismissed_hp_broadcasts') || '[]'); }
+    catch { return []; }
+  });
+
   // Poll support unread count
   useEffect(() => {
     const fetchUnread = () => {
@@ -63,6 +77,64 @@ export default function AdminLayout() {
     const interval = setInterval(fetchUnread, 60000);
     return () => clearInterval(interval);
   }, []);
+
+  // Poll broadcast unread count
+  const fetchBroadcastUnread = useCallback(() => {
+    api.get('/admin/broadcasts/unread-count')
+      .then(r => setBroadcastUnread(r.data.count || 0))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    fetchBroadcastUnread();
+    const interval = setInterval(fetchBroadcastUnread, 60000);
+    return () => clearInterval(interval);
+  }, [fetchBroadcastUnread]);
+
+  const fetchBroadcasts = useCallback(() => {
+    api.get('/admin/broadcasts')
+      .then(r => setBroadcasts(r.data || []))
+      .catch(() => {});
+  }, []);
+
+  const openBroadcasts = (e) => {
+    setBroadcastAnchor(e.currentTarget);
+    fetchBroadcasts();
+  };
+
+  const handleMarkBroadcastRead = (id) => {
+    api.put(`/admin/broadcasts/${id}/read`)
+      .then(() => { fetchBroadcasts(); fetchBroadcastUnread(); })
+      .catch(() => {});
+  };
+
+  const handleMarkAllBroadcastsRead = () => {
+    api.put('/admin/broadcasts/read-all')
+      .then(() => { fetchBroadcasts(); fetchBroadcastUnread(); })
+      .catch(() => {});
+  };
+
+  const dismissHighPriority = (id) => {
+    const updated = [...dismissedHighPriority, id];
+    setDismissedHighPriority(updated);
+    sessionStorage.setItem('dismissed_hp_broadcasts', JSON.stringify(updated));
+    handleMarkBroadcastRead(id);
+  };
+
+  const broadcastIcon = (type) => {
+    switch (type) {
+      case 'feature': return <NewReleases fontSize="small" sx={{ color: '#8B2635' }} />;
+      case 'downtime': return <Warning fontSize="small" color="error" />;
+      case 'news': return <Newspaper fontSize="small" color="info" />;
+      case 'update': return <Build fontSize="small" color="success" />;
+      default: return <Campaign fontSize="small" />;
+    }
+  };
+
+  // High-priority unread broadcasts for banner display
+  const highPriorityBroadcasts = broadcasts.filter(
+    b => b.priority === 'high' && !b.is_read && !dismissedHighPriority.includes(b.id)
+  );
 
   // Check setup wizard status for new tenants
   useEffect(() => {
@@ -197,6 +269,11 @@ export default function AdminLayout() {
               onClick={() => window.open(`/t/${user.tenantSlug}`, '_blank')}
             />
           )}
+          <IconButton color="inherit" onClick={openBroadcasts} sx={{ mr: 1 }}>
+            <Badge badgeContent={broadcastUnread} color="error">
+              <Notifications />
+            </Badge>
+          </IconButton>
           <IconButton color="inherit" onClick={toggleTheme} sx={{ mr: 1 }}>
             {mode === 'dark' ? <LightMode /> : <DarkMode />}
           </IconButton>
@@ -205,6 +282,79 @@ export default function AdminLayout() {
           </Button>
         </Toolbar>
       </AppBar>
+
+      {/* Broadcast notification popover */}
+      <Popover
+        open={Boolean(broadcastAnchor)}
+        anchorEl={broadcastAnchor}
+        onClose={() => setBroadcastAnchor(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+        PaperProps={{ sx: { width: 380, maxHeight: 460 } }}
+      >
+        <Box display="flex" justifyContent="space-between" alignItems="center" px={2} py={1.5}>
+          <Typography variant="subtitle2" fontWeight={600}>Announcements</Typography>
+          {broadcastUnread > 0 && (
+            <Button size="small" startIcon={<DoneAll />} onClick={handleMarkAllBroadcastsRead}
+              sx={{ textTransform: 'none' }}>
+              Mark all read
+            </Button>
+          )}
+        </Box>
+        <Divider />
+        {broadcasts.length === 0 ? (
+          <Box p={3} textAlign="center">
+            <Campaign sx={{ fontSize: 36, color: 'text.disabled', mb: 1 }} />
+            <Typography color="text.secondary" variant="body2">No announcements</Typography>
+          </Box>
+        ) : (
+          <List dense disablePadding sx={{ maxHeight: 380, overflow: 'auto' }}>
+            {broadcasts.map(b => (
+              <ListItemButton
+                key={b.id}
+                sx={{
+                  opacity: b.is_read ? 0.65 : 1,
+                  py: 1.5,
+                  alignItems: 'flex-start',
+                  bgcolor: !b.is_read ? 'action.hover' : 'transparent',
+                }}
+                onClick={() => {
+                  if (!b.is_read) handleMarkBroadcastRead(b.id);
+                }}
+              >
+                <ListItemIcon sx={{ minWidth: 36, mt: 0.5 }}>
+                  {broadcastIcon(b.type)}
+                </ListItemIcon>
+                <ListItemText
+                  primary={b.title}
+                  secondary={
+                    <>
+                      <Typography variant="caption" component="span" sx={{
+                        display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden', whiteSpace: 'pre-line',
+                      }}>
+                        {b.body}
+                      </Typography>
+                      <br />
+                      <Typography variant="caption" component="span" color="text.disabled">
+                        {dayjs(b.published_at).fromNow()}
+                      </Typography>
+                    </>
+                  }
+                  primaryTypographyProps={{
+                    variant: 'body2',
+                    fontWeight: b.is_read ? 400 : 600,
+                    gutterBottom: true,
+                  }}
+                />
+                {!b.is_read && (
+                  <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#8B2635', mt: 1, ml: 1, flexShrink: 0 }} />
+                )}
+              </ListItemButton>
+            ))}
+          </List>
+        )}
+      </Popover>
 
       {/* Mobile: Custom drawer (no MUI Modal) */}
       {isMobile ? (
@@ -374,6 +524,23 @@ export default function AdminLayout() {
             </Typography>
           </Alert>
         )}
+        {highPriorityBroadcasts.map(b => (
+          <Alert
+            key={b.id}
+            severity={b.type === 'downtime' ? 'error' : 'info'}
+            icon={broadcastIcon(b.type)}
+            action={
+              <IconButton size="small" color="inherit" onClick={() => dismissHighPriority(b.id)}>
+                <Close fontSize="small" />
+              </IconButton>
+            }
+            sx={{ mb: 2, borderRadius: 2 }}
+          >
+            <Typography variant="body2">
+              <strong>{b.title}</strong> — {b.body.length > 120 ? b.body.slice(0, 120) + '…' : b.body}
+            </Typography>
+          </Alert>
+        ))}
         <Outlet />
       </Box>
     </Box>

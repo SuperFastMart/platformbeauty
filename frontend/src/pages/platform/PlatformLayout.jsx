@@ -7,7 +7,7 @@ import {
 } from '@mui/material';
 import {
   Dashboard, Business, SupportAgent, Logout, Notifications,
-  FiberNew, DoneAll, DarkMode, LightMode, Subscriptions
+  FiberNew, DoneAll, DarkMode, LightMode, Subscriptions, Campaign
 } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
@@ -23,6 +23,7 @@ const navItems = [
   { label: 'Dashboard', path: '/platform/dashboard', icon: <Dashboard /> },
   { label: 'Tenants', path: '/platform/tenants', icon: <Business /> },
   { label: 'Support', path: '/platform/support', icon: <SupportAgent /> },
+  { label: 'Broadcasts', path: '/platform/broadcasts', icon: <Campaign /> },
   { label: 'Subscriptions', path: '/platform/subscriptions', icon: <Subscriptions /> },
 ];
 

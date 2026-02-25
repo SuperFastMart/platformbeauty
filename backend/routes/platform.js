@@ -684,6 +684,97 @@ router.put('/notifications/read-all', platformAuth, asyncHandler(async (req, res
 }));
 
 // ============================================
+// BROADCASTS
+// ============================================
+
+// GET /api/platform/broadcasts
+router.get('/broadcasts', platformAuth, asyncHandler(async (req, res) => {
+  const totalTenants = await getOne('SELECT COUNT(*)::int AS count FROM tenants WHERE active = TRUE');
+  const broadcasts = await getAll(
+    `SELECT b.*,
+       (SELECT COUNT(*)::int FROM platform_broadcast_reads WHERE broadcast_id = b.id) AS read_count
+     FROM platform_broadcasts b
+     ORDER BY b.created_at DESC`
+  );
+  res.json({ broadcasts, total_tenants: totalTenants?.count || 0 });
+}));
+
+// POST /api/platform/broadcasts
+router.post('/broadcasts', platformAuth, asyncHandler(async (req, res) => {
+  const { title, body, type, priority, expires_at } = req.body;
+  if (!title || !body) return res.status(400).json({ error: 'Title and body are required' });
+  const broadcast = await getOne(
+    `INSERT INTO platform_broadcasts (title, body, type, priority, expires_at, created_by)
+     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+    [title, body, type || 'feature', priority || 'normal', expires_at || null, req.user.id]
+  );
+  res.status(201).json(broadcast);
+}));
+
+// PUT /api/platform/broadcasts/:id
+router.put('/broadcasts/:id', platformAuth, asyncHandler(async (req, res) => {
+  const { title, body, type, priority, expires_at, published } = req.body;
+  const broadcast = await getOne(
+    `UPDATE platform_broadcasts SET
+       title = COALESCE($1, title),
+       body = COALESCE($2, body),
+       type = COALESCE($3, type),
+       priority = COALESCE($4, priority),
+       expires_at = $5,
+       published = COALESCE($6, published),
+       published_at = CASE WHEN $6 = TRUE AND published = FALSE THEN NOW() ELSE published_at END,
+       updated_at = NOW()
+     WHERE id = $7 RETURNING *`,
+    [title, body, type, priority, expires_at !== undefined ? expires_at : null, published, req.params.id]
+  );
+  if (!broadcast) return res.status(404).json({ error: 'Broadcast not found' });
+  res.json(broadcast);
+}));
+
+// PUT /api/platform/broadcasts/:id/publish
+router.put('/broadcasts/:id/publish', platformAuth, asyncHandler(async (req, res) => {
+  const broadcast = await getOne(
+    `UPDATE platform_broadcasts SET published = TRUE, published_at = NOW(), updated_at = NOW()
+     WHERE id = $1 RETURNING *`,
+    [req.params.id]
+  );
+  if (!broadcast) return res.status(404).json({ error: 'Broadcast not found' });
+  res.json(broadcast);
+}));
+
+// DELETE /api/platform/broadcasts/:id
+router.delete('/broadcasts/:id', platformAuth, asyncHandler(async (req, res) => {
+  const result = await run('DELETE FROM platform_broadcasts WHERE id = $1', [req.params.id]);
+  if (result.rowCount === 0) return res.status(404).json({ error: 'Broadcast not found' });
+  res.json({ message: 'Broadcast deleted' });
+}));
+
+// GET /api/platform/broadcasts/:id/stats
+router.get('/broadcasts/:id/stats', platformAuth, asyncHandler(async (req, res) => {
+  const broadcast = await getOne('SELECT * FROM platform_broadcasts WHERE id = $1', [req.params.id]);
+  if (!broadcast) return res.status(404).json({ error: 'Broadcast not found' });
+  const readCount = await getOne(
+    'SELECT COUNT(*)::int AS count FROM platform_broadcast_reads WHERE broadcast_id = $1',
+    [req.params.id]
+  );
+  const totalTenants = await getOne('SELECT COUNT(*)::int AS count FROM tenants WHERE active = TRUE');
+  const readers = await getAll(
+    `SELECT t.name, t.slug, br.read_at
+     FROM platform_broadcast_reads br
+     JOIN tenants t ON t.id = br.tenant_id
+     WHERE br.broadcast_id = $1
+     ORDER BY br.read_at DESC`,
+    [req.params.id]
+  );
+  res.json({
+    broadcast,
+    read_count: readCount?.count || 0,
+    total_tenants: totalTenants?.count || 0,
+    readers,
+  });
+}));
+
+// ============================================
 // DAC7 COMPLIANCE EXPORT
 // ============================================
 

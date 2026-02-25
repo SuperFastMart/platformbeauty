@@ -558,6 +558,73 @@ router.delete('/services/:id', asyncHandler(async (req, res) => {
   }
 }));
 
+// ── Platform Broadcasts (tenant-facing) ──
+
+// GET /api/admin/broadcasts — active broadcasts with read status
+router.get('/broadcasts', asyncHandler(async (req, res) => {
+  const broadcasts = await getAll(
+    `SELECT b.id, b.title, b.body, b.type, b.priority, b.published_at,
+       CASE WHEN br.id IS NOT NULL THEN TRUE ELSE FALSE END AS is_read
+     FROM platform_broadcasts b
+     LEFT JOIN platform_broadcast_reads br ON br.broadcast_id = b.id AND br.tenant_id = $1
+     WHERE b.published = TRUE
+       AND (b.expires_at IS NULL OR b.expires_at > NOW())
+     ORDER BY b.published_at DESC
+     LIMIT 20`,
+    [req.tenantId]
+  );
+  res.json(broadcasts);
+}));
+
+// GET /api/admin/broadcasts/unread-count
+router.get('/broadcasts/unread-count', asyncHandler(async (req, res) => {
+  const result = await getOne(
+    `SELECT COUNT(*)::int AS count
+     FROM platform_broadcasts b
+     WHERE b.published = TRUE
+       AND (b.expires_at IS NULL OR b.expires_at > NOW())
+       AND NOT EXISTS (
+         SELECT 1 FROM platform_broadcast_reads br
+         WHERE br.broadcast_id = b.id AND br.tenant_id = $1
+       )`,
+    [req.tenantId]
+  );
+  res.json({ count: result?.count || 0 });
+}));
+
+// PUT /api/admin/broadcasts/:id/read
+router.put('/broadcasts/:id/read', asyncHandler(async (req, res) => {
+  await run(
+    `INSERT INTO platform_broadcast_reads (broadcast_id, tenant_id)
+     VALUES ($1, $2)
+     ON CONFLICT (broadcast_id, tenant_id) DO NOTHING`,
+    [req.params.id, req.tenantId]
+  );
+  res.json({ success: true });
+}));
+
+// PUT /api/admin/broadcasts/read-all
+router.put('/broadcasts/read-all', asyncHandler(async (req, res) => {
+  const unread = await getAll(
+    `SELECT b.id FROM platform_broadcasts b
+     WHERE b.published = TRUE
+       AND (b.expires_at IS NULL OR b.expires_at > NOW())
+       AND NOT EXISTS (
+         SELECT 1 FROM platform_broadcast_reads br
+         WHERE br.broadcast_id = b.id AND br.tenant_id = $1
+       )`,
+    [req.tenantId]
+  );
+  for (const b of unread) {
+    await run(
+      `INSERT INTO platform_broadcast_reads (broadcast_id, tenant_id)
+       VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+      [b.id, req.tenantId]
+    );
+  }
+  res.json({ success: true });
+}));
+
 // ── Service Add-on Links ──
 
 // GET /api/admin/services/:id/addons
