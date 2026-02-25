@@ -111,12 +111,80 @@ app.use('/api/admin/subscription', subscriptionAdminRoutes);
 app.use('/api/subscriptions', subscriptionPublicRoutes);
 app.use('/api/platform/subscriptions', subscriptionPlatformRoutes);
 
+// Dynamic sitemap.xml
+const { getAll } = require('./config/database');
+app.get('/sitemap.xml', async (req, res) => {
+  try {
+    const tenants = await getAll('SELECT slug, updated_at FROM tenants WHERE active = TRUE');
+    const baseUrl = process.env.FRONTEND_URL || 'https://boukd.com';
+    const now = new Date().toISOString().split('T')[0];
+
+    let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
+    xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
+    xml += `  <url>\n    <loc>${baseUrl}/</loc>\n    <lastmod>${now}</lastmod>\n    <priority>1.0</priority>\n  </url>\n`;
+    for (const t of tenants) {
+      const lastmod = t.updated_at ? new Date(t.updated_at).toISOString().split('T')[0] : now;
+      xml += `  <url>\n    <loc>${baseUrl}/t/${t.slug}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <priority>0.7</priority>\n  </url>\n`;
+    }
+    xml += '</urlset>';
+
+    res.set('Content-Type', 'application/xml');
+    res.send(xml);
+  } catch (err) {
+    console.error('Sitemap error:', err);
+    res.status(500).send('Error generating sitemap');
+  }
+});
+
 // Serve frontend for all non-API routes in production
 if (process.env.NODE_ENV === 'production') {
-  app.get('*', (req, res) => {
-    if (!req.path.startsWith('/api')) {
-      res.sendFile(path.join(__dirname, '../frontend/build', 'index.html'));
+  const fs = require('fs');
+  const indexHtml = fs.readFileSync(path.join(__dirname, '../frontend/build', 'index.html'), 'utf-8');
+
+  app.get('*', async (req, res) => {
+    if (req.path.startsWith('/api')) return;
+
+    // Server-side meta injection for tenant routes
+    const tenantMatch = req.path.match(/^\/t\/([a-z0-9]+)/);
+    if (tenantMatch) {
+      try {
+        const { getOne } = require('./config/database');
+        const tenant = await getOne(
+          `SELECT t.name, t.slug, t.logo_url, ts.setting_value AS about_text
+           FROM tenants t
+           LEFT JOIN tenant_settings ts ON ts.tenant_id = t.id AND ts.setting_key = 'about_text'
+           WHERE t.slug = $1 AND t.active = TRUE`,
+          [tenantMatch[1]]
+        );
+        if (tenant) {
+          const title = `Book with ${tenant.name} | Boukd`;
+          const desc = tenant.about_text
+            ? tenant.about_text.slice(0, 155)
+            : `Book appointments with ${tenant.name} online. Easy scheduling, instant confirmations.`;
+          const url = `https://boukd.com/t/${tenant.slug}`;
+          const image = tenant.logo_url || 'https://boukd.com/boukd-logo.png';
+
+          const html = indexHtml
+            .replace(/<title>[^<]*<\/title>/, `<title>${title}</title>`)
+            .replace(/<meta name="description" content="[^"]*"/, `<meta name="description" content="${desc}"`)
+            .replace(/<meta property="og:title" content="[^"]*"/, `<meta property="og:title" content="${title}"`)
+            .replace(/<meta property="og:description" content="[^"]*"/, `<meta property="og:description" content="${desc}"`)
+            .replace(/<meta property="og:url" content="[^"]*"/, `<meta property="og:url" content="${url}"`)
+            .replace(/<meta property="og:image" content="[^"]*"/, `<meta property="og:image" content="${image}"`)
+            .replace(/<meta name="twitter:title" content="[^"]*"/, `<meta name="twitter:title" content="${title}"`)
+            .replace(/<meta name="twitter:description" content="[^"]*"/, `<meta name="twitter:description" content="${desc}"`)
+            .replace(/<meta name="twitter:image" content="[^"]*"/, `<meta name="twitter:image" content="${image}"`)
+            .replace(/<link rel="canonical" href="[^"]*"/, `<link rel="canonical" href="${url}"`);
+
+          return res.send(html);
+        }
+      } catch (err) {
+        console.error('Meta injection error:', err);
+      }
     }
+
+    // Default: serve unmodified HTML
+    res.send(indexHtml);
   });
 }
 

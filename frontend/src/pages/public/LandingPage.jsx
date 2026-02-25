@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 import {
   Box, Typography, Button, TextField, Container, Grid, Card, CardContent,
   AppBar, Toolbar, Alert, CircularProgress, InputAdornment, Chip, Divider
@@ -92,6 +93,26 @@ export default function LandingPage() {
 
   return (
     <Box sx={{ bgcolor: '#F5F0EE', minHeight: '100vh' }}>
+      <Helmet>
+        <title>Boukd — The Booking Platform for Service Professionals</title>
+        <meta name="description" content="Boukd is the all-in-one booking platform for service professionals. Manage bookings, customers, payments, and your brand from one dashboard. Start your free trial today." />
+        <script type="application/ld+json">{JSON.stringify({
+          '@context': 'https://schema.org',
+          '@type': 'SoftwareApplication',
+          name: 'Boukd',
+          applicationCategory: 'BusinessApplication',
+          description: 'The all-in-one booking platform for service professionals. Manage bookings, customers, payments, and your brand from one dashboard.',
+          url: 'https://boukd.com',
+          offers: {
+            '@type': 'Offer',
+            price: '0',
+            priceCurrency: 'GBP',
+            description: '14-day free trial, no credit card required',
+          },
+          operatingSystem: 'Web',
+        })}</script>
+      </Helmet>
+
       {/* Navigation */}
       <AppBar position="static" elevation={0} sx={{ bgcolor: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(8px)', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
         <Container maxWidth="lg">
@@ -174,10 +195,10 @@ export default function LandingPage() {
                 lineHeight: 1.2,
                 mb: 2,
               }}>
-                The all-in-one booking platform for beauty professionals
+                The all-in-one booking platform for service professionals
               </Typography>
               <Typography variant="h6" sx={{ opacity: 0.9, fontWeight: 400, mb: 4, maxWidth: 550, lineHeight: 1.6 }}>
-                Manage bookings, customers, payments, and your brand — all from one beautiful dashboard. No tech skills needed.
+                Manage bookings, customers, payments, and your brand — all from one powerful dashboard. No tech skills needed.
               </Typography>
               <Box display="flex" gap={2} flexWrap="wrap">
                 <Button
@@ -370,25 +391,27 @@ export default function LandingPage() {
         </Container>
       </Box>
 
-      {/* Built For Beauty Pros */}
+      {/* Built For You */}
       <Box sx={{ py: { xs: 6, md: 10 }, bgcolor: 'white' }}>
         <Container maxWidth="lg">
           <Grid container spacing={6} alignItems="center">
             <Grid item xs={12} md={6}>
               <Chip label="BUILT FOR YOU" size="small" sx={{ bgcolor: `${PRIMARY}15`, color: PRIMARY, fontWeight: 700, mb: 2 }} />
               <Typography variant="h3" fontWeight={800} sx={{ fontFamily: HEADING_FONT, fontSize: { xs: '1.8rem', md: '2.2rem' }, mb: 2 }}>
-                Designed for beauty, wellness, and service professionals
+                Designed for every service professional
               </Typography>
               <Typography variant="body1" color="text.secondary" lineHeight={1.8} mb={3}>
-                Whether you're a nail technician, hairstylist, makeup artist, barber, or spa owner —
+                Whether you're a personal trainer, consultant, therapist, tutor, or stylist —
                 Boukd gives you a professional booking system that works for your business.
               </Typography>
               {[
-                'Hair salons & barbers',
-                'Nail technicians',
-                'Semi-permanent makeup artists',
-                'Beauty therapists & spas',
-                'Massage therapists',
+                'Health & wellness',
+                'Hair, beauty & barbering',
+                'Fitness & personal training',
+                'Consulting & coaching',
+                'Tutoring & education',
+                'Pet grooming & services',
+                'Massage & physiotherapy',
                 'Any appointment-based business',
               ].map((item, i) => (
                 <Box key={i} display="flex" alignItems="center" gap={1} mb={1}>
@@ -405,14 +428,14 @@ export default function LandingPage() {
                     <Typography variant="caption" sx={{ opacity: 0.8 }}>boukd.com/t/your-business</Typography>
                   </Box>
                   <Box sx={{ p: 3 }}>
-                    {['Gel Nails — Full Set', 'Lash Lift & Tint', 'Eyebrow Lamination'].map((service, i) => (
+                    {['Initial Consultation', 'Standard Session', 'Premium Package'].map((service, i) => (
                       <Box key={i} display="flex" justifyContent="space-between" alignItems="center"
                         sx={{ py: 1.5, borderBottom: i < 2 ? '1px solid #eee' : 'none' }}>
                         <Box>
                           <Typography fontWeight={500}>{service}</Typography>
-                          <Typography variant="caption" color="text.secondary">{45 + i * 15} min</Typography>
+                          <Typography variant="caption" color="text.secondary">{30 + i * 30} min</Typography>
                         </Box>
-                        <Chip label={`£${30 + i * 10}`} size="small"
+                        <Chip label={`£${25 + i * 25}`} size="small"
                           sx={{ bgcolor: `${PRIMARY}10`, color: PRIMARY, fontWeight: 700 }} />
                       </Box>
                     ))}
@@ -547,7 +570,7 @@ export default function LandingPage() {
                     <form onSubmit={handleSubmit}>
                       <TextField
                         fullWidth label="Business Name" required
-                        placeholder="e.g. Studio Jen, Nails by Sarah"
+                        placeholder="e.g. Studio Jen, Peak Fitness"
                         value={form.business_name}
                         onChange={handleNameChange}
                         margin="normal"

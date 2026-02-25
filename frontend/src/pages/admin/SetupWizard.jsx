@@ -314,7 +314,7 @@ export default function SetupWizard() {
             fullWidth label="Business Tagline" size="small" sx={{ mb: 2 }}
             value={aboutTitle}
             onChange={e => setAboutTitle(e.target.value)}
-            placeholder="e.g. Professional beauty treatments in the heart of town"
+            placeholder="e.g. Professional services in the heart of town"
           />
           <TextField
             fullWidth label="About Text" multiline rows={3} size="small"

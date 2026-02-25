@@ -447,7 +447,7 @@ export default function Services() {
                 fullWidth label="New Category Name" margin="normal"
                 value={form.category}
                 onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
-                placeholder="e.g. Nails, Hair Cuts, Semi Perm Makeup"
+                placeholder="e.g. Nails, Consultations, Training"
                 autoFocus
               />
               <Button

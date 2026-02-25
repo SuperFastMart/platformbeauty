@@ -1,5 +1,6 @@
 import { useState, useEffect, createContext, useContext } from 'react';
 import { Outlet, useParams, useNavigate, useLocation } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 import { Box, Typography, AppBar, Toolbar, CircularProgress, createTheme, ThemeProvider, Button, IconButton } from '@mui/material';
 import { Person, ArrowBack } from '@mui/icons-material';
 import api from '../../api/client';
@@ -101,6 +102,15 @@ export default function TenantPublicLayout() {
   return (
     <TenantContext.Provider value={tenant}>
       <ThemeProvider theme={tenantTheme}>
+        <Helmet>
+          <title>{`Book with ${tenant.name} | Boukd`}</title>
+          <meta name="description" content={siteSettings.about_text ? `${siteSettings.about_text.slice(0, 155)}` : `Book appointments with ${tenant.name} online. Easy scheduling, instant confirmations.`} />
+          <meta property="og:title" content={`Book with ${tenant.name} | Boukd`} />
+          <meta property="og:description" content={siteSettings.about_text ? `${siteSettings.about_text.slice(0, 155)}` : `Book appointments with ${tenant.name} online.`} />
+          <meta property="og:url" content={`https://boukd.com/t/${slug}`} />
+          {tenant.logo_url && <meta property="og:image" content={tenant.logo_url} />}
+          <link rel="canonical" href={`https://boukd.com/t/${slug}`} />
+        </Helmet>
         <Box minHeight="100vh" bgcolor="background.default" display="flex" flexDirection="column">
           <AppBar position="static" elevation={0}>
             <Toolbar>

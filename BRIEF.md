@@ -1,7 +1,7 @@
 # Booking Platform - Project Brief
 
 ## What is this?
-A multi-tenant SaaS booking platform for beauty professionals. Think "Fresha alternative" - each beautician/salon gets their own booking system hosted on a shared platform.
+A multi-tenant SaaS booking platform for service professionals. Think "Fresha alternative" - each service provider gets their own booking system hosted on a shared platform.
 
 ## Origin
 Built as an evolution of a single-tenant system (Studio Jen - separate repo). That system is live and battle-tested with real bookings, payments, Stripe, email reminders, loyalty cards, reviews, etc. This new project takes those proven features and rebuilds them with multi-tenancy from day one.
@@ -9,7 +9,7 @@ Built as an evolution of a single-tenant system (Studio Jen - separate repo). Th
 ## Architecture
 - **Single Railway deployment** - Express backend serves both the API and the React frontend (no Vercel)
 - **PostgreSQL** - one database, all tenant tables have `tenant_id` foreign key
-- **Three auth levels**: platform admin (us), tenant admin (beauticians), public (their customers)
+- **Three auth levels**: platform admin (us), tenant admin (service providers), public (their customers)
 - **Tenant routing**: public booking pages accessed via slug (e.g. `/t/studiojen`)
 
 ## What's already scaffolded
@@ -23,7 +23,7 @@ Built as an evolution of a single-tenant system (Studio Jen - separate repo). Th
 ## Key tables
 - `tenants` - business profiles, Stripe keys, subscription tier, branding
 - `platform_admins` - super admin accounts (us)
-- `tenant_users` - beautician admin accounts (scoped per tenant)
+- `tenant_users` - service provider admin accounts (scoped per tenant)
 - `services`, `bookings`, `customers`, `time_slots` - core booking system (all tenant-scoped)
 - `reviews`, `tenant_settings`, `slot_templates`, `slot_exceptions` - supporting features
 
