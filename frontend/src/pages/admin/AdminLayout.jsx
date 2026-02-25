@@ -3,7 +3,8 @@ import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   Box, AppBar, Toolbar, Typography, Drawer, List,
   ListItemButton, ListItemIcon, ListItemText, Button, Chip, Badge,
-  IconButton, useMediaQuery, useTheme, Alert, Popover, Divider
+  IconButton, useMediaQuery, useTheme, Alert, Popover, Divider,
+  Dialog, DialogTitle, DialogContent, DialogActions
 } from '@mui/material';
 import {
   Dashboard as DashboardIcon, ContentCut, CalendarMonth,
@@ -129,6 +130,14 @@ export default function AdminLayout() {
       case 'update': return <Build fontSize="small" color="success" />;
       default: return <Campaign fontSize="small" />;
     }
+  };
+
+  const [selectedBroadcast, setSelectedBroadcast] = useState(null);
+
+  const openBroadcastDetail = (b) => {
+    setSelectedBroadcast(b);
+    setBroadcastAnchor(null);
+    if (!b.is_read) handleMarkBroadcastRead(b.id);
   };
 
   // High-priority unread broadcasts for banner display
@@ -318,9 +327,7 @@ export default function AdminLayout() {
                   alignItems: 'flex-start',
                   bgcolor: !b.is_read ? 'action.hover' : 'transparent',
                 }}
-                onClick={() => {
-                  if (!b.is_read) handleMarkBroadcastRead(b.id);
-                }}
+                onClick={() => openBroadcastDetail(b)}
               >
                 <ListItemIcon sx={{ minWidth: 36, mt: 0.5 }}>
                   {broadcastIcon(b.type)}
@@ -355,6 +362,37 @@ export default function AdminLayout() {
           </List>
         )}
       </Popover>
+
+      {/* Broadcast detail dialog */}
+      <Dialog open={!!selectedBroadcast} onClose={() => setSelectedBroadcast(null)} maxWidth="sm" fullWidth>
+        {selectedBroadcast && (
+          <>
+            <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1.5, pb: 1 }}>
+              {broadcastIcon(selectedBroadcast.type)}
+              <Box flex={1}>
+                <Typography variant="h6" fontWeight={600}>{selectedBroadcast.title}</Typography>
+                <Box display="flex" gap={1} mt={0.5}>
+                  <Chip label={selectedBroadcast.type} size="small" variant="outlined" sx={{ height: 22, fontSize: 11 }} />
+                  {selectedBroadcast.priority === 'high' && (
+                    <Chip label="High Priority" size="small" color="error" sx={{ height: 22, fontSize: 11 }} />
+                  )}
+                </Box>
+              </Box>
+            </DialogTitle>
+            <DialogContent>
+              <Typography variant="body2" sx={{ whiteSpace: 'pre-line', lineHeight: 1.7 }}>
+                {selectedBroadcast.body}
+              </Typography>
+              <Typography variant="caption" color="text.disabled" display="block" mt={2}>
+                Published {dayjs(selectedBroadcast.published_at).fromNow()} — {dayjs(selectedBroadcast.published_at).format('D MMM YYYY [at] HH:mm')}
+              </Typography>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setSelectedBroadcast(null)}>Close</Button>
+            </DialogActions>
+          </>
+        )}
+      </Dialog>
 
       {/* Mobile: Custom drawer (no MUI Modal) */}
       {isMobile ? (
