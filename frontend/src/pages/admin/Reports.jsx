@@ -295,7 +295,7 @@ export default function Reports() {
                           {!isMobile && <TableCell>{t.service_names || '—'}</TableCell>}
                           <TableCell>
                             <Chip
-                              label={t.payment_method}
+                              label={{ card: 'Card', cash: 'Cash', card_on_file: 'Card on file', pay_on_site: 'Pay on site', pay_at_salon: 'Pay on site' }[t.payment_method] || t.payment_method}
                               size="small"
                               color={t.payment_method === 'card' ? 'primary' : 'default'}
                             />

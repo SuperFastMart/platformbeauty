@@ -238,7 +238,7 @@ const migrations = [
         tenant_id INTEGER NOT NULL REFERENCES tenants(id),
         booking_id INTEGER NOT NULL REFERENCES bookings(id),
         amount DECIMAL(10,2),
-        payment_method VARCHAR(20) DEFAULT 'pay_at_salon',
+        payment_method VARCHAR(20) DEFAULT 'pay_on_site',
         payment_status VARCHAR(20) DEFAULT 'pending',
         stripe_payment_id TEXT,
         stripe_payment_method_id TEXT,
@@ -1064,6 +1064,14 @@ const migrations = [
         UNIQUE(broadcast_id, tenant_id)
       );
       CREATE INDEX IF NOT EXISTS idx_broadcast_reads_tenant ON platform_broadcast_reads(tenant_id);
+    `
+  },
+
+  {
+    name: '060_rename_pay_at_salon',
+    sql: `
+      ALTER TABLE payments ALTER COLUMN payment_method SET DEFAULT 'pay_on_site';
+      UPDATE payments SET payment_method = 'pay_on_site' WHERE payment_method = 'pay_at_salon';
     `
   },
 

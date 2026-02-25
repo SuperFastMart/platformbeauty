@@ -26,7 +26,7 @@ async function seed() {
   if (!existingTenant) {
     const tenant = await getOne(
       `INSERT INTO tenants (name, slug, owner_email, owner_name, business_phone, primary_color, trial_ends_at)
-       VALUES ($1, $2, $3, $4, $5, $6, NOW() + INTERVAL '30 days')
+       VALUES ($1, $2, $3, $4, $5, $6, NOW() + INTERVAL '14 days')
        RETURNING id`,
       ['Studio Jen', 'studiojen', 'jen@studiojen.com', 'Jennifer Smith', '07700 900123', '#8B2635']
     );
