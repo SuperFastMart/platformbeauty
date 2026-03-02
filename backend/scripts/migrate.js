@@ -1075,6 +1075,19 @@ const migrations = [
     `
   },
 
+  {
+    name: '061_create_slug_redirects',
+    sql: `
+      CREATE TABLE IF NOT EXISTS slug_redirects (
+        id SERIAL PRIMARY KEY,
+        tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        old_slug VARCHAR(100) NOT NULL UNIQUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_slug_redirects_old_slug ON slug_redirects(old_slug);
+    `
+  },
+
   // ============================================
   // MIGRATION TRACKING
   // ============================================

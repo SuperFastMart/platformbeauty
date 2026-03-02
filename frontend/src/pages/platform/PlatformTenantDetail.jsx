@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box, Typography, Button, Card, CardContent, CircularProgress, Grid, Chip,
   Snackbar, Alert, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions,
   Table, TableBody, TableCell, TableHead, TableRow, TableContainer, Paper,
-  MenuItem, Select, FormControl, InputLabel, TextField
+  MenuItem, Select, FormControl, InputLabel, TextField, InputAdornment
 } from '@mui/material';
 import { ArrowBack, Block, CheckCircle, Delete, Edit, PersonOutline, SwapHoriz } from '@mui/icons-material';
 import dayjs from 'dayjs';
@@ -24,6 +24,9 @@ export default function PlatformTenantDetail() {
   const [selectedTier, setSelectedTier] = useState('');
   const [renameDialog, setRenameDialog] = useState(false);
   const [newName, setNewName] = useState('');
+  const [newSlug, setNewSlug] = useState('');
+  const [slugAvailable, setSlugAvailable] = useState(null);
+  const [slugChecking, setSlugChecking] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
 
   const fetchTenant = () => {
@@ -34,6 +37,22 @@ export default function PlatformTenantDetail() {
   };
 
   useEffect(() => { fetchTenant(); }, [id]);
+
+  // Check slug availability with debounce
+  useEffect(() => {
+    if (!newSlug || newSlug.length < 3 || (tenant && newSlug === tenant.slug)) {
+      setSlugAvailable(newSlug === tenant?.slug ? null : null);
+      return;
+    }
+    setSlugChecking(true);
+    const timer = setTimeout(() => {
+      api.get(`/platform/check-slug/${newSlug}`)
+        .then(r => setSlugAvailable(r.data.available))
+        .catch(() => setSlugAvailable(null))
+        .finally(() => setSlugChecking(false));
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [newSlug, tenant?.slug]);
 
   const handleSuspend = async () => {
     setActionLoading(true);
@@ -76,16 +95,28 @@ export default function PlatformTenantDetail() {
     }
   };
 
+  const handleRenameNameChange = (val) => {
+    setNewName(val);
+    setNewSlug(val.toLowerCase().replace(/[^a-z0-9]+/g, '').slice(0, 50));
+  };
+
   const handleRename = async () => {
-    if (!newName.trim() || newName.trim() === tenant.name) return;
+    const trimName = newName.trim();
+    const nameChanged = trimName && trimName !== tenant.name;
+    const slugChanged = newSlug && newSlug !== tenant.slug;
+    if (!nameChanged && !slugChanged) return;
+    if (slugChanged && slugAvailable === false) return;
     setActionLoading(true);
     try {
-      await api.put(`/platform/tenants/${id}`, { name: newName.trim() });
-      setSnackbar({ open: true, message: 'Tenant renamed successfully', severity: 'success' });
+      const body = {};
+      if (nameChanged) body.name = trimName;
+      if (slugChanged) body.slug = newSlug;
+      await api.put(`/platform/tenants/${id}`, body);
+      setSnackbar({ open: true, message: 'Tenant updated successfully', severity: 'success' });
       setRenameDialog(false);
       fetchTenant();
-    } catch {
-      setSnackbar({ open: true, message: 'Failed to rename tenant', severity: 'error' });
+    } catch (err) {
+      setSnackbar({ open: true, message: err.response?.data?.error || 'Failed to update tenant', severity: 'error' });
     } finally {
       setActionLoading(false);
     }
@@ -166,7 +197,7 @@ export default function PlatformTenantDetail() {
               <Button
                 variant="outlined"
                 startIcon={<Edit />}
-                onClick={() => { setNewName(tenant.name); setRenameDialog(true); }}
+                onClick={() => { setNewName(tenant.name); setNewSlug(tenant.slug); setSlugAvailable(null); setRenameDialog(true); }}
                 disabled={actionLoading}
               >
                 Rename
@@ -256,27 +287,59 @@ export default function PlatformTenantDetail() {
       </Card>
 
       {/* Rename Dialog */}
-      <Dialog open={renameDialog} onClose={() => setRenameDialog(false)} maxWidth="xs" fullWidth>
+      <Dialog open={renameDialog} onClose={() => setRenameDialog(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Rename Tenant</DialogTitle>
         <DialogContent>
           <DialogContentText sx={{ mb: 2 }}>
-            Update the business name for this tenant.
+            Update the business name and URL. The old URL will automatically redirect to the new one.
           </DialogContentText>
           <TextField
             fullWidth autoFocus
             label="Business Name"
             value={newName}
-            onChange={(e) => setNewName(e.target.value)}
+            onChange={(e) => handleRenameNameChange(e.target.value)}
+            sx={{ mb: 2 }}
+          />
+          <TextField
+            fullWidth
+            label="Booking URL"
+            value={newSlug}
+            onChange={(e) => setNewSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 50))}
+            InputProps={{
+              startAdornment: <InputAdornment position="start">boukd.com/t/</InputAdornment>,
+              endAdornment: newSlug && newSlug !== tenant.slug && newSlug.length >= 3 && (
+                <InputAdornment position="end">
+                  {slugChecking ? (
+                    <CircularProgress size={18} />
+                  ) : slugAvailable === true ? (
+                    <CheckCircle sx={{ color: 'success.main', fontSize: 20 }} />
+                  ) : slugAvailable === false ? (
+                    <Typography variant="caption" color="error">Taken</Typography>
+                  ) : null}
+                </InputAdornment>
+              ),
+            }}
+            helperText={
+              newSlug === tenant.slug ? 'Current URL (unchanged)' :
+              newSlug.length >= 3 && slugAvailable === true ? 'This URL is available' :
+              newSlug.length >= 3 && slugAvailable === false ? 'This URL is already taken' :
+              newSlug.length > 0 && newSlug.length < 3 ? 'Minimum 3 characters' : ''
+            }
           />
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setRenameDialog(false)}>Cancel</Button>
           <Button
             variant="contained" onClick={handleRename}
-            disabled={actionLoading || !newName.trim() || newName.trim() === tenant.name}
+            disabled={
+              actionLoading ||
+              (newName.trim() === tenant.name && newSlug === tenant.slug) ||
+              (newSlug !== tenant.slug && slugAvailable === false) ||
+              newSlug.length < 3
+            }
             sx={{ bgcolor: '#8B2635', '&:hover': { bgcolor: '#6d1f2b' } }}
           >
-            Rename
+            Update
           </Button>
         </DialogActions>
       </Dialog>

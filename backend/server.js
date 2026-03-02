@@ -149,6 +149,19 @@ if (process.env.NODE_ENV === 'production') {
     if (tenantMatch) {
       try {
         const { getOne } = require('./config/database');
+
+        // Check for slug redirect first
+        const redirect = await getOne(
+          `SELECT t.slug FROM slug_redirects sr
+           JOIN tenants t ON t.id = sr.tenant_id AND t.active = TRUE
+           WHERE sr.old_slug = $1`,
+          [tenantMatch[1]]
+        );
+        if (redirect) {
+          const newPath = req.path.replace(`/t/${tenantMatch[1]}`, `/t/${redirect.slug}`);
+          return res.redirect(301, newPath);
+        }
+
         const tenant = await getOne(
           `SELECT t.name, t.slug, t.logo_url, ts.setting_value AS about_text
            FROM tenants t

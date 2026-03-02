@@ -166,7 +166,13 @@ router.post('/signup', asyncHandler(async (req, res) => {
 
 // GET /api/platform/check-slug/:slug — check slug availability
 router.get('/check-slug/:slug', asyncHandler(async (req, res) => {
-  const existing = await getOne('SELECT id FROM tenants WHERE slug = $1', [req.params.slug]);
+  const existing = await getOne(
+    `SELECT id FROM tenants WHERE slug = $1
+     UNION ALL
+     SELECT id FROM slug_redirects WHERE old_slug = $1
+     LIMIT 1`,
+    [req.params.slug]
+  );
   res.json({ available: !existing });
 }));
 
@@ -335,8 +341,36 @@ router.get('/tenants/:id', platformAuth, asyncHandler(async (req, res) => {
 
 // PUT /api/platform/tenants/:id
 router.put('/tenants/:id', platformAuth, asyncHandler(async (req, res) => {
-  const { name, owner_email, owner_name, business_phone, business_address,
+  const { name, slug, owner_email, owner_name, business_phone, business_address,
           subscription_tier, subscription_status, active } = req.body;
+
+  // If slug is being changed, validate and create redirect
+  if (slug) {
+    const cleanSlug = slug.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (cleanSlug.length < 3 || cleanSlug.length > 50) {
+      return res.status(400).json({ error: 'Slug must be between 3 and 50 characters' });
+    }
+
+    const current = await getOne('SELECT slug FROM tenants WHERE id = $1', [req.params.id]);
+    if (!current) return res.status(404).json({ error: 'Tenant not found' });
+
+    if (cleanSlug !== current.slug) {
+      // Check uniqueness against active slugs and redirect history
+      const taken = await getOne(
+        `SELECT id FROM tenants WHERE slug = $1 AND id != $2
+         UNION ALL
+         SELECT id FROM slug_redirects WHERE old_slug = $1`,
+        [cleanSlug, req.params.id]
+      );
+      if (taken) return res.status(409).json({ error: 'That URL is already taken' });
+
+      // Store old slug as redirect
+      await run(
+        'INSERT INTO slug_redirects (tenant_id, old_slug) VALUES ($1, $2) ON CONFLICT (old_slug) DO NOTHING',
+        [req.params.id, current.slug]
+      );
+    }
+  }
 
   const tenant = await getOne(
     `UPDATE tenants SET
@@ -348,12 +382,15 @@ router.put('/tenants/:id', platformAuth, asyncHandler(async (req, res) => {
       subscription_tier = COALESCE($6, subscription_tier),
       subscription_status = COALESCE($7, subscription_status),
       active = COALESCE($8, active),
+      slug = COALESCE($9, slug),
       updated_at = CURRENT_TIMESTAMP
-     WHERE id = $9
+     WHERE id = $10
      RETURNING id, name, slug, owner_email, owner_name, business_phone, business_address,
                subscription_tier, subscription_status, active, updated_at`,
     [name, owner_email, owner_name, business_phone, business_address,
-     subscription_tier, subscription_status, active, req.params.id]
+     subscription_tier, subscription_status, active,
+     slug ? slug.toLowerCase().replace(/[^a-z0-9]/g, '') : null,
+     req.params.id]
   );
 
   if (!tenant) {

@@ -52,6 +52,17 @@ const resolveTenant = async (req, res, next) => {
   );
 
   if (!tenant) {
+    // Check if this is an old slug that should redirect
+    const redirect = await getOne(
+      `SELECT t.slug FROM slug_redirects sr
+       JOIN tenants t ON t.id = sr.tenant_id AND t.active = TRUE
+       WHERE sr.old_slug = $1`,
+      [slug]
+    );
+    if (redirect) {
+      const newPath = req.originalUrl.replace(`/t/${slug}`, `/t/${redirect.slug}`);
+      return res.redirect(301, newPath);
+    }
     return res.status(404).json({ error: 'Business not found' });
   }
 
