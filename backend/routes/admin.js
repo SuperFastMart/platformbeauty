@@ -1006,13 +1006,56 @@ router.put('/bookings/:id/status', asyncHandler(async (req, res) => {
 }));
 
 // ============================================
+// ROTATION SETTINGS
+// ============================================
+
+// GET /api/admin/rotation-settings
+router.get('/rotation-settings', asyncHandler(async (req, res) => {
+  const rows = await getAll(
+    `SELECT setting_key, setting_value FROM tenant_settings
+     WHERE tenant_id = $1 AND setting_key = ANY($2)`,
+    [req.tenantId, ['rotation_weeks', 'rotation_start_date']]
+  );
+  const settings = {};
+  rows.forEach(r => { settings[r.setting_key] = r.setting_value; });
+  res.json({
+    rotation_weeks: parseInt(settings.rotation_weeks) || 1,
+    rotation_start_date: settings.rotation_start_date || null,
+  });
+}));
+
+// PUT /api/admin/rotation-settings
+router.put('/rotation-settings', asyncHandler(async (req, res) => {
+  const { rotation_weeks, rotation_start_date } = req.body;
+  const weeks = parseInt(rotation_weeks);
+  if (!weeks || weeks < 1 || weeks > 4) {
+    return res.status(400).json({ error: 'rotation_weeks must be between 1 and 4' });
+  }
+  if (weeks > 1 && !rotation_start_date) {
+    return res.status(400).json({ error: 'rotation_start_date is required when rotation is enabled' });
+  }
+  const keys = { rotation_weeks: String(weeks) };
+  if (rotation_start_date) keys.rotation_start_date = rotation_start_date;
+  for (const [key, value] of Object.entries(keys)) {
+    await run(
+      `INSERT INTO tenant_settings (tenant_id, setting_key, setting_value, updated_at)
+       VALUES ($1, $2, $3, NOW())
+       ON CONFLICT (tenant_id, setting_key) DO UPDATE SET
+         setting_value = EXCLUDED.setting_value, updated_at = NOW()`,
+      [req.tenantId, key, value]
+    );
+  }
+  res.json({ message: 'Rotation settings saved', rotation_weeks: weeks, rotation_start_date: keys.rotation_start_date || null });
+}));
+
+// ============================================
 // SLOT TEMPLATES
 // ============================================
 
 // GET /api/admin/slot-templates
 router.get('/slot-templates', asyncHandler(async (req, res) => {
   const templates = await getAll(
-    'SELECT * FROM slot_templates WHERE tenant_id = $1 ORDER BY day_of_week, start_time',
+    'SELECT * FROM slot_templates WHERE tenant_id = $1 ORDER BY week_number, day_of_week, start_time',
     [req.tenantId]
   );
   res.json(templates);
@@ -1020,17 +1063,17 @@ router.get('/slot-templates', asyncHandler(async (req, res) => {
 
 // POST /api/admin/slot-templates
 router.post('/slot-templates', asyncHandler(async (req, res) => {
-  const { name, day_of_week, start_time, end_time, slot_duration } = req.body;
+  const { name, day_of_week, start_time, end_time, slot_duration, week_number } = req.body;
 
   if (name === undefined || day_of_week === undefined || !start_time || !end_time) {
     return res.status(400).json({ error: 'Name, day_of_week, start_time, and end_time are required' });
   }
 
   const template = await getOne(
-    `INSERT INTO slot_templates (tenant_id, name, day_of_week, start_time, end_time, slot_duration)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO slot_templates (tenant_id, name, day_of_week, start_time, end_time, slot_duration, week_number)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING *`,
-    [req.tenantId, name, day_of_week, start_time, end_time, slot_duration || 30]
+    [req.tenantId, name, day_of_week, start_time, end_time, slot_duration || 30, week_number || 1]
   );
 
   res.status(201).json(template);
@@ -1038,7 +1081,7 @@ router.post('/slot-templates', asyncHandler(async (req, res) => {
 
 // PUT /api/admin/slot-templates/:id
 router.put('/slot-templates/:id', asyncHandler(async (req, res) => {
-  const { name, day_of_week, start_time, end_time, slot_duration, active } = req.body;
+  const { name, day_of_week, start_time, end_time, slot_duration, active, week_number } = req.body;
 
   const template = await getOne(
     `UPDATE slot_templates SET
@@ -1047,10 +1090,11 @@ router.put('/slot-templates/:id', asyncHandler(async (req, res) => {
       start_time = COALESCE($3, start_time),
       end_time = COALESCE($4, end_time),
       slot_duration = COALESCE($5, slot_duration),
-      active = COALESCE($6, active)
-     WHERE id = $7 AND tenant_id = $8
+      active = COALESCE($6, active),
+      week_number = COALESCE($7, week_number)
+     WHERE id = $8 AND tenant_id = $9
      RETURNING *`,
-    [name, day_of_week, start_time, end_time, slot_duration, active, req.params.id, req.tenantId]
+    [name, day_of_week, start_time, end_time, slot_duration, active, week_number, req.params.id, req.tenantId]
   );
 
   if (!template) {
@@ -1092,6 +1136,17 @@ router.post('/slot-templates/generate', asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'No active slot templates found. Create templates first.' });
   }
 
+  // Load rotation settings
+  const rotationRows = await getAll(
+    `SELECT setting_key, setting_value FROM tenant_settings
+     WHERE tenant_id = $1 AND setting_key = ANY($2)`,
+    [req.tenantId, ['rotation_weeks', 'rotation_start_date']]
+  );
+  const rotationSettings = {};
+  rotationRows.forEach(r => { rotationSettings[r.setting_key] = r.setting_value; });
+  const rotationWeeks = parseInt(rotationSettings.rotation_weeks) || 1;
+  const rotationStart = rotationSettings.rotation_start_date || startDate;
+
   // Get exception dates in range
   const exceptions = await getAll(
     'SELECT date FROM slot_exceptions WHERE tenant_id = $1 AND date >= $2 AND date <= $3',
@@ -1102,15 +1157,24 @@ router.post('/slot-templates/generate', asyncHandler(async (req, res) => {
   let slotsCreated = 0;
   const current = new Date(startDate);
   const end = new Date(endDate);
+  const rotationStartDate = new Date(rotationStart);
 
   while (current <= end) {
     const dateStr = current.toISOString().split('T')[0];
     const dayOfWeek = current.getDay(); // 0=Sunday, 6=Saturday
 
+    // Calculate which rotation week this date falls in
+    const diffDays = Math.floor((current - rotationStartDate) / 86400000);
+    const weekNumber = rotationWeeks > 1
+      ? ((Math.floor(diffDays / 7) % rotationWeeks) + rotationWeeks) % rotationWeeks + 1
+      : 1;
+
     // Skip exception dates
     if (!exceptionDates.has(dateStr)) {
-      // Find templates for this day of week
-      const dayTemplates = templates.filter(t => t.day_of_week === dayOfWeek);
+      // Find templates for this day of week and rotation week
+      const dayTemplates = templates.filter(
+        t => t.day_of_week === dayOfWeek && t.week_number === weekNumber
+      );
 
       for (const template of dayTemplates) {
         // Generate slots at interval from start_time to end_time

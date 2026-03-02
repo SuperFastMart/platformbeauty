@@ -1087,6 +1087,12 @@ const migrations = [
       CREATE INDEX IF NOT EXISTS idx_slug_redirects_old_slug ON slug_redirects(old_slug);
     `
   },
+  {
+    name: '062_add_week_number_to_slot_templates',
+    sql: `
+      ALTER TABLE slot_templates ADD COLUMN IF NOT EXISTS week_number INTEGER NOT NULL DEFAULT 1;
+    `
+  },
 
   // ============================================
   // MIGRATION TRACKING
