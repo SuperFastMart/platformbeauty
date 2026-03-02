@@ -4,9 +4,9 @@ import {
   Box, Typography, Button, Card, CardContent, CircularProgress, Grid, Chip,
   Snackbar, Alert, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions,
   Table, TableBody, TableCell, TableHead, TableRow, TableContainer, Paper,
-  MenuItem, Select, FormControl, InputLabel
+  MenuItem, Select, FormControl, InputLabel, TextField
 } from '@mui/material';
-import { ArrowBack, Block, CheckCircle, Delete, PersonOutline, SwapHoriz } from '@mui/icons-material';
+import { ArrowBack, Block, CheckCircle, Delete, Edit, PersonOutline, SwapHoriz } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import api from '../../api/client';
 import { useAuth } from '../../contexts/AuthContext';
@@ -22,6 +22,8 @@ export default function PlatformTenantDetail() {
   const [deleteDialog, setDeleteDialog] = useState(false);
   const [tierDialog, setTierDialog] = useState(false);
   const [selectedTier, setSelectedTier] = useState('');
+  const [renameDialog, setRenameDialog] = useState(false);
+  const [newName, setNewName] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
 
   const fetchTenant = () => {
@@ -71,6 +73,21 @@ export default function PlatformTenantDetail() {
     } finally {
       setActionLoading(false);
       setDeleteDialog(false);
+    }
+  };
+
+  const handleRename = async () => {
+    if (!newName.trim() || newName.trim() === tenant.name) return;
+    setActionLoading(true);
+    try {
+      await api.put(`/platform/tenants/${id}`, { name: newName.trim() });
+      setSnackbar({ open: true, message: 'Tenant renamed successfully', severity: 'success' });
+      setRenameDialog(false);
+      fetchTenant();
+    } catch {
+      setSnackbar({ open: true, message: 'Failed to rename tenant', severity: 'error' });
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -145,6 +162,14 @@ export default function PlatformTenantDetail() {
                 disabled={actionLoading}
               >
                 Impersonate
+              </Button>
+              <Button
+                variant="outlined"
+                startIcon={<Edit />}
+                onClick={() => { setNewName(tenant.name); setRenameDialog(true); }}
+                disabled={actionLoading}
+              >
+                Rename
               </Button>
               <Button
                 variant="outlined"
@@ -229,6 +254,32 @@ export default function PlatformTenantDetail() {
           )}
         </CardContent>
       </Card>
+
+      {/* Rename Dialog */}
+      <Dialog open={renameDialog} onClose={() => setRenameDialog(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Rename Tenant</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Update the business name for this tenant.
+          </DialogContentText>
+          <TextField
+            fullWidth autoFocus
+            label="Business Name"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRenameDialog(false)}>Cancel</Button>
+          <Button
+            variant="contained" onClick={handleRename}
+            disabled={actionLoading || !newName.trim() || newName.trim() === tenant.name}
+            sx={{ bgcolor: '#8B2635', '&:hover': { bgcolor: '#6d1f2b' } }}
+          >
+            Rename
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Change Tier Dialog */}
       <Dialog open={tierDialog} onClose={() => setTierDialog(false)} maxWidth="xs" fullWidth>
