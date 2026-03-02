@@ -559,9 +559,23 @@ router.delete('/tenants/:id', platformAuth, asyncHandler(async (req, res) => {
     await client.query('DELETE FROM ticket_messages WHERE ticket_id IN (SELECT id FROM support_tickets WHERE tenant_id = $1)', tid);
     await client.query('DELETE FROM support_tickets WHERE tenant_id = $1', tid);
     await client.query('DELETE FROM platform_notifications WHERE tenant_id = $1', tid);
+    await client.query('DELETE FROM platform_broadcast_reads WHERE tenant_id = $1', tid);
     // Activity & impersonation
     await client.query('DELETE FROM activity_log WHERE tenant_id = $1', tid);
     await client.query('DELETE FROM impersonation_sessions WHERE target_tenant_id = $1', tid);
+    // Memberships (depend on customers, services, bookings)
+    await client.query('DELETE FROM membership_usage WHERE customer_membership_id IN (SELECT id FROM customer_memberships WHERE tenant_id = $1)', tid);
+    await client.query('DELETE FROM customer_memberships WHERE tenant_id = $1', tid);
+    await client.query('DELETE FROM membership_included_services WHERE membership_plan_id IN (SELECT id FROM membership_plans WHERE tenant_id = $1)', tid);
+    await client.query('DELETE FROM membership_plans WHERE tenant_id = $1', tid);
+    // Packages (depend on customers, services, bookings)
+    await client.query('DELETE FROM package_usage WHERE customer_package_id IN (SELECT id FROM customer_packages WHERE tenant_id = $1)', tid);
+    await client.query('DELETE FROM customer_packages WHERE tenant_id = $1', tid);
+    await client.query('DELETE FROM package_services WHERE package_id IN (SELECT id FROM service_packages WHERE tenant_id = $1)', tid);
+    await client.query('DELETE FROM service_packages WHERE tenant_id = $1', tid);
+    // Gift cards (depend on customers)
+    await client.query('DELETE FROM gift_card_transactions WHERE tenant_id = $1', tid);
+    await client.query('DELETE FROM gift_cards WHERE tenant_id = $1', tid);
     // Loyalty (depends on customers)
     await client.query('DELETE FROM redeemed_rewards WHERE tenant_id = $1', tid);
     await client.query('DELETE FROM loyalty_transactions WHERE tenant_id = $1', tid);
@@ -577,13 +591,21 @@ router.delete('/tenants/:id', platformAuth, asyncHandler(async (req, res) => {
     // Email logs & booking requests (depend on bookings)
     await client.query('DELETE FROM email_logs WHERE tenant_id = $1', tid);
     await client.query('DELETE FROM booking_requests WHERE booking_id IN (SELECT id FROM bookings WHERE tenant_id = $1)', tid);
-    // Payments & bookings
+    // Tips, payments & bookings
     await client.query('DELETE FROM payments WHERE tenant_id = $1', tid);
     await client.query('DELETE FROM bookings WHERE tenant_id = $1', tid);
     // Availability
     await client.query('DELETE FROM time_slots WHERE tenant_id = $1', tid);
     await client.query('DELETE FROM slot_exceptions WHERE tenant_id = $1', tid);
     await client.query('DELETE FROM slot_templates WHERE tenant_id = $1', tid);
+    // Customer data
+    await client.query('DELETE FROM customer_photos WHERE tenant_id = $1', tid);
+    await client.query('DELETE FROM customer_segments WHERE tenant_id = $1', tid);
+    await client.query('DELETE FROM waitlist WHERE tenant_id = $1', tid);
+    // Service attachments (depend on services)
+    await client.query('DELETE FROM intake_questions WHERE tenant_id = $1', tid);
+    await client.query('DELETE FROM service_forms WHERE tenant_id = $1', tid);
+    await client.query('DELETE FROM service_addon_links WHERE tenant_id = $1', tid);
     // Core tenant data
     await client.query('DELETE FROM customers WHERE tenant_id = $1', tid);
     await client.query('DELETE FROM services WHERE tenant_id = $1', tid);
