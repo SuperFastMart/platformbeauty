@@ -1093,6 +1093,13 @@ const migrations = [
       ALTER TABLE slot_templates ADD COLUMN IF NOT EXISTS week_number INTEGER NOT NULL DEFAULT 1;
     `
   },
+  {
+    name: '063_add_gender_client_source_to_customers',
+    sql: `
+      ALTER TABLE customers ADD COLUMN IF NOT EXISTS gender VARCHAR(20);
+      ALTER TABLE customers ADD COLUMN IF NOT EXISTS client_source VARCHAR(50);
+    `
+  },
 
   // ============================================
   // MIGRATION TRACKING

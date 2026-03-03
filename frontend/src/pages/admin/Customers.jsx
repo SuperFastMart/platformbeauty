@@ -10,6 +10,7 @@ import { Search, ChevronRight, Add, Upload, Download, FilterList, Save, Close } 
 import dayjs from 'dayjs';
 import api from '../../api/client';
 import useSubscriptionTier from '../../hooks/useSubscriptionTier';
+import CustomerImportDialog from '../../components/CustomerImportDialog';
 
 export default function Customers() {
   const navigate = useNavigate();
@@ -25,11 +26,8 @@ export default function Customers() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
-  // CSV Import
+  // Import dialog
   const [importOpen, setImportOpen] = useState(false);
-  const [importData, setImportData] = useState([]);
-  const [importResult, setImportResult] = useState(null);
-  const [importing, setImporting] = useState(false);
 
   // Filters / Segmentation
   const [showFilters, setShowFilters] = useState(false);
@@ -54,49 +52,6 @@ export default function Customers() {
       api.get('/admin/segments').then(({ data }) => setSegments(data)).catch(() => {});
     }
   }, []);
-
-  const handleCsvFile = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      const text = evt.target.result;
-      const lines = text.split(/\r?\n/).filter(l => l.trim());
-      if (lines.length < 2) { setSnackbar({ open: true, message: 'CSV has no data rows', severity: 'error' }); return; }
-      const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/['"]/g, ''));
-      const rows = lines.slice(1).map(line => {
-        const vals = line.match(/("([^"]|"")*"|[^,]*)/g)?.map(v => v.replace(/^"|"$/g, '').replace(/""/g, '"').trim()) || [];
-        const obj = {};
-        headers.forEach((h, i) => { obj[h] = vals[i] || ''; });
-        return obj;
-      });
-      setImportData(rows);
-      setImportResult(null);
-    };
-    reader.readAsText(file);
-  };
-
-  const handleImport = async () => {
-    setImporting(true);
-    try {
-      const { data } = await api.post('/admin/customers/import', { customers: importData });
-      setImportResult(data);
-      if (data.imported > 0 || data.updated > 0) fetchCustomers();
-    } catch (err) {
-      setSnackbar({ open: true, message: err.response?.data?.error || 'Import failed', severity: 'error' });
-    } finally {
-      setImporting(false);
-    }
-  };
-
-  const downloadTemplate = () => {
-    const csv = 'name,email,phone,notes,tags\nJane Doe,jane@example.com,+447123456789,Regular client,"vip,loyal"';
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'customer_import_template.csv';
-    a.click();
-  };
 
   const applyFilters = async () => {
     setFiltering(true);
@@ -187,7 +142,7 @@ export default function Customers() {
             </Button>
           )}
           {hasAccess('growth') && (
-            <Button variant="outlined" size="small" startIcon={<Upload />} onClick={() => { setImportOpen(true); setImportData([]); setImportResult(null); }}>
+            <Button variant="outlined" size="small" startIcon={<Upload />} onClick={() => setImportOpen(true)}>
               Import
             </Button>
           )}
@@ -304,6 +259,7 @@ export default function Customers() {
                 <TableCell><strong>Name</strong></TableCell>
                 <TableCell><strong>Email</strong></TableCell>
                 <TableCell><strong>Phone</strong></TableCell>
+                <TableCell><strong>Gender</strong></TableCell>
                 <TableCell align="center"><strong>Bookings</strong></TableCell>
                 <TableCell align="right"><strong>Total Spent</strong></TableCell>
                 <TableCell><strong>Last Booking</strong></TableCell>
@@ -324,6 +280,9 @@ export default function Customers() {
                   </TableCell>
                   <TableCell>
                     <Typography variant="body2" color="text.secondary">{c.phone || '-'}</Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="body2" color="text.secondary">{c.gender || '-'}</Typography>
                   </TableCell>
                   <TableCell align="center">
                     <Chip label={c.booking_count || 0} size="small" variant="outlined" />
@@ -367,69 +326,13 @@ export default function Customers() {
         </DialogActions>
       </Dialog>
 
-      {/* CSV Import Dialog */}
-      <Dialog open={importOpen} onClose={() => setImportOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Import Customers</DialogTitle>
-        <DialogContent>
-          <Box display="flex" gap={1} mb={2}>
-            <Button variant="outlined" size="small" startIcon={<Download />} onClick={downloadTemplate}>
-              Download Template
-            </Button>
-          </Box>
-          <input type="file" accept=".csv" onChange={handleCsvFile} style={{ marginBottom: 16 }} />
-          {importData.length > 0 && !importResult && (
-            <Box>
-              <Typography variant="body2" mb={1}>{importData.length} row{importData.length !== 1 ? 's' : ''} found</Typography>
-              <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 200 }}>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Name</TableCell>
-                      <TableCell>Email</TableCell>
-                      <TableCell>Phone</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {importData.slice(0, 10).map((r, i) => (
-                      <TableRow key={i}>
-                        <TableCell>{r.name || '—'}</TableCell>
-                        <TableCell>{r.email || '—'}</TableCell>
-                        <TableCell>{r.phone || '—'}</TableCell>
-                      </TableRow>
-                    ))}
-                    {importData.length > 10 && (
-                      <TableRow><TableCell colSpan={3}>...and {importData.length - 10} more</TableCell></TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </Box>
-          )}
-          {importResult && (
-            <Box mt={2}>
-              <Alert severity="success" sx={{ mb: 1 }}>
-                {importResult.imported} created, {importResult.updated} updated, {importResult.skipped} skipped
-              </Alert>
-              {importResult.errors?.length > 0 && (
-                <Box>
-                  <Typography variant="subtitle2" color="error" mb={0.5}>Errors:</Typography>
-                  {importResult.errors.slice(0, 5).map((e, i) => (
-                    <Typography key={i} variant="caption" display="block">Row {e.row} ({e.name}): {e.errors.join(', ')}</Typography>
-                  ))}
-                </Box>
-              )}
-            </Box>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setImportOpen(false)}>Close</Button>
-          {importData.length > 0 && !importResult && (
-            <Button variant="contained" onClick={handleImport} disabled={importing}>
-              {importing ? 'Importing...' : `Import ${importData.length} Rows`}
-            </Button>
-          )}
-        </DialogActions>
-      </Dialog>
+      {/* Customer Import Dialog */}
+      <CustomerImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onComplete={fetchCustomers}
+        existingCustomers={customers}
+      />
 
       {/* Save Segment Dialog */}
       <Dialog open={saveSegOpen} onClose={() => setSaveSegOpen(false)} maxWidth="xs" fullWidth>

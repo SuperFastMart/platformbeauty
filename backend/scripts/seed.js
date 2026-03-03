@@ -19,8 +19,8 @@ async function seed() {
     console.log('  - Platform admin already exists');
   }
 
-  // 2. Create demo tenant "Studio Jen"
-  const existingTenant = await getOne('SELECT id FROM tenants WHERE slug = $1', ['studiojen']);
+  // 2. Create test tenant
+  const existingTenant = await getOne('SELECT id FROM tenants WHERE slug = $1', ['testtenant']);
   let tenantId;
 
   if (!existingTenant) {
@@ -28,28 +28,28 @@ async function seed() {
       `INSERT INTO tenants (name, slug, owner_email, owner_name, business_phone, primary_color, trial_ends_at)
        VALUES ($1, $2, $3, $4, $5, $6, NOW() + INTERVAL '14 days')
        RETURNING id`,
-      ['Studio Jen', 'studiojen', 'jen@studiojen.com', 'Jennifer Smith', '07700 900123', '#8B2635']
+      ['Test Tenant', 'testtenant', 'test@testtenant.com', 'Test User', '07700 900123', '#8B2635']
     );
     tenantId = tenant.id;
-    console.log('  ✓ Tenant "Studio Jen" created');
+    console.log('  ✓ Tenant "Test Tenant" created');
   } else {
     tenantId = existingTenant.id;
-    console.log('  - Tenant "Studio Jen" already exists');
+    console.log('  - Tenant "Test Tenant" already exists');
   }
 
   // 3. Create tenant admin user
   const existingUser = await getOne(
     'SELECT id FROM tenant_users WHERE tenant_id = $1 AND email = $2',
-    [tenantId, 'jen@studiojen.com']
+    [tenantId, 'test@testtenant.com']
   );
 
   if (!existingUser) {
     const tenantPassword = await bcrypt.hash('admin123', 10);
     await run(
       'INSERT INTO tenant_users (tenant_id, username, email, password, role) VALUES ($1, $2, $3, $4, $5)',
-      [tenantId, 'jen', 'jen@studiojen.com', tenantPassword, 'admin']
+      [tenantId, 'test', 'test@testtenant.com', tenantPassword, 'admin']
     );
-    console.log('  ✓ Tenant admin created (jen@studiojen.com / admin123)');
+    console.log('  ✓ Tenant admin created (test@testtenant.com / admin123)');
   } else {
     console.log('  - Tenant admin already exists');
   }

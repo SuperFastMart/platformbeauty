@@ -5,11 +5,12 @@ import {
   Dialog, DialogTitle, DialogContent, DialogActions, Divider,
   useMediaQuery, useTheme, Tooltip
 } from '@mui/material';
-import { Check, Close, SwapHoriz, CurrencyPound, CreditCardOff, CreditCard, Add, ReportProblem } from '@mui/icons-material';
+import { Check, Close, SwapHoriz, CurrencyPound, CreditCardOff, CreditCard, Add, Upload, ReportProblem } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api/client';
 import NoShowChargeModal from '../../components/NoShowChargeModal';
+import BookingImportDialog from '../../components/BookingImportDialog';
 
 const statusColors = {
   pending: 'warning',
@@ -48,6 +49,9 @@ export default function Bookings() {
   const [requestDialog, setRequestDialog] = useState(false);
   const [currentRequest, setCurrentRequest] = useState(null);
   const [requestResponse, setRequestResponse] = useState('');
+
+  // Import dialog
+  const [importOpen, setImportOpen] = useState(false);
 
   const fetchBookings = () => {
     setLoading(true);
@@ -143,9 +147,14 @@ export default function Bookings() {
     <Box>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3} flexWrap="wrap" gap={1}>
         <Typography variant="h5" fontWeight={600}>Bookings</Typography>
-        <Button variant="contained" startIcon={<Add />} onClick={() => navigate('/admin/bookings/create')} sx={{ minHeight: 44 }}>
-          {isMobile ? 'New' : 'Create Booking'}
-        </Button>
+        <Box display="flex" gap={1}>
+          <Button variant="outlined" size="small" startIcon={<Upload />} onClick={() => setImportOpen(true)}>
+            Import
+          </Button>
+          <Button variant="contained" startIcon={<Add />} onClick={() => navigate('/admin/bookings/create')} sx={{ minHeight: 44 }}>
+            {isMobile ? 'New' : 'Create Booking'}
+          </Button>
+        </Box>
       </Box>
 
       {/* Pending Booking Requests */}
@@ -442,6 +451,13 @@ export default function Bookings() {
           setSnackbar({ open: true, message: 'No-show charge processed', severity: 'success' });
           fetchBookings();
         }}
+      />
+
+      {/* Booking Import Dialog */}
+      <BookingImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onComplete={fetchBookings}
       />
 
       <Snackbar open={snackbar.open} autoHideDuration={3000} onClose={() => setSnackbar(s => ({ ...s, open: false }))}>

@@ -1658,14 +1658,14 @@ router.delete('/customers/:id', asyncHandler(async (req, res) => {
   res.json({ message: 'Customer data deleted. Revenue records preserved with anonymised data.' });
 }));
 
-// POST /api/admin/customers/import — bulk import customers from CSV
+// POST /api/admin/customers/import — bulk import customers from CSV/XLSX
 router.post('/customers/import', asyncHandler(async (req, res) => {
   const { customers: rows } = req.body;
   if (!Array.isArray(rows) || rows.length === 0) {
     return res.status(400).json({ error: 'customers array is required' });
   }
-  if (rows.length > 500) {
-    return res.status(400).json({ error: 'Maximum 500 customers per import' });
+  if (rows.length > 1000) {
+    return res.status(400).json({ error: 'Maximum 1000 customers per import' });
   }
 
   let imported = 0, updated = 0, skipped = 0;
@@ -1690,16 +1690,19 @@ router.post('/customers/import', asyncHandler(async (req, res) => {
 
     try {
       const result = await getOne(
-        `INSERT INTO customers (tenant_id, name, email, phone, admin_notes, tags)
-         VALUES ($1, $2, $3, $4, $5, $6)
+        `INSERT INTO customers (tenant_id, name, email, phone, admin_notes, tags, gender, client_source)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          ON CONFLICT (tenant_id, email) DO UPDATE SET
            name = COALESCE(NULLIF($2, ''), customers.name),
            phone = COALESCE(NULLIF($4, ''), customers.phone),
            admin_notes = CASE WHEN $5 IS NOT NULL AND $5 != '' THEN COALESCE(customers.admin_notes || E'\n' || $5, $5) ELSE customers.admin_notes END,
-           tags = CASE WHEN $6 IS NOT NULL AND $6 != '' THEN $6 ELSE customers.tags END
+           tags = CASE WHEN $6 IS NOT NULL AND $6 != '' THEN $6 ELSE customers.tags END,
+           gender = COALESCE(NULLIF($7, ''), customers.gender),
+           client_source = COALESCE(NULLIF($8, ''), customers.client_source)
          RETURNING id, (xmax = 0) as is_new`,
         [req.tenantId, row.name.trim(), row.email.trim().toLowerCase(),
-         row.phone?.trim() || null, row.notes?.trim() || null, row.tags?.trim() || null]
+         row.phone?.trim() || null, row.notes?.trim() || null, row.tags?.trim() || null,
+         row.gender?.trim() || null, row.client_source?.trim() || null]
       );
       if (result.is_new) imported++; else updated++;
     } catch (err) {
@@ -1709,6 +1712,118 @@ router.post('/customers/import', asyncHandler(async (req, res) => {
   }
 
   res.json({ message: `Import complete: ${imported} created, ${updated} updated, ${skipped} skipped`, imported, updated, skipped, errors });
+}));
+
+// POST /api/admin/bookings/import — bulk import bookings from CSV/XLSX
+router.post('/bookings/import', asyncHandler(async (req, res) => {
+  const { bookings: rows } = req.body;
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return res.status(400).json({ error: 'bookings array is required' });
+  }
+  if (rows.length > 2000) {
+    return res.status(400).json({ error: 'Maximum 2000 bookings per import' });
+  }
+
+  // Pre-load customers and services for lookup
+  const customers = await getAll(
+    'SELECT id, name, email, phone FROM customers WHERE tenant_id = $1',
+    [req.tenantId]
+  );
+  const customerByName = {};
+  customers.forEach(c => { customerByName[c.name.toLowerCase()] = c; });
+
+  const services = await getAll(
+    'SELECT id, name, duration, price, category FROM services WHERE tenant_id = $1 AND active = TRUE',
+    [req.tenantId]
+  );
+  const serviceByName = {};
+  services.forEach(s => { serviceByName[s.name.toLowerCase()] = s; });
+
+  let imported = 0, skipped = 0;
+  const errors = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const rowErrors = [];
+
+    if (!row.customer_name || !row.customer_name.trim()) rowErrors.push('Client name is required');
+    if (!row.date) rowErrors.push('Date is required');
+    if (!row.start_time || !row.end_time) rowErrors.push('Start and end time are required');
+
+    if (rowErrors.length > 0) {
+      errors.push({ row: i + 1, name: row.customer_name || '', errors: rowErrors });
+      skipped++;
+      continue;
+    }
+
+    // Lookup customer
+    const customer = customerByName[row.customer_name.trim().toLowerCase()];
+    const customerEmail = customer?.email || row.customer_email?.trim()?.toLowerCase() || '';
+    const customerPhone = customer?.phone || '';
+
+    // Lookup service
+    const service = row.service_name ? serviceByName[row.service_name.trim().toLowerCase()] : null;
+
+    // Map status
+    const statusMap = { 'new': 'confirmed', 'confirmed': 'confirmed', 'completed': 'completed', 'cancelled': 'cancelled', 'no-show': 'confirmed' };
+    const status = statusMap[(row.status || 'confirmed').toLowerCase()] || 'confirmed';
+
+    try {
+      await run(
+        `INSERT INTO bookings (
+          tenant_id, customer_name, customer_email, customer_phone,
+          customer_id, service_ids, service_names, date,
+          start_time, end_time, total_price, total_duration,
+          status, payment_status, created_by, booking_source, notes,
+          reminder_24h_sent, sms_24h_sent, sms_2h_sent
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, TRUE, TRUE, TRUE)`,
+        [
+          req.tenantId,
+          row.customer_name.trim(),
+          customerEmail,
+          customerPhone,
+          customer?.id || null,
+          service?.id ? String(service.id) : null,
+          row.service_name?.trim() || null,
+          row.date,
+          row.start_time,
+          row.end_time,
+          parseFloat(row.price) || 0,
+          parseInt(row.duration) || null,
+          status,
+          status === 'cancelled' ? 'cancelled' : 'completed',
+          'import',
+          'import',
+          row.notes?.trim() || null,
+        ]
+      );
+      imported++;
+    } catch (err) {
+      if (err.code === '23505') {
+        skipped++;
+      } else {
+        errors.push({ row: i + 1, name: row.customer_name || '', errors: [err.message] });
+        skipped++;
+      }
+    }
+  }
+
+  res.json({ message: `Import complete: ${imported} imported, ${skipped} skipped`, imported, skipped, errors });
+}));
+
+// POST /api/admin/bookings/import/enable-notifications — re-enable reminders for future imported bookings
+router.post('/bookings/import/enable-notifications', asyncHandler(async (req, res) => {
+  const result = await run(
+    `UPDATE bookings
+     SET reminder_24h_sent = FALSE, sms_24h_sent = FALSE, sms_2h_sent = FALSE
+     WHERE tenant_id = $1
+       AND booking_source = 'import'
+       AND date >= CURRENT_DATE
+       AND status IN ('confirmed', 'pending')
+       AND reminder_24h_sent = TRUE`,
+    [req.tenantId]
+  );
+  res.json({ updated: result.rowCount || 0 });
 }));
 
 // GET /api/admin/customers/filter — filter customers with dynamic criteria

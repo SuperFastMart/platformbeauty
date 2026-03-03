@@ -206,6 +206,12 @@ export default function CustomerDetail() {
               <Typography fontWeight={600} mb={1}>Contact Details</Typography>
               <Typography variant="body2"><strong>Email:</strong> {customer.email}</Typography>
               <Typography variant="body2"><strong>Phone:</strong> {customer.phone || 'Not provided'}</Typography>
+              {customer.gender && (
+                <Typography variant="body2"><strong>Gender:</strong> {customer.gender}</Typography>
+              )}
+              {customer.client_source && (
+                <Typography variant="body2"><strong>Source:</strong> {customer.client_source}</Typography>
+              )}
               <Typography variant="body2">
                 <strong>Customer since:</strong> {dayjs(customer.created_at).format('D MMM YYYY')}
               </Typography>
