@@ -152,17 +152,18 @@ export default function CustomerImportDialog({ open, onClose, onComplete, existi
 
       const errors = [];
       if (!name) errors.push('Name is required');
-      if (!email || !validateEmail(email)) errors.push('Valid email is required');
+      if (email && !validateEmail(email)) errors.push('Invalid email format');
+      if (!email && !phone) errors.push('Email or phone is required');
       if (phone) {
         const clean = phone.replace(/[\s\-\(\)+]/g, '');
         if (!/^[0-9]{7,15}$/.test(clean)) errors.push('Invalid phone format');
       }
 
-      // Duplicate within the file itself
+      // Duplicate within the file itself (by email if present)
       const isDuplicateInFile = email && seenEmails.has(email);
       if (email) seenEmails.add(email);
 
-      const isDuplicate = existingEmails.has(email) || isDuplicateInFile;
+      const isDuplicate = (email && existingEmails.has(email)) || isDuplicateInFile;
       const cleanGender = gender === 'Not specified' ? '' : gender;
 
       return {
@@ -256,7 +257,7 @@ export default function CustomerImportDialog({ open, onClose, onComplete, existi
               </Button>
             </Box>
             <Typography variant="body2" color="text.secondary" mb={2}>
-              Required columns: <strong>Name</strong>, <strong>Email</strong>. Optional: Phone, Gender, Notes, Tags.
+              Required columns: <strong>Name</strong> and at least one of <strong>Email</strong> or <strong>Phone</strong>. Optional: Gender, Notes, Tags.
             </Typography>
             <Box
               sx={{
