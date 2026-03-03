@@ -253,6 +253,15 @@ publicRouter.get('/fill/:token', asyncHandler(async (req, res) => {
     [req.tenantId]
   );
 
+  // Fall back to header_logo_url from site settings if tenants.logo_url is empty
+  if (!tenant.logo_url) {
+    const logoSetting = await getOne(
+      `SELECT setting_value FROM tenant_settings WHERE tenant_id = $1 AND setting_key = 'header_logo_url'`,
+      [req.tenantId]
+    );
+    if (logoSetting) tenant.logo_url = logoSetting.setting_value;
+  }
+
   const customer = await getOne(
     'SELECT name FROM customers WHERE id = $1',
     [response.customer_id]

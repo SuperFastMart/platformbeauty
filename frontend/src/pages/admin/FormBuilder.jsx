@@ -3,12 +3,13 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box, Typography, Button, Card, CardContent, Chip, IconButton,
   Dialog, DialogTitle, DialogContent, DialogActions, TextField,
-  MenuItem, FormControlLabel, Checkbox, Snackbar, Alert, Divider
+  MenuItem, FormControlLabel, Checkbox, Snackbar, Alert, Divider,
+  RadioGroup, Radio, FormGroup, FormControl, InputLabel, Select
 } from '@mui/material';
 import {
   ArrowBack, Add, Edit, Delete, DragIndicator, KeyboardArrowUp, KeyboardArrowDown,
   ShortText, Notes, RadioButtonChecked, CheckBox, ChecklistRtl,
-  ArrowDropDownCircle, ToggleOn, InfoOutlined
+  ArrowDropDownCircle, ToggleOn, InfoOutlined, Visibility
 } from '@mui/icons-material';
 import api from '../../api/client';
 import ConfirmDialog from '../../components/ConfirmDialog';
@@ -41,6 +42,8 @@ export default function FormBuilder() {
   const [settingsDialog, setSettingsDialog] = useState(false);
   const [settingsForm, setSettingsForm] = useState({});
   const [services, setServices] = useState([]);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [tenant, setTenant] = useState(null);
 
   const fetchForm = async () => {
     try {
@@ -63,6 +66,7 @@ export default function FormBuilder() {
   useEffect(() => {
     fetchForm();
     api.get('/admin/services').then(({ data }) => setServices(data)).catch(() => {});
+    api.get('/admin/settings').then(({ data }) => setTenant(data)).catch(() => {});
   }, [id]);
 
   const openAddField = () => {
@@ -185,6 +189,7 @@ export default function FormBuilder() {
         <Chip label={form.service_scope === 'all' ? 'All services' : 'Specific services'} size="small" variant="outlined" />
         {form.require_signature && <Chip label="Signature required" size="small" variant="outlined" color="info" />}
         <Chip label="Edit Settings" size="small" variant="outlined" onClick={() => setSettingsDialog(true)} icon={<Edit />} />
+        <Chip label="Preview" size="small" variant="outlined" onClick={() => setPreviewOpen(true)} icon={<Visibility />} color="primary" />
       </Box>
 
       {/* Field list */}
@@ -329,6 +334,124 @@ export default function FormBuilder() {
             {saving ? 'Saving...' : 'Save Settings'}
           </Button>
         </DialogActions>
+      </Dialog>
+
+      {/* Preview Dialog */}
+      <Dialog open={previewOpen} onClose={() => setPreviewOpen(false)} maxWidth="sm" fullWidth
+        PaperProps={{ sx: { maxHeight: '90vh', bgcolor: '#fafafa' } }}>
+        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          Form Preview
+          <Button size="small" onClick={() => setPreviewOpen(false)}>Close</Button>
+        </DialogTitle>
+        <DialogContent>
+          <Box maxWidth={600} mx="auto" py={2}>
+            {/* Header — mirrors FormFill */}
+            <Box textAlign="center" mb={3}>
+              {tenant?.header_logo_url && (
+                <img src={tenant.header_logo_url} alt={tenant?.name}
+                  style={{ maxHeight: 48, marginBottom: 12 }} />
+              )}
+              <Typography variant="h5" fontWeight={700}>{form.name}</Typography>
+              {form.description && (
+                <Typography color="text.secondary" mt={0.5}>{form.description}</Typography>
+              )}
+              <Typography variant="body2" color="text.secondary" mt={0.5}>
+                For: Jane Doe (preview)
+              </Typography>
+            </Box>
+
+            {/* Fields */}
+            {fields.map(field => {
+              const opts = typeof field.options === 'string' ? JSON.parse(field.options) : field.options;
+              return (
+                <Card key={field.id} sx={{ mb: 2, boxShadow: 'none', border: '1px solid', borderColor: 'divider', borderRadius: '12px' }}>
+                  <CardContent>
+                    {field.field_type !== 'description_text' && (
+                      <Typography fontWeight={500} mb={1}>
+                        {field.label}
+                        {field.required && <Typography component="span" color="error"> *</Typography>}
+                      </Typography>
+                    )}
+                    {field.field_type === 'description_text' && (
+                      <Typography fontWeight={600} mb={1}>{field.label}</Typography>
+                    )}
+                    {field.field_type !== 'description_text' && field.field_type !== 'single_checkbox' && field.description && (
+                      <Typography variant="caption" color="text.secondary" display="block" mb={1}>{field.description}</Typography>
+                    )}
+                    {/* Render field by type */}
+                    {field.field_type === 'short_answer' && (
+                      <TextField fullWidth size="small" placeholder="Your answer" disabled />
+                    )}
+                    {field.field_type === 'long_answer' && (
+                      <TextField fullWidth multiline rows={4} placeholder="Your answer" disabled />
+                    )}
+                    {field.field_type === 'single_answer' && (
+                      <RadioGroup>
+                        {opts?.choices?.map((choice, i) => (
+                          <FormControlLabel key={i} value={choice} control={<Radio size="small" disabled />} label={choice} />
+                        ))}
+                      </RadioGroup>
+                    )}
+                    {field.field_type === 'single_checkbox' && (
+                      <FormControlLabel control={<Checkbox disabled />} label={field.description || 'I agree'} />
+                    )}
+                    {field.field_type === 'multiple_choice' && (
+                      <FormGroup>
+                        {opts?.choices?.map((choice, i) => (
+                          <FormControlLabel key={i} label={choice} control={<Checkbox size="small" disabled />} />
+                        ))}
+                      </FormGroup>
+                    )}
+                    {field.field_type === 'dropdown' && (
+                      <FormControl fullWidth size="small">
+                        <InputLabel>Select an option</InputLabel>
+                        <Select value="" label="Select an option" disabled>
+                          {opts?.choices?.map((choice, i) => (
+                            <MenuItem key={i} value={choice}>{choice}</MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    )}
+                    {field.field_type === 'yes_no' && (
+                      <RadioGroup row>
+                        <FormControlLabel value="Yes" control={<Radio size="small" disabled />} label="Yes" />
+                        <FormControlLabel value="No" control={<Radio size="small" disabled />} label="No" />
+                      </RadioGroup>
+                    )}
+                    {field.field_type === 'description_text' && (
+                      <Box sx={{ bgcolor: 'rgba(0,0,0,0.03)', borderRadius: 2, p: 2 }}>
+                        <Typography variant="body2" color="text.secondary" whiteSpace="pre-line">
+                          {field.description || ''}
+                        </Typography>
+                      </Box>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
+
+            {/* Signature */}
+            {form.require_signature && (
+              <Card sx={{ mb: 2, boxShadow: 'none', border: '1px solid', borderColor: 'divider', borderRadius: '12px' }}>
+                <CardContent>
+                  <Typography fontWeight={600} mb={1}>Signature <Typography component="span" color="error">*</Typography></Typography>
+                  <FormControlLabel control={<Checkbox disabled />}
+                    label="I confirm the information above is accurate and I consent to the collection of this data" />
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Submit button */}
+            <Button fullWidth variant="contained" size="large" disabled
+              sx={{
+                bgcolor: tenant?.primary_color || '#8B2635',
+                '&.Mui-disabled': { bgcolor: tenant?.primary_color || '#8B2635', color: 'white', opacity: 0.8 },
+                py: 1.5, borderRadius: 2,
+              }}>
+              Submit Form
+            </Button>
+          </Box>
+        </DialogContent>
       </Dialog>
 
       <ConfirmDialog
