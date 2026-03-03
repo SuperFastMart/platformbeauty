@@ -992,6 +992,9 @@ router.put('/bookings/:id/status', asyncHandler(async (req, res) => {
     if (status === 'confirmed') {
       sendBookingApprovedNotification(booking, tenant).catch(err => console.error('Email error:', err));
       sendBookingConfirmedSMS(booking, tenant).catch(err => console.error('SMS error:', err));
+      // Auto-send consultation forms
+      const { autoSendConsultationForms } = require('./consultationForms');
+      autoSendConsultationForms(booking, tenant).catch(err => console.error('Consultation form auto-send error:', err));
     } else if (status === 'rejected') {
       sendBookingRejectedNotification(booking, tenant, reason, alternative).catch(err => console.error('Email error:', err));
       sendBookingRejectedSMS(booking, tenant).catch(err => console.error('SMS error:', err));
@@ -1660,6 +1663,39 @@ router.put('/customers/:id/preferences', asyncHandler(async (req, res) => {
   }
 
   res.json(customer);
+}));
+
+// GET /api/admin/customers/:id/communications — email + SMS history
+router.get('/customers/:id/communications', asyncHandler(async (req, res) => {
+  const customer = await getOne(
+    'SELECT id, email, phone FROM customers WHERE id = $1 AND tenant_id = $2',
+    [req.params.id, req.tenantId]
+  );
+  if (!customer) return res.status(404).json({ error: 'Customer not found' });
+
+  const emails = await getAll(
+    `SELECT id, email_type AS type, subject, status, sent_at, created_at, 'email' AS channel
+     FROM email_logs
+     WHERE tenant_id = $1 AND (customer_id = $2 OR ($3 IS NOT NULL AND recipient_email = $3))
+     ORDER BY created_at DESC
+     LIMIT 100`,
+    [req.tenantId, customer.id, customer.email]
+  );
+
+  const sms = await getAll(
+    `SELECT id, sms_type AS type, message_preview, status, sent_at, created_at, 'sms' AS channel
+     FROM sms_logs
+     WHERE tenant_id = $1 AND (customer_id = $2 OR ($3 IS NOT NULL AND recipient_phone = $3))
+     ORDER BY created_at DESC
+     LIMIT 100`,
+    [req.tenantId, customer.id, customer.phone]
+  );
+
+  const combined = [...emails, ...sms].sort((a, b) =>
+    new Date(b.created_at) - new Date(a.created_at)
+  );
+
+  res.json(combined);
 }));
 
 // DELETE /api/admin/customers/:id (GDPR delete — anonymize bookings, preserve revenue)

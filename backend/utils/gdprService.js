@@ -7,6 +7,8 @@ const { getOne, getAll, run } = require('../config/database');
  */
 async function deleteCustomerData(customerId, tenantId, customerEmail) {
   // 1. Delete personal data records (no financial value)
+  await run('DELETE FROM consultation_form_responses WHERE customer_id = $1 AND tenant_id = $2', [customerId, tenantId]);
+  await run('DELETE FROM sms_logs WHERE customer_id = $1 AND tenant_id = $2', [customerId, tenantId]);
   await run('DELETE FROM booking_requests WHERE customer_id = $1 AND tenant_id = $2', [customerId, tenantId]);
   await run('DELETE FROM email_logs WHERE customer_id = $1 AND tenant_id = $2', [customerId, tenantId]);
   await run('DELETE FROM messages WHERE customer_id = $1 AND tenant_id = $2', [customerId, tenantId]);

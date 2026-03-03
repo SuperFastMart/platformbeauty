@@ -110,10 +110,24 @@ function normalizePhone(phone) {
   return cleaned;
 }
 
-async function sendSMS(phone, message, tenant) {
+async function sendSMS(phone, message, tenant, { smsType, bookingId, customerId, recipientName } = {}) {
   const apiKey = process.env.BREVO_API_KEY;
+  const recipient = normalizePhone(phone);
+
+  // Create log entry
+  let logId = null;
+  try {
+    const log = await getOne(
+      `INSERT INTO sms_logs (tenant_id, recipient_phone, recipient_name, sms_type, message_preview, booking_id, customer_id, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending') RETURNING id`,
+      [tenant.id, recipient, recipientName || null, smsType || null, message.slice(0, 160), bookingId || null, customerId || null]
+    );
+    logId = log.id;
+  } catch (e) { console.error('[SMS] Log insert error:', e.message); }
+
   if (!apiKey) {
     console.log('[SMS] Skipped: no API key');
+    if (logId) await run('UPDATE sms_logs SET status = $1, error_message = $2 WHERE id = $3', ['skipped', 'BREVO_API_KEY not configured', logId]).catch(() => {});
     return { success: false };
   }
 
@@ -128,10 +142,10 @@ async function sendSMS(phone, message, tenant) {
   }
   if (!smsEnabled) {
     console.log('[SMS] Skipped: SMS disabled for tenant plan');
+    if (logId) await run('UPDATE sms_logs SET status = $1, error_message = $2 WHERE id = $3', ['skipped', 'SMS disabled for tenant plan', logId]).catch(() => {});
     return { success: false };
   }
 
-  const recipient = normalizePhone(phone);
   console.log(`[SMS] Sending to ${recipient} (original: ${phone}) for tenant ${tenant.name}`);
 
   try {
@@ -148,9 +162,20 @@ async function sendSMS(phone, message, tenant) {
     });
     const result = await response.json();
     console.log(`[SMS] Response: ${response.status}`, JSON.stringify(result));
+
+    if (logId) {
+      if (response.ok) {
+        await run('UPDATE sms_logs SET status = $1, provider_message_id = $2, sent_at = NOW() WHERE id = $3',
+          ['sent', result.reference || null, logId]).catch(() => {});
+      } else {
+        await run('UPDATE sms_logs SET status = $1, error_message = $2 WHERE id = $3',
+          ['failed', JSON.stringify(result), logId]).catch(() => {});
+      }
+    }
     return { success: response.ok, result };
   } catch (err) {
     console.error('[SMS] Error:', err.message);
+    if (logId) await run('UPDATE sms_logs SET status = $1, error_message = $2 WHERE id = $3', ['failed', err.message, logId]).catch(() => {});
     return { success: false, error: err.message };
   }
 }
@@ -424,13 +449,13 @@ async function sendSMSReminder24h(booking, tenant) {
   if (!booking.customer_phone) return { success: false };
   const date = booking.date.toISOString ? booking.date.toISOString().split('T')[0] : String(booking.date).split('T')[0];
   const message = `Reminder: Your appointment at ${tenant.name} is tomorrow at ${booking.start_time.slice(0, 5)}. ${booking.service_names}. See you then!`;
-  return sendSMS(booking.customer_phone, message, tenant);
+  return sendSMS(booking.customer_phone, message, tenant, { smsType: 'reminder_24h', bookingId: booking.id, customerId: booking.customer_id, recipientName: booking.customer_name });
 }
 
 async function sendSMSReminder2h(booking, tenant) {
   if (!booking.customer_phone) return { success: false };
   const message = `Reminder: Your appointment at ${tenant.name} is in 2 hours at ${booking.start_time.slice(0, 5)}. See you soon!`;
-  return sendSMS(booking.customer_phone, message, tenant);
+  return sendSMS(booking.customer_phone, message, tenant, { smsType: 'reminder_2h', bookingId: booking.id, customerId: booking.customer_id, recipientName: booking.customer_name });
 }
 
 async function sendBookingConfirmedSMS(booking, tenant) {
@@ -440,7 +465,7 @@ async function sendBookingConfirmedSMS(booking, tenant) {
   }
   const date = booking.date.toISOString ? booking.date.toISOString().split('T')[0] : String(booking.date).split('T')[0];
   const message = `Hi ${booking.customer_name}, your booking at ${tenant.name} on ${date} at ${booking.start_time.slice(0, 5)} is confirmed! See you then.`;
-  return sendSMS(booking.customer_phone, message, tenant);
+  return sendSMS(booking.customer_phone, message, tenant, { smsType: 'booking_confirmed', bookingId: booking.id, customerId: booking.customer_id, recipientName: booking.customer_name });
 }
 
 async function sendBookingRejectedSMS(booking, tenant) {
@@ -449,7 +474,7 @@ async function sendBookingRejectedSMS(booking, tenant) {
     return { success: false };
   }
   const message = `Hi ${booking.customer_name}, unfortunately your booking at ${tenant.name} could not be confirmed. Please visit our booking page to rebook.`;
-  return sendSMS(booking.customer_phone, message, tenant);
+  return sendSMS(booking.customer_phone, message, tenant, { smsType: 'booking_rejected', bookingId: booking.id, customerId: booking.customer_id, recipientName: booking.customer_name });
 }
 
 async function sendBookingRequestNotification(request, booking, tenant) {
@@ -612,7 +637,7 @@ async function sendWaitlistSMS(entry, tenant) {
   if (!entry.customer_phone) return { success: false };
   const date = typeof entry.date === 'string' ? entry.date.split('T')[0] : entry.date.toISOString().split('T')[0];
   const message = `Great news! A slot has opened at ${tenant.name} on ${date}. Book now before it's taken — you have 4 hours. Visit our booking page to secure your spot.`;
-  return sendSMS(entry.customer_phone, message, tenant);
+  return sendSMS(entry.customer_phone, message, tenant, { smsType: 'waitlist_notification', recipientName: entry.customer_name });
 }
 
 async function sendGiftCardEmail(recipientEmail, recipientName, code, amount, senderName, message, tenant) {
@@ -695,6 +720,38 @@ async function sendCompletionFollowUpEmail(booking, tenant, followUpToken) {
   });
 }
 
+// Send consultation form link to customer
+async function sendConsultationFormEmail(customer, form, token, tenant, bookingId) {
+  const platformUrl = process.env.PLATFORM_URL || 'https://boukd.com';
+  const formUrl = `${platformUrl}/t/${tenant.slug}/form/${token}`;
+  const color = tenant.primary_color || '#8B2635';
+  const html = `
+    <h2 style="margin:0 0 16px;color:${color};">Please Complete Your Consultation Form</h2>
+    <p style="color:#555;">Hi ${customer.name},</p>
+    <p style="color:#555;">Before your appointment at <strong>${tenant.name}</strong>, please take a moment to complete the following form:</p>
+    <div style="background:#f9f9f9;border-radius:8px;padding:16px;margin:16px 0;">
+      <p style="margin:4px 0;font-weight:600;color:#333;">${form.name}</p>
+      ${form.description ? `<p style="margin:4px 0;color:#666;">${form.description}</p>` : ''}
+    </div>
+    <p style="text-align:center;margin:24px 0;">
+      <a href="${formUrl}" style="display:inline-block;background:${color};color:#fff;padding:14px 36px;border-radius:8px;text-decoration:none;font-weight:600;font-size:16px;">
+        Complete Form
+      </a>
+    </p>
+    <p style="color:#999;font-size:13px;">This form helps us prepare for your visit and ensure the best experience.</p>`;
+
+  return sendEmail({
+    to: customer.email,
+    toName: customer.name,
+    subject: `Please complete: ${form.name} - ${tenant.name}`,
+    html,
+    tenant,
+    emailType: 'consultation_form',
+    bookingId: bookingId || null,
+    customerId: customer.id,
+  });
+}
+
 module.exports = {
   sendEmail,
   sendPlatformEmail,
@@ -719,4 +776,5 @@ module.exports = {
   sendWaitlistNotification,
   sendWaitlistSMS,
   sendCompletionFollowUpEmail,
+  sendConsultationFormEmail,
 };

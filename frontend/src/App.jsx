@@ -45,6 +45,8 @@ const Waitlist = lazy(() => import('./pages/admin/Waitlist'));
 const GiftCards = lazy(() => import('./pages/admin/GiftCards'));
 const Packages = lazy(() => import('./pages/admin/Packages'));
 const Memberships = lazy(() => import('./pages/admin/Memberships'));
+const ConsultationForms = lazy(() => import('./pages/admin/ConsultationForms'));
+const FormBuilder = lazy(() => import('./pages/admin/FormBuilder'));
 
 // Public booking
 const TenantPublicLayout = lazy(() => import('./pages/public/TenantPublicLayout'));
@@ -58,6 +60,7 @@ const TipPage = lazy(() => import('./pages/public/TipPage'));
 const GiftCardPurchase = lazy(() => import('./pages/public/GiftCardPurchase'));
 const MembershipSignup = lazy(() => import('./pages/public/MembershipSignup'));
 const PackagePurchase = lazy(() => import('./pages/public/PackagePurchase'));
+const FormFill = lazy(() => import('./pages/public/FormFill'));
 const LandingPage = lazy(() => import('./pages/public/LandingPage'));
 const EmailVerification = lazy(() => import('./pages/public/EmailVerification'));
 
@@ -116,6 +119,8 @@ export default function App() {
           <Route path="gift-cards" element={<GiftCards />} />
           <Route path="packages" element={<Packages />} />
           <Route path="memberships" element={<Memberships />} />
+          <Route path="consultation-forms" element={<ConsultationForms />} />
+          <Route path="consultation-forms/:id" element={<FormBuilder />} />
           <Route path="setup" element={<SetupWizard />} />
         </Route>
 
@@ -130,6 +135,7 @@ export default function App() {
           <Route path="gift-cards" element={<GiftCardPurchase />} />
           <Route path="memberships" element={<MembershipSignup />} />
           <Route path="packages" element={<PackagePurchase />} />
+          <Route path="form/:token" element={<FormFill />} />
         </Route>
 
         {/* Embeddable widget (no layout wrapper) */}

@@ -13,7 +13,7 @@ import {
   Chat, StarBorder, Menu as MenuIcon, SupportAgent,
   DarkMode, LightMode, Security, Close, AccountBalance, HourglassEmpty,
   CardGiftcard, Inventory2, WorkspacePremium, Notifications, Campaign,
-  DoneAll, NewReleases, Build, Newspaper, Warning
+  DoneAll, NewReleases, Build, Newspaper, Warning, Assignment
 } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
@@ -34,6 +34,7 @@ const navItems = [
   { label: 'Availability', path: '/admin/slot-templates', icon: <Schedule /> },
   { label: 'Create Booking', path: '/admin/bookings/create', icon: <AddCircle /> },
   { label: 'Customers', path: '/admin/customers', icon: <People /> },
+  { label: 'Forms', path: '/admin/consultation-forms', icon: <Assignment /> },
   { label: 'Loyalty', path: '/admin/loyalty', icon: <LoyaltyIcon /> },
   { label: 'Discount Codes', path: '/admin/discount-codes', icon: <LocalOffer /> },
   { label: 'Gift Cards', path: '/admin/gift-cards', icon: <CardGiftcard /> },

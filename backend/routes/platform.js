@@ -625,6 +625,12 @@ router.delete('/tenants/:id', platformAuth, asyncHandler(async (req, res) => {
     await client.query('DELETE FROM message_templates WHERE tenant_id = $1', tid);
     await client.query('DELETE FROM discount_code_uses WHERE tenant_id = $1', tid);
     await client.query('DELETE FROM discount_codes WHERE tenant_id = $1', tid);
+    // Consultation forms (responses → fields → forms)
+    await client.query('DELETE FROM consultation_form_responses WHERE tenant_id = $1', tid);
+    await client.query('DELETE FROM consultation_form_fields WHERE tenant_id = $1', tid);
+    await client.query('DELETE FROM consultation_forms WHERE tenant_id = $1', tid);
+    // SMS logs
+    await client.query('DELETE FROM sms_logs WHERE tenant_id = $1', tid);
     // Email logs & booking requests (depend on bookings)
     await client.query('DELETE FROM email_logs WHERE tenant_id = $1', tid);
     await client.query('DELETE FROM booking_requests WHERE booking_id IN (SELECT id FROM bookings WHERE tenant_id = $1)', tid);

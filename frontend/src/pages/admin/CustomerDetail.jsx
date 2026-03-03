@@ -4,9 +4,13 @@ import {
   Box, Typography, Card, CardContent, Chip, Button, TextField,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
   Grid, Alert, Snackbar, Dialog, DialogTitle, DialogContent, DialogActions,
-  IconButton, useMediaQuery, useTheme, Tooltip
+  IconButton, useMediaQuery, useTheme, Tooltip, Accordion, AccordionSummary,
+  AccordionDetails, FormControl, InputLabel, Select, MenuItem, CircularProgress
 } from '@mui/material';
-import { ArrowBack, Delete, PersonOutline, ReportProblem, LocalOffer, Add, CameraAlt, Close } from '@mui/icons-material';
+import {
+  ArrowBack, Delete, PersonOutline, ReportProblem, LocalOffer, Add, CameraAlt, Close,
+  ExpandMore, Email, Sms, Send, Assignment
+} from '@mui/icons-material';
 import dayjs from 'dayjs';
 import api from '../../api/client';
 import { useAuth } from '../../contexts/AuthContext';
@@ -50,6 +54,15 @@ export default function CustomerDetail() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [viewPhoto, setViewPhoto] = useState(null);
 
+  // Communications & Forms
+  const [communications, setCommunications] = useState([]);
+  const [commsLoading, setCommsLoading] = useState(false);
+  const [formResponses, setFormResponses] = useState([]);
+  const [sendFormOpen, setSendFormOpen] = useState(false);
+  const [availableForms, setAvailableForms] = useState([]);
+  const [selectedFormId, setSelectedFormId] = useState('');
+  const [sendingForm, setSendingForm] = useState(false);
+
   useEffect(() => {
     api.get(`/admin/customers/${id}`)
       .then(({ data }) => {
@@ -73,6 +86,57 @@ export default function CustomerDetail() {
     }
   };
   useEffect(() => { fetchPhotos(); }, [id]);
+
+  // Fetch communications
+  useEffect(() => {
+    setCommsLoading(true);
+    api.get(`/admin/customers/${id}/communications`)
+      .then(({ data }) => setCommunications(data))
+      .catch(() => {})
+      .finally(() => setCommsLoading(false));
+  }, [id]);
+
+  // Fetch form responses
+  const fetchFormResponses = () => {
+    api.get(`/admin/consultation-forms/customer/${id}/responses`)
+      .then(({ data }) => setFormResponses(data))
+      .catch(() => {});
+  };
+  useEffect(() => { fetchFormResponses(); }, [id]);
+
+  const handleSendForm = async () => {
+    if (!selectedFormId) return;
+    setSendingForm(true);
+    try {
+      await api.post(`/admin/consultation-forms/${selectedFormId}/send`, { customerId: parseInt(id) });
+      setSnackbar({ open: true, message: 'Form sent successfully', severity: 'success' });
+      setSendFormOpen(false);
+      setSelectedFormId('');
+      fetchFormResponses();
+    } catch (err) {
+      setSnackbar({ open: true, message: err.response?.data?.error || 'Failed to send form', severity: 'error' });
+    } finally {
+      setSendingForm(false);
+    }
+  };
+
+  const openSendFormDialog = () => {
+    api.get('/admin/consultation-forms').then(({ data }) => {
+      setAvailableForms(data.filter(f => f.active));
+    }).catch(() => {});
+    setSendFormOpen(true);
+  };
+
+  const formatCommType = (type) => {
+    const map = {
+      booking_approved: 'Booking Confirmed', booking_rejected: 'Booking Rejected',
+      booking_cancelled: 'Booking Cancelled', reminder_24h: '24h Reminder',
+      reminder_2h: '2h Reminder', booking_confirmed: 'Booking Confirmed',
+      waitlist_notification: 'Waitlist', consultation_form: 'Consultation Form',
+      password_reset: 'Password Reset', welcome: 'Welcome',
+    };
+    return map[type] || (type || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  };
 
   const handlePhotoUpload = async () => {
     if (!photoFile) return;
@@ -353,6 +417,139 @@ export default function CustomerDetail() {
         )
       )}
 
+      {/* Communication History */}
+      <Box mt={3}>
+        <Typography variant="h6" fontWeight={600} mb={2}>Communication History</Typography>
+        {commsLoading ? (
+          <Box display="flex" justifyContent="center" py={3}><CircularProgress size={24} /></Box>
+        ) : communications.length === 0 ? (
+          <Typography color="text.secondary" variant="body2">No communications sent yet</Typography>
+        ) : (
+          <TableContainer component={Paper} variant="outlined">
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell><strong>Channel</strong></TableCell>
+                  <TableCell><strong>Type</strong></TableCell>
+                  <TableCell><strong>Subject / Preview</strong></TableCell>
+                  <TableCell><strong>Status</strong></TableCell>
+                  <TableCell><strong>Date</strong></TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {communications.map((c, i) => (
+                  <TableRow key={`${c.channel}-${c.id || i}`}>
+                    <TableCell>
+                      <Chip
+                        icon={c.channel === 'email' ? <Email sx={{ fontSize: 14 }} /> : <Sms sx={{ fontSize: 14 }} />}
+                        label={c.channel === 'email' ? 'Email' : 'SMS'}
+                        size="small" variant="outlined"
+                        color={c.channel === 'email' ? 'info' : 'success'}
+                      />
+                    </TableCell>
+                    <TableCell>{formatCommType(c.email_type || c.sms_type)}</TableCell>
+                    <TableCell sx={{ maxWidth: 250, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {c.subject || c.message_preview || '-'}
+                    </TableCell>
+                    <TableCell>
+                      <Chip label={c.status || 'sent'} size="small"
+                        color={c.status === 'sent' ? 'success' : c.status === 'failed' ? 'error' : c.status === 'skipped' ? 'default' : 'warning'} />
+                    </TableCell>
+                    <TableCell>{dayjs(c.created_at).format('D MMM YYYY HH:mm')}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+      </Box>
+
+      {/* Consultation Form Responses */}
+      <Box mt={3}>
+        <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+          <Typography variant="h6" fontWeight={600}>Consultation Forms</Typography>
+          <Button size="small" variant="outlined" startIcon={<Send />} onClick={openSendFormDialog}>
+            Send Form
+          </Button>
+        </Box>
+        {formResponses.length === 0 ? (
+          <Typography color="text.secondary" variant="body2">No consultation forms sent yet</Typography>
+        ) : (
+          formResponses.map(r => (
+            <Accordion key={r.id} sx={{ boxShadow: 'none', border: '1px solid', borderColor: 'divider', borderRadius: '12px !important', mb: 1.5, '&:before': { display: 'none' } }}>
+              <AccordionSummary expandIcon={<ExpandMore />}>
+                <Box display="flex" alignItems="center" gap={1} flex={1} flexWrap="wrap">
+                  <Assignment sx={{ fontSize: 18, color: 'text.secondary' }} />
+                  <Typography fontWeight={500}>{r.form_name}</Typography>
+                  <Chip label={r.status} size="small"
+                    color={r.status === 'completed' ? 'success' : 'warning'} />
+                  {r.signed && <Chip label="Signed" size="small" color="info" variant="outlined" />}
+                  <Typography variant="caption" color="text.secondary" ml="auto">
+                    {r.status === 'completed' ? `Completed ${dayjs(r.completed_at).format('D MMM YYYY')}` : `Sent ${dayjs(r.sent_at).format('D MMM YYYY')}`}
+                  </Typography>
+                </Box>
+              </AccordionSummary>
+              <AccordionDetails>
+                {r.status === 'pending' ? (
+                  <Typography variant="body2" color="text.secondary">Awaiting response from {person.toLowerCase()}</Typography>
+                ) : r.fields && r.responses ? (
+                  <Box>
+                    {r.fields.map(field => {
+                      if (field.field_type === 'description_text') return null;
+                      const val = r.responses[field.id]?.value;
+                      return (
+                        <Box key={field.id} mb={1.5}>
+                          <Typography variant="body2" fontWeight={600}>{field.label}</Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            {Array.isArray(val) ? val.join(', ') : typeof val === 'boolean' ? (val ? 'Yes' : 'No') : (val || '-')}
+                          </Typography>
+                        </Box>
+                      );
+                    })}
+                    {r.signed && r.signed_at && (
+                      <Typography variant="caption" color="text.secondary" mt={1} display="block">
+                        Signed on {dayjs(r.signed_at).format('D MMM YYYY [at] HH:mm')}
+                      </Typography>
+                    )}
+                  </Box>
+                ) : (
+                  <Typography variant="body2" color="text.secondary">No response data available</Typography>
+                )}
+              </AccordionDetails>
+            </Accordion>
+          ))
+        )}
+      </Box>
+
+      {/* Send Form Dialog */}
+      <Dialog open={sendFormOpen} onClose={() => setSendFormOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Send Consultation Form</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" mb={2}>
+            Select a form to send to {customer?.name}. They will receive an email with a link to fill it out.
+          </Typography>
+          <FormControl fullWidth size="small">
+            <InputLabel>Select form</InputLabel>
+            <Select value={selectedFormId} label="Select form" onChange={e => setSelectedFormId(e.target.value)}>
+              {availableForms.map(f => (
+                <MenuItem key={f.id} value={f.id}>{f.name}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          {availableForms.length === 0 && (
+            <Typography variant="body2" color="text.secondary" mt={2}>
+              No active forms available. Create one in the Forms section first.
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSendFormOpen(false)}>Cancel</Button>
+          <Button variant="contained" onClick={handleSendForm} disabled={!selectedFormId || sendingForm}>
+            {sendingForm ? 'Sending...' : 'Send'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {/* Photos */}
       {hasAccess('growth') && (
         <Box mt={3}>
@@ -489,7 +686,8 @@ export default function CustomerDetail() {
             <li>{person} record (name, email, phone, notes, preferences)</li>
             <li>Messages and booking requests</li>
             <li>Loyalty stamps and redeemed rewards</li>
-            <li>Email history</li>
+            <li>Email and SMS history</li>
+            <li>Consultation form responses</li>
           </Typography>
           <Typography variant="body2" fontWeight={600} gutterBottom>What gets anonymised (kept for reporting):</Typography>
           <Typography variant="body2" color="text.secondary" component="ul" sx={{ pl: 2 }}>

@@ -105,6 +105,11 @@ const { adminRouter: membershipAdminRoutes, publicRouter: membershipPublicRoutes
 app.use('/api/admin/memberships', membershipAdminRoutes);
 app.use('/api/t/:tenant/memberships', membershipPublicRoutes);
 
+// --- Consultation Forms ---
+const { adminRouter: consultFormAdminRoutes, publicRouter: consultFormPublicRoutes } = require('./routes/consultationForms');
+app.use('/api/admin/consultation-forms', consultFormAdminRoutes);
+app.use('/api/t/:tenant/consultation-forms', consultFormPublicRoutes);
+
 // --- Subscriptions ---
 const { adminRouter: subscriptionAdminRoutes, publicRouter: subscriptionPublicRoutes, platformRouter: subscriptionPlatformRoutes } = require('./routes/subscriptions');
 app.use('/api/admin/subscription', subscriptionAdminRoutes);

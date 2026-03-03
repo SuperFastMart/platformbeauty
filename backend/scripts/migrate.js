@@ -1117,6 +1117,94 @@ const migrations = [
   },
 
   // ============================================
+  // CONSULTATION FORMS
+  // ============================================
+  {
+    name: '066_consultation_forms',
+    sql: `
+      CREATE TABLE IF NOT EXISTS consultation_forms (
+        id SERIAL PRIMARY KEY,
+        tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        send_mode VARCHAR(20) NOT NULL DEFAULT 'before_appointment',
+        frequency VARCHAR(20) NOT NULL DEFAULT 'every_time',
+        service_scope VARCHAR(20) NOT NULL DEFAULT 'all',
+        service_ids TEXT,
+        require_signature BOOLEAN DEFAULT FALSE,
+        active BOOLEAN DEFAULT TRUE,
+        display_order INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `
+  },
+  {
+    name: '067_consultation_form_fields',
+    sql: `
+      CREATE TABLE IF NOT EXISTS consultation_form_fields (
+        id SERIAL PRIMARY KEY,
+        form_id INTEGER NOT NULL REFERENCES consultation_forms(id) ON DELETE CASCADE,
+        tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+        field_type VARCHAR(30) NOT NULL,
+        label VARCHAR(500) NOT NULL,
+        description TEXT,
+        required BOOLEAN DEFAULT FALSE,
+        options JSONB,
+        display_order INTEGER DEFAULT 0,
+        active BOOLEAN DEFAULT TRUE
+      );
+    `
+  },
+  {
+    name: '068_consultation_form_responses',
+    sql: `
+      CREATE TABLE IF NOT EXISTS consultation_form_responses (
+        id SERIAL PRIMARY KEY,
+        tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+        form_id INTEGER NOT NULL REFERENCES consultation_forms(id),
+        customer_id INTEGER NOT NULL REFERENCES customers(id),
+        booking_id INTEGER REFERENCES bookings(id),
+        token VARCHAR(64) UNIQUE NOT NULL,
+        status VARCHAR(20) DEFAULT 'pending',
+        responses JSONB,
+        signed BOOLEAN DEFAULT FALSE,
+        signed_at TIMESTAMP,
+        completed_at TIMESTAMP,
+        sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_cfr_token ON consultation_form_responses(token);
+      CREATE INDEX IF NOT EXISTS idx_cfr_customer ON consultation_form_responses(tenant_id, customer_id);
+    `
+  },
+
+  // ============================================
+  // SMS LOGGING
+  // ============================================
+  {
+    name: '069_sms_logs',
+    sql: `
+      CREATE TABLE IF NOT EXISTS sms_logs (
+        id SERIAL PRIMARY KEY,
+        tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+        recipient_phone VARCHAR(50) NOT NULL,
+        recipient_name VARCHAR(255),
+        sms_type VARCHAR(50),
+        message_preview VARCHAR(160),
+        booking_id INTEGER,
+        customer_id INTEGER,
+        status VARCHAR(20) DEFAULT 'pending',
+        provider_message_id TEXT,
+        error_message TEXT,
+        sent_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_sms_logs_customer ON sms_logs(tenant_id, customer_id);
+    `
+  },
+
+  // ============================================
   // MIGRATION TRACKING
   // ============================================
   {
