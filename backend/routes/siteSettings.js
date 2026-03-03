@@ -51,7 +51,7 @@ adminRouter.put('/:key', asyncHandler(async (req, res) => {
     processedValue = value.map(embed => ({ ...embed, code: sanitizeEmbedCode(embed.code) }));
   }
 
-  const stringValue = typeof processedValue === 'object' ? JSON.stringify(processedValue) : String(processedValue || '');
+  const stringValue = typeof processedValue === 'object' ? JSON.stringify(processedValue) : String(processedValue ?? '');
 
   await run(
     `INSERT INTO tenant_settings (tenant_id, setting_key, setting_value, updated_at)
@@ -83,7 +83,7 @@ adminRouter.put('/', asyncHandler(async (req, res) => {
       processedValue = value.map(embed => ({ ...embed, code: sanitizeEmbedCode(embed.code) }));
     }
 
-    const stringValue = typeof processedValue === 'object' ? JSON.stringify(processedValue) : String(processedValue || '');
+    const stringValue = typeof processedValue === 'object' ? JSON.stringify(processedValue) : String(processedValue ?? '');
     await run(
       `INSERT INTO tenant_settings (tenant_id, setting_key, setting_value, updated_at)
        VALUES ($1, $2, $3, NOW())
