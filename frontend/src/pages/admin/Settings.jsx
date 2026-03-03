@@ -705,7 +705,7 @@ function SmsTab({ snackbar, setSnackbar }) {
               <Typography variant="subtitle2" fontWeight={600} mb={1.5}>Appointment Reminders</Typography>
               <FormControlLabel
                 control={<Switch checked={smsSettings.sms_reminder_24h_enabled === 'true'} onChange={() => toggleSetting('sms_reminder_24h_enabled')} />}
-                label="24-hour SMS reminder (sent daily at 9am)"
+                label="24-hour SMS reminder (sent 24 hours before appointment)"
                 sx={{ display: 'block', mb: 1 }}
               />
               <FormControlLabel
