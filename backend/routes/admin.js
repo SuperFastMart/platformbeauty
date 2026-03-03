@@ -1140,6 +1140,82 @@ router.put('/bookings/:id/status', asyncHandler(async (req, res) => {
   res.json(booking);
 }));
 
+// POST /api/admin/bookings/:id/send-notification — manually send/resend booking notification
+router.post('/bookings/:id/send-notification', asyncHandler(async (req, res) => {
+  const booking = await getOne(
+    'SELECT * FROM bookings WHERE id = $1 AND tenant_id = $2',
+    [req.params.id, req.tenantId]
+  );
+  if (!booking) return res.status(404).json({ error: 'Booking not found' });
+
+  const tenant = await getOne('SELECT * FROM tenants WHERE id = $1', [req.tenantId]);
+  if (!tenant) return res.status(500).json({ error: 'Tenant not found' });
+
+  const { sendBookingCardConfirmationEmail, sendBookingCardConfirmationSMS } = require('../utils/emailService');
+
+  if (booking.status === 'pending_confirmation') {
+    // Resend card confirmation
+    let token = booking.confirmation_token;
+    if (!token || (booking.confirmation_token_expires && new Date(booking.confirmation_token_expires) < new Date())) {
+      // Generate new token if expired
+      token = crypto.randomBytes(32).toString('hex');
+      await run(
+        `UPDATE bookings SET confirmation_token = $1, confirmation_token_expires = NOW() + INTERVAL '48 hours' WHERE id = $2`,
+        [token, booking.id]
+      );
+    }
+
+    if (booking.customer_email) {
+      await sendBookingCardConfirmationEmail(booking, tenant, token);
+    } else if (booking.customer_phone) {
+      await sendBookingCardConfirmationSMS(booking, tenant, token);
+    } else {
+      return res.status(400).json({ error: 'Customer has no email or phone number' });
+    }
+    res.json({ message: 'Card confirmation resent' });
+  } else if (booking.status === 'confirmed') {
+    // Send booking confirmed notification
+    sendBookingApprovedNotification(booking, tenant).catch(err => console.error('Email error:', err));
+    sendBookingConfirmedSMS(booking, tenant).catch(err => console.error('SMS error:', err));
+    res.json({ message: 'Booking confirmation sent' });
+  } else {
+    return res.status(400).json({ error: `Cannot send notification for status: ${booking.status}` });
+  }
+}));
+
+// GET /api/admin/bookings/:id/communications — email + SMS logs for a booking
+router.get('/bookings/:id/communications', asyncHandler(async (req, res) => {
+  const bookingId = req.params.id;
+
+  // Verify booking belongs to tenant
+  const booking = await getOne(
+    'SELECT id FROM bookings WHERE id = $1 AND tenant_id = $2',
+    [bookingId, req.tenantId]
+  );
+  if (!booking) return res.status(404).json({ error: 'Booking not found' });
+
+  const [emails, sms] = await Promise.all([
+    getAll(
+      `SELECT id, recipient_email, recipient_name, email_type, subject, status, error_message, sent_at, created_at,
+              'email' as channel
+       FROM email_logs WHERE tenant_id = $1 AND booking_id = $2
+       ORDER BY created_at DESC`,
+      [req.tenantId, bookingId]
+    ),
+    getAll(
+      `SELECT id, recipient_phone, recipient_name, sms_type, message_preview, status, error_message, sent_at, created_at,
+              'sms' as channel
+       FROM sms_logs WHERE tenant_id = $1 AND booking_id = $2
+       ORDER BY created_at DESC`,
+      [req.tenantId, bookingId]
+    ),
+  ]);
+
+  // Merge and sort by created_at descending
+  const all = [...emails, ...sms].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  res.json(all);
+}));
+
 // ============================================
 // ROTATION SETTINGS
 // ============================================

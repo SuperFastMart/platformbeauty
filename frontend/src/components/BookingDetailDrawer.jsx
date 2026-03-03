@@ -7,7 +7,7 @@ import {
 import {
   Close, Edit, Save, ArrowBack, ExpandMore, Check, CreditCard,
   CurrencyPound, CreditCardOff, ReportProblem, Event, AccessTime,
-  Person, ContentCut, AttachMoney
+  Person, ContentCut, AttachMoney, Send, Email, Sms
 } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import api from '../api/client';
@@ -43,6 +43,11 @@ export default function BookingDetailDrawer({ open, bookingId, onClose, onUpdate
   const [priceOverride, setPriceOverride] = useState(false);
   const [notifyCustomer, setNotifyCustomer] = useState(true);
 
+  // Communication log
+  const [comms, setComms] = useState([]);
+  const [commsLoading, setCommsLoading] = useState(false);
+  const [sendingNotification, setSendingNotification] = useState(false);
+
   // Customer search
   const [customerSearch, setCustomerSearch] = useState('');
   const [customerOptions, setCustomerOptions] = useState([]);
@@ -63,7 +68,30 @@ export default function BookingDetailDrawer({ open, bookingId, onClose, onUpdate
       })
       .catch(() => setError('Failed to load booking'))
       .finally(() => setLoading(false));
+    // Fetch communication log
+    setCommsLoading(true);
+    api.get(`/admin/bookings/${bookingId}/communications`)
+      .then(({ data }) => setComms(data))
+      .catch(() => setComms([]))
+      .finally(() => setCommsLoading(false));
   }, [open, bookingId]);
+
+  const handleSendNotification = async () => {
+    setSendingNotification(true);
+    try {
+      const { data } = await api.post(`/admin/bookings/${bookingId}/send-notification`);
+      setError('');
+      // Refresh comms log
+      api.get(`/admin/bookings/${bookingId}/communications`)
+        .then(({ data: c }) => setComms(c)).catch(() => {});
+      // Temporarily show success via the error state (repurpose with a success alert)
+      setBooking(prev => ({ ...prev, _notificationSent: true }));
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to send notification');
+    } finally {
+      setSendingNotification(false);
+    }
+  };
 
   // Enter edit mode
   const startEditing = () => {
@@ -233,6 +261,13 @@ export default function BookingDetailDrawer({ open, bookingId, onClose, onUpdate
                 </Alert>
               )}
 
+              {/* Notification sent success */}
+              {booking._notificationSent && (
+                <Alert severity="success" sx={{ mb: 2 }} onClose={() => setBooking(prev => ({ ...prev, _notificationSent: false }))}>
+                  Notification sent successfully
+                </Alert>
+              )}
+
               {/* Customer */}
               <Box mb={2.5}>
                 <Box display="flex" alignItems="center" gap={0.5} mb={0.5}>
@@ -380,18 +415,28 @@ export default function BookingDetailDrawer({ open, bookingId, onClose, onUpdate
                 )}
 
                 {booking.status === 'pending_confirmation' && (
-                  <Button variant="contained" color="success" startIcon={<Check />}
-                    onClick={async () => {
-                      await api.put(`/admin/bookings/${bookingId}/status`, { status: 'confirmed' });
-                      onUpdate?.();
-                      api.get(`/admin/bookings/${bookingId}`).then(({ data }) => { setBooking(data); setServices(data.services || []); });
-                    }}>
-                    Confirm Without Card
-                  </Button>
+                  <>
+                    <Button variant="contained" color="success" startIcon={<Check />}
+                      onClick={async () => {
+                        await api.put(`/admin/bookings/${bookingId}/status`, { status: 'confirmed' });
+                        onUpdate?.();
+                        api.get(`/admin/bookings/${bookingId}`).then(({ data }) => { setBooking(data); setServices(data.services || []); });
+                      }}>
+                      Confirm Without Card
+                    </Button>
+                    <Button variant="outlined" size="small" startIcon={<Send />}
+                      onClick={handleSendNotification} disabled={sendingNotification}>
+                      {sendingNotification ? 'Sending...' : 'Resend Card Link'}
+                    </Button>
+                  </>
                 )}
 
                 {booking.status === 'confirmed' && (
                   <>
+                    <Button variant="outlined" size="small" startIcon={<Send />}
+                      onClick={handleSendNotification} disabled={sendingNotification}>
+                      {sendingNotification ? 'Sending...' : 'Send Confirmation'}
+                    </Button>
                     <Button variant="contained" color="success" size="small" startIcon={<CreditCard />}
                       onClick={async () => {
                         try {
@@ -428,6 +473,48 @@ export default function BookingDetailDrawer({ open, bookingId, onClose, onUpdate
                   Created {dayjs(booking.created_at).format('D MMM YYYY HH:mm')} · {booking.created_by === 'admin' ? 'By admin' : 'By customer'}
                   {booking.booking_source && booking.booking_source !== 'direct' && ` · Source: ${booking.booking_source}`}
                 </Typography>
+              </Box>
+
+              {/* Communication History */}
+              <Box mt={3} pt={2} borderTop={1} borderColor="divider">
+                <Typography variant="subtitle2" fontWeight={600} mb={1}>
+                  Communication History
+                </Typography>
+                {commsLoading ? (
+                  <Box display="flex" justifyContent="center" py={2}><CircularProgress size={20} /></Box>
+                ) : comms.length === 0 ? (
+                  <Typography variant="body2" color="text.secondary">No messages sent for this booking</Typography>
+                ) : (
+                  comms.map((c, i) => (
+                    <Box key={`${c.channel}-${c.id}`} sx={{ mb: 1.5, p: 1.5, bgcolor: 'grey.50', borderRadius: 1.5 }}>
+                      <Box display="flex" alignItems="center" gap={0.5} mb={0.3}>
+                        {c.channel === 'email' ? (
+                          <Email sx={{ fontSize: 14, color: 'info.main' }} />
+                        ) : (
+                          <Sms sx={{ fontSize: 14, color: 'success.main' }} />
+                        )}
+                        <Typography variant="caption" fontWeight={600}>
+                          {(c.email_type || c.sms_type || '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                        </Typography>
+                        <Chip
+                          label={c.status || 'sent'}
+                          size="small"
+                          color={c.status === 'sent' ? 'success' : c.status === 'failed' ? 'error' : 'default'}
+                          sx={{ height: 18, fontSize: '0.65rem', ml: 'auto' }}
+                        />
+                      </Box>
+                      <Typography variant="caption" color="text.secondary">
+                        {c.subject || c.message_preview || (c.channel === 'email' ? c.recipient_email : c.recipient_phone)}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        {dayjs(c.created_at).format('D MMM YYYY HH:mm')}
+                        {c.status === 'failed' && c.error_message && (
+                          <Typography component="span" variant="caption" color="error.main"> — {c.error_message}</Typography>
+                        )}
+                      </Typography>
+                    </Box>
+                  ))
+                )}
               </Box>
             </>
           )}
