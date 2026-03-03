@@ -11,6 +11,7 @@ import dayjs from 'dayjs';
 import api from '../../api/client';
 import useSubscriptionTier from '../../hooks/useSubscriptionTier';
 import CustomerImportDialog from '../../components/CustomerImportDialog';
+import useTerminology from '../../hooks/useTerminology';
 
 export default function Customers() {
   const navigate = useNavigate();
@@ -25,6 +26,7 @@ export default function Customers() {
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const { person, people } = useTerminology();
 
   // Import dialog
   const [importOpen, setImportOpen] = useState(false);
@@ -119,7 +121,7 @@ export default function Customers() {
     setFormError('');
     try {
       await api.post('/admin/customers', form);
-      setSnackbar({ open: true, message: 'Customer created', severity: 'success' });
+      setSnackbar({ open: true, message: `${person} created`, severity: 'success' });
       setDialogOpen(false);
       setForm({ name: '', email: '', phone: '' });
       fetchCustomers();
@@ -133,7 +135,7 @@ export default function Customers() {
   return (
     <Box>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h5" fontWeight={600}>Customers</Typography>
+        <Typography variant="h5" fontWeight={600}>{people}</Typography>
         <Box display="flex" alignItems="center" gap={1} flexWrap="wrap">
           <Chip label={`${filteredCustomers ? filteredCustomers.length : customers.length} ${filteredCustomers ? 'filtered' : 'total'}`} size="small" />
           {hasAccess('growth') && (
@@ -155,7 +157,7 @@ export default function Customers() {
         <Card sx={{ mb: 2 }}>
           <CardContent sx={{ py: 2 }}>
             <Box display="flex" justifyContent="space-between" alignItems="center" mb={1.5}>
-              <Typography variant="subtitle2" fontWeight={600}>Filter Customers</Typography>
+              <Typography variant="subtitle2" fontWeight={600}>Filter {people}</Typography>
               <Box display="flex" gap={1}>
                 {segments.length > 0 && (
                   <TextField
@@ -215,7 +217,7 @@ export default function Customers() {
         <Typography>Loading...</Typography>
       ) : filtered.length === 0 ? (
         <Typography color="text.secondary">
-          {search ? 'No customers match your search' : 'No customers yet'}
+          {search ? `No ${people.toLowerCase()} match your search` : `No ${people.toLowerCase()} yet`}
         </Typography>
       ) : isMobile ? (
         /* Mobile: Card layout */
@@ -305,7 +307,7 @@ export default function Customers() {
 
       {/* Add Customer Dialog */}
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>Add Customer</DialogTitle>
+        <DialogTitle>Add {person}</DialogTitle>
         <DialogContent>
           {formError && <Alert severity="error" sx={{ mb: 2 }}>{formError}</Alert>}
           <TextField fullWidth label="Name" margin="normal" required

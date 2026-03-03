@@ -12,6 +12,7 @@ import api from '../../api/client';
 import { useAuth } from '../../contexts/AuthContext';
 import useSubscriptionTier from '../../hooks/useSubscriptionTier';
 import FeatureGate from '../../components/FeatureGate';
+import useTerminology from '../../hooks/useTerminology';
 
 const statusColors = {
   pending: 'warning', confirmed: 'success', rejected: 'error',
@@ -37,6 +38,7 @@ export default function CustomerDetail() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { hasAccess } = useSubscriptionTier();
+  const { person } = useTerminology();
 
   // Photos
   const [photos, setPhotos] = useState([]);
@@ -150,7 +152,7 @@ export default function CustomerDetail() {
   };
 
   if (loading) return <Typography>Loading...</Typography>;
-  if (!customer) return <Typography>Customer not found</Typography>;
+  if (!customer) return <Typography>{person} not found</Typography>;
 
   return (
     <Box>
@@ -173,7 +175,7 @@ export default function CustomerDetail() {
               }
             }}
           >
-            View as Customer
+            View as {person}
           </Button>
         )}
       </Box>
@@ -213,7 +215,7 @@ export default function CustomerDetail() {
                 <Typography variant="body2"><strong>Source:</strong> {customer.client_source}</Typography>
               )}
               <Typography variant="body2">
-                <strong>Customer since:</strong> {dayjs(customer.created_at).format('D MMM YYYY')}
+                <strong>{person} since:</strong> {dayjs(customer.created_at).format('D MMM YYYY')}
               </Typography>
               {customer.first_visit_date && (
                 <Typography variant="body2">
@@ -463,22 +465,22 @@ export default function CustomerDetail() {
       <Box mt={4} pt={3} borderTop={1} borderColor="divider">
         <Button color="error" variant="outlined" startIcon={<Delete />}
           onClick={() => setDeleteDialog(true)}>
-          Delete Customer (GDPR)
+          Delete {person} (GDPR)
         </Button>
         <Typography variant="caption" display="block" color="text.secondary" mt={0.5}>
-          This will permanently delete the customer and all associated data.
+          This will permanently delete this {person.toLowerCase()} and all associated data.
         </Typography>
       </Box>
 
       <Dialog open={deleteDialog} onClose={() => setDeleteDialog(false)}>
-        <DialogTitle>Delete Customer (GDPR)?</DialogTitle>
+        <DialogTitle>Delete {person} (GDPR)?</DialogTitle>
         <DialogContent>
           <Alert severity="warning" sx={{ mt: 1, mb: 2 }}>
             This will permanently delete <strong>{customer.name}</strong>'s personal data. This action cannot be undone.
           </Alert>
           <Typography variant="body2" fontWeight={600} gutterBottom>What gets deleted:</Typography>
           <Typography variant="body2" color="text.secondary" component="ul" sx={{ pl: 2, mb: 1 }}>
-            <li>Customer record (name, email, phone, notes, preferences)</li>
+            <li>{person} record (name, email, phone, notes, preferences)</li>
             <li>Messages and booking requests</li>
             <li>Loyalty stamps and redeemed rewards</li>
             <li>Email history</li>

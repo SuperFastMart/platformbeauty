@@ -1048,6 +1048,31 @@ router.put('/rotation-settings', asyncHandler(async (req, res) => {
   res.json({ message: 'Rotation settings saved', rotation_weeks: weeks, rotation_start_date: keys.rotation_start_date || null });
 }));
 
+// GET /api/admin/settings/terminology
+router.get('/settings/terminology', asyncHandler(async (req, res) => {
+  const row = await getOne(
+    `SELECT setting_value FROM tenant_settings WHERE tenant_id = $1 AND setting_key = 'customer_label'`,
+    [req.tenantId]
+  );
+  res.json({ value: row?.setting_value || 'customers' });
+}));
+
+// PUT /api/admin/settings/terminology
+router.put('/settings/terminology', asyncHandler(async (req, res) => {
+  const { value } = req.body;
+  if (!['customers', 'clients'].includes(value)) {
+    return res.status(400).json({ error: 'Value must be "customers" or "clients"' });
+  }
+  await run(
+    `INSERT INTO tenant_settings (tenant_id, setting_key, setting_value, updated_at)
+     VALUES ($1, 'customer_label', $2, NOW())
+     ON CONFLICT (tenant_id, setting_key) DO UPDATE SET
+       setting_value = EXCLUDED.setting_value, updated_at = NOW()`,
+    [req.tenantId, value]
+  );
+  res.json({ message: 'Terminology updated', value });
+}));
+
 // ============================================
 // SLOT TEMPLATES
 // ============================================
@@ -1721,7 +1746,20 @@ router.post('/customers/import', asyncHandler(async (req, res) => {
           [req.tenantId, row.name.trim().toLowerCase(), row.phone?.trim() || null]
         );
         if (existing) {
-          updated++;
+          // Merge data into the existing record
+          await run(
+            `UPDATE customers SET
+               admin_notes = COALESCE(NULLIF($2, ''), admin_notes),
+               tags = COALESCE(NULLIF($3, ''), tags),
+               gender = COALESCE(NULLIF($4, ''), gender),
+               client_source = COALESCE(NULLIF($5, ''), client_source),
+               first_visit_date = COALESCE($6, first_visit_date),
+               last_visit_date = COALESCE($7, last_visit_date)
+             WHERE id = $1`,
+            [existing.id, row.notes?.trim() || null, row.tags?.trim() || null,
+             row.gender?.trim() || null, row.client_source?.trim() || null,
+             row.first_visit_date || null, row.last_visit_date || null]
+          );
           result = { is_new: false };
         } else {
           result = await getOne(

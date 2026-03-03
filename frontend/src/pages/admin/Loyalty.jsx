@@ -8,8 +8,10 @@ import {
 import api from '../../api/client';
 import useSubscriptionTier from '../../hooks/useSubscriptionTier';
 import FeatureGate from '../../components/FeatureGate';
+import useTerminology from '../../hooks/useTerminology';
 
 export default function Loyalty() {
+  const { person, people } = useTerminology();
   const { hasAccess } = useSubscriptionTier();
   const [config, setConfig] = useState(null);
   const [stats, setStats] = useState(null);
@@ -159,9 +161,9 @@ export default function Loyalty() {
       {/* Customer stamps table */}
       <Card>
         <CardContent>
-          <Typography variant="h6" fontWeight={600} mb={2}>Customer Stamps</Typography>
+          <Typography variant="h6" fontWeight={600} mb={2}>{person} Stamps</Typography>
           {customers.length === 0 ? (
-            <Typography color="text.secondary">No customers yet</Typography>
+            <Typography color="text.secondary">No {people.toLowerCase()} yet</Typography>
           ) : (
             isMobile ? customers.map(c => {
               const stampData = Array.isArray(c.stamp_data) ? c.stamp_data : [];
@@ -191,7 +193,7 @@ export default function Loyalty() {
             <Table size="small">
               <TableHead>
                 <TableRow>
-                  <TableCell>Customer</TableCell>
+                  <TableCell>{person}</TableCell>
                   <TableCell>Email</TableCell>
                   <TableCell>Stamps</TableCell>
                   <TableCell align="right">Actions</TableCell>

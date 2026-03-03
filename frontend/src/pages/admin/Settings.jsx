@@ -7,6 +7,7 @@ import {
 } from '@mui/material';
 import { Save, CreditCard, Store, Palette, Info, Schedule, Code, ContentCopy, Share, Delete, Add, DragIndicator, Gavel, Subscriptions, OpenInNew, CheckCircle, Security, Lock, LockOpen, AccountBalance, Sms } from '@mui/icons-material';
 import api from '../../api/client';
+import useTerminology, { updateTerminology } from '../../hooks/useTerminology';
 
 function TabPanel({ children, value, index }) {
   return value === index ? <Box mt={3}>{children}</Box> : null;
@@ -777,6 +778,21 @@ export default function Settings() {
     business_hours: defaultHours,
   });
 
+  // Terminology preference
+  const terms = useTerminology();
+  const [customerLabel, setCustomerLabel] = useState(localStorage.getItem('customer_label') || 'customers');
+
+  const handleTerminologyChange = async (value) => {
+    setCustomerLabel(value);
+    updateTerminology(value);
+    try {
+      await api.put('/admin/settings/terminology', { value });
+      setSnackbar({ open: true, message: 'Terminology updated — reload pages to see the change', severity: 'success' });
+    } catch {
+      setSnackbar({ open: true, message: 'Failed to save terminology', severity: 'error' });
+    }
+  };
+
   useEffect(() => {
     Promise.all([
       api.get('/admin/settings'),
@@ -867,6 +883,29 @@ export default function Settings() {
               value={settings.business_phone || ''} onChange={handleChange('business_phone')} />
             <TextField fullWidth label="Address" margin="normal" multiline rows={2}
               value={settings.business_address || ''} onChange={handleChange('business_address')} />
+          </CardContent>
+        </Card>
+
+        <Card sx={{ mt: 2 }}>
+          <CardContent>
+            <Typography variant="subtitle1" fontWeight={600} mb={1}>Terminology</Typography>
+            <Typography variant="body2" color="text.secondary" mb={2}>
+              Choose how you refer to your customers throughout the admin panel.
+            </Typography>
+            <Box display="flex" gap={2}>
+              <Button
+                variant={customerLabel === 'customers' ? 'contained' : 'outlined'}
+                onClick={() => handleTerminologyChange('customers')}
+              >
+                Customers
+              </Button>
+              <Button
+                variant={customerLabel === 'clients' ? 'contained' : 'outlined'}
+                onClick={() => handleTerminologyChange('clients')}
+              >
+                Clients
+              </Button>
+            </Box>
           </CardContent>
         </Card>
       </TabPanel>

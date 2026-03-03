@@ -11,8 +11,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../../api/client';
 import CalendarGrid from '../../components/CalendarGrid';
 import TimeSlotPicker from '../../components/TimeSlotPicker';
-
-const steps = ['Customer', 'Service', 'Date & Time', 'Confirm'];
+import useTerminology from '../../hooks/useTerminology';
 
 const FREQUENCY_OPTIONS = [
   { value: 'specific', label: 'Specific Days' },
@@ -22,6 +21,8 @@ const FREQUENCY_OPTIONS = [
 ];
 
 export default function AdminBookingCreate() {
+  const { person, people } = useTerminology();
+  const steps = [person, 'Service', 'Date & Time', 'Confirm'];
   const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -220,10 +221,10 @@ export default function AdminBookingCreate() {
       {activeStep === 0 && (
         <Card>
           <CardContent sx={{ p: 3 }}>
-            <Typography variant="h6" fontWeight={600} mb={2}>Customer Details</Typography>
+            <Typography variant="h6" fontWeight={600} mb={2}>{person} Details</Typography>
             <FormControlLabel
               control={<Checkbox checked={isNewCustomer} onChange={e => setIsNewCustomer(e.target.checked)} />}
-              label="New customer"
+              label={`New ${person.toLowerCase()}`}
             />
 
             {isNewCustomer ? (
@@ -252,9 +253,9 @@ export default function AdminBookingCreate() {
                 inputValue={customerSearch}
                 onInputChange={(_, v) => setCustomerSearch(v)}
                 renderInput={(params) => (
-                  <TextField {...params} label="Search customers" margin="normal" placeholder="Type name, email or phone..." />
+                  <TextField {...params} label={`Search ${people.toLowerCase()}`} margin="normal" placeholder="Type name, email or phone..." />
                 )}
-                noOptionsText={customerSearch.length < 2 ? 'Type at least 2 characters' : 'No customers found'}
+                noOptionsText={customerSearch.length < 2 ? 'Type at least 2 characters' : `No ${people.toLowerCase()} found`}
                 sx={{ mt: 1 }}
               />
             )}
@@ -472,7 +473,7 @@ export default function AdminBookingCreate() {
           <Typography variant="h6" fontWeight={600} mb={2}>Confirm Booking</Typography>
           <Card>
             <CardContent>
-              <Typography variant="subtitle2" color="text.secondary">Customer</Typography>
+              <Typography variant="subtitle2" color="text.secondary">{person}</Typography>
               <Typography>{customerName} — {customerEmail}</Typography>
               {customerPhone && <Typography variant="body2">{customerPhone}</Typography>}
 

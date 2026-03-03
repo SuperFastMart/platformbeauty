@@ -1106,6 +1106,15 @@ const migrations = [
       ALTER TABLE customers ADD COLUMN IF NOT EXISTS first_visit_date DATE;
     `
   },
+  {
+    name: '065_allow_null_email_customers',
+    sql: `
+      ALTER TABLE customers ALTER COLUMN email DROP NOT NULL;
+      ALTER TABLE customers DROP CONSTRAINT IF EXISTS customers_tenant_id_email_key;
+      CREATE UNIQUE INDEX IF NOT EXISTS customers_tenant_email_unique
+        ON customers (tenant_id, email) WHERE email IS NOT NULL;
+    `
+  },
 
   // ============================================
   // MIGRATION TRACKING

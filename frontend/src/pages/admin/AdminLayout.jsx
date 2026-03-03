@@ -20,6 +20,7 @@ import relativeTime from 'dayjs/plugin/relativeTime';
 import { useAuth } from '../../contexts/AuthContext';
 import { useThemeMode } from '../../contexts/ThemeContext';
 import api from '../../api/client';
+import useTerminology from '../../hooks/useTerminology';
 
 dayjs.extend(relativeTime);
 
@@ -48,6 +49,7 @@ const navItems = [
 export default function AdminLayout() {
   const { user, logout, exitImpersonation, isImpersonating } = useAuth();
   const { mode, toggleTheme } = useThemeMode();
+  const { people: peopleLabel } = useTerminology();
   const navigate = useNavigate();
   const location = useLocation();
   const theme = useTheme();
@@ -245,7 +247,7 @@ export default function AdminLayout() {
                 ? <Badge variant="dot" color="error">{item.icon}</Badge>
                 : item.icon}
             </ListItemIcon>
-            <ListItemText primary={item.label} />
+            <ListItemText primary={item.label === 'Customers' ? peopleLabel : item.label} />
           </ListItemButton>
         ))}
       </List>

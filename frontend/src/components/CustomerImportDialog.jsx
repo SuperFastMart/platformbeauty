@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 import dayjs from 'dayjs';
+import useTerminology from '../hooks/useTerminology';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
 dayjs.extend(customParseFormat);
 import {
@@ -121,6 +122,7 @@ function parseFile(file, onComplete, onError) {
 }
 
 export default function CustomerImportDialog({ open, onClose, onComplete, existingCustomers = [] }) {
+  const { person, people } = useTerminology();
   const [step, setStep] = useState(0);
   const [rows, setRows] = useState([]);
   const [mapping, setMapping] = useState({});
@@ -241,7 +243,7 @@ export default function CustomerImportDialog({ open, onClose, onComplete, existi
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
       <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        Import Customers
+        Import {people}
         <IconButton onClick={handleClose} size="small"><Close /></IconButton>
       </DialogTitle>
 
@@ -249,7 +251,7 @@ export default function CustomerImportDialog({ open, onClose, onComplete, existi
         {step === 0 && (
           <Box>
             <Alert severity="info" sx={{ mb: 3 }}>
-              Import your customers from a CSV or Excel file. Fresha client exports are supported automatically.
+              Import your {people.toLowerCase()} from a CSV or Excel file. Fresha client exports are supported automatically.
             </Alert>
             <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
               <Button variant="outlined" startIcon={<Download />} onClick={downloadTemplate}>
@@ -294,7 +296,7 @@ export default function CustomerImportDialog({ open, onClose, onComplete, existi
 
             {existingCount > 0 && (
               <Alert severity="info" sx={{ mb: 2 }}>
-                <strong>{existingCount}</strong> customer{existingCount !== 1 ? 's' : ''} already exist by email.
+                <strong>{existingCount}</strong> {existingCount !== 1 ? people.toLowerCase() : person.toLowerCase()} already exist by email.
                 {skipDuplicates
                   ? ' These will be skipped. Untick below to merge — missing fields (phone, gender, etc.) will be filled in without overwriting existing data.'
                   : ' These will be smart-merged — only empty fields will be updated from the import.'}
@@ -304,7 +306,7 @@ export default function CustomerImportDialog({ open, onClose, onComplete, existi
             {existingCount > 0 && (
               <FormControlLabel
                 control={<Checkbox checked={skipDuplicates} onChange={(e) => setSkipDuplicates(e.target.checked)} />}
-                label={`Skip existing customers (${existingCount})`}
+                label={`Skip existing ${people.toLowerCase()} (${existingCount})`}
                 sx={{ mb: 1 }}
               />
             )}
@@ -345,7 +347,7 @@ export default function CustomerImportDialog({ open, onClose, onComplete, existi
                         ) : r.isDuplicateInFile ? (
                           <Tooltip title="Duplicate email within this file (will be skipped)"><Warning color="warning" fontSize="small" /></Tooltip>
                         ) : r.isDuplicate ? (
-                          <Tooltip title="Customer with this email already exists (will update)"><Warning color="warning" fontSize="small" /></Tooltip>
+                          <Tooltip title={`${person} with this email already exists (will update)`}><Warning color="warning" fontSize="small" /></Tooltip>
                         ) : (
                           <CheckCircle color="success" fontSize="small" />
                         )}
@@ -395,7 +397,7 @@ export default function CustomerImportDialog({ open, onClose, onComplete, existi
           <>
             <Button onClick={() => { setStep(0); setRows([]); setMapping({}); }}>Back</Button>
             <Button variant="contained" onClick={handleImport} disabled={importing || importableRows.length === 0}>
-              Import {importableRows.length} Customer{importableRows.length !== 1 ? 's' : ''}
+              Import {importableRows.length} {importableRows.length !== 1 ? people : person}
             </Button>
           </>
         )}

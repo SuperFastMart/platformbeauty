@@ -9,8 +9,10 @@ import dayjs from 'dayjs';
 import api from '../../api/client';
 import useSubscriptionTier from '../../hooks/useSubscriptionTier';
 import FeatureGate from '../../components/FeatureGate';
+import useTerminology from '../../hooks/useTerminology';
 
 export default function Reports() {
+  const { person, people } = useTerminology();
   const { hasAccess } = useSubscriptionTier();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -281,7 +283,7 @@ export default function Reports() {
                     <TableHead>
                       <TableRow>
                         <TableCell>Date</TableCell>
-                        <TableCell>Customer</TableCell>
+                        <TableCell>{person}</TableCell>
                         {!isMobile && <TableCell>Service</TableCell>}
                         <TableCell>Method</TableCell>
                         <TableCell align="right">Amount</TableCell>
@@ -407,7 +409,7 @@ export default function Reports() {
             <Card sx={{ mb: 3 }}>
               <CardContent>
                 <Typography variant="h6" fontWeight={600} mb={2}>
-                  At-Risk Customers
+                  At-Risk {people}
                   <Typography component="span" variant="body2" color="text.secondary" ml={1}>
                     (2+ visits, absent 60+ days)
                   </Typography>
@@ -416,7 +418,7 @@ export default function Reports() {
                   <Table size="small">
                     <TableHead>
                       <TableRow>
-                        <TableCell>Customer</TableCell>
+                        <TableCell>{person}</TableCell>
                         {!isMobile && <TableCell>Last Visit</TableCell>}
                         <TableCell align="right">Days Since</TableCell>
                         <TableCell align="right">Total Spent</TableCell>

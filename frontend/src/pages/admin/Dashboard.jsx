@@ -11,6 +11,7 @@ import {
 } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import api from '../../api/client';
+import useTerminology from '../../hooks/useTerminology';
 
 function StatCard({ title, value, icon, color, onClick, subtitle }) {
   return (
@@ -105,6 +106,7 @@ function StatusBars({ data }) {
 }
 
 export default function Dashboard() {
+  const { people } = useTerminology();
   const [stats, setStats] = useState(null);
   const [analytics, setAnalytics] = useState(null);
   const [analyticsPeriod, setAnalyticsPeriod] = useState(30);
@@ -167,7 +169,7 @@ export default function Dashboard() {
         </Grid>
         <Grid item xs={6} sm={6} md={3}>
           <StatCard
-            title="Total Customers"
+            title={`Total ${people}`}
             value={stats.totalCustomers}
             icon={<People fontSize="inherit" />}
             color="info.main"
@@ -236,7 +238,7 @@ export default function Dashboard() {
                   <Typography variant="h5" fontWeight={700} color="primary">
                     {analytics.new_customers}
                   </Typography>
-                  <Typography variant="caption" color="text.secondary">New Customers</Typography>
+                  <Typography variant="caption" color="text.secondary">New {people}</Typography>
                 </CardContent>
               </Card>
             </Grid>

@@ -11,6 +11,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../../api/client';
 import NoShowChargeModal from '../../components/NoShowChargeModal';
 import BookingImportDialog from '../../components/BookingImportDialog';
+import useTerminology from '../../hooks/useTerminology';
 
 const statusColors = {
   pending: 'warning',
@@ -21,6 +22,7 @@ const statusColors = {
 };
 
 export default function Bookings() {
+  const { person } = useTerminology();
   const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -162,7 +164,7 @@ export default function Bookings() {
         <Box mb={4}>
           <Typography variant="subtitle1" fontWeight={600} mb={1} display="flex" alignItems="center" gap={1}>
             <SwapHoriz color="warning" />
-            Customer Requests ({requests.length})
+            {person} Requests ({requests.length})
           </Typography>
           {requests.map(r => (
             <Card key={r.id} sx={{ mb: 1.5, borderLeft: 3, borderColor: 'warning.main' }}>
@@ -375,13 +377,13 @@ export default function Bookings() {
 
       {/* Request Review Dialog */}
       <Dialog open={requestDialog} onClose={() => setRequestDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Review Customer Request</DialogTitle>
+        <DialogTitle>Review {person} Request</DialogTitle>
         <DialogContent>
           {currentRequest && (
             <Box mb={2}>
               <Chip label={currentRequest.request_type === 'cancel' ? 'Cancellation' : 'Amendment'}
                 size="small" color="warning" sx={{ mb: 1 }} />
-              <Typography variant="body2"><strong>Customer:</strong> {currentRequest.customer_name}</Typography>
+              <Typography variant="body2"><strong>{person}:</strong> {currentRequest.customer_name}</Typography>
               <Typography variant="body2"><strong>Booking:</strong> {currentRequest.service_names}</Typography>
               <Typography variant="body2">
                 <strong>Date:</strong> {dayjs(currentRequest.booking_date).format('D MMM YYYY')} at {currentRequest.booking_time?.slice(0, 5)}
@@ -399,7 +401,7 @@ export default function Bookings() {
               </Typography>
             </Box>
           )}
-          <TextField fullWidth label="Response to customer (optional)" margin="normal"
+          <TextField fullWidth label={`Response to ${person.toLowerCase()} (optional)`} margin="normal"
             value={requestResponse} onChange={e => setRequestResponse(e.target.value)} multiline rows={2} />
         </DialogContent>
         <DialogActions>
@@ -429,7 +431,7 @@ export default function Bookings() {
                 Charge: £{parseFloat(completeBooking.total_price).toFixed(2)}
               </Typography>
               <Typography variant="caption" color="text.secondary">
-                The customer's saved card will be charged the full amount.
+                The {person.toLowerCase()}'s saved card will be charged the full amount.
               </Typography>
             </Box>
           )}

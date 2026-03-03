@@ -9,8 +9,10 @@ import { Add, Edit, Delete, WorkspacePremium, People, Visibility } from '@mui/ic
 import dayjs from 'dayjs';
 import api from '../../api/client';
 import FeatureGate from '../../components/FeatureGate';
+import useTerminology from '../../hooks/useTerminology';
 
 export default function Memberships() {
+  const { person } = useTerminology();
   const [plans, setPlans] = useState([]);
   const [services, setServices] = useState([]);
   const [stats, setStats] = useState(null);
@@ -341,7 +343,7 @@ export default function Memberships() {
                     <Table size="small">
                       <TableHead>
                         <TableRow>
-                          <TableCell sx={{ fontWeight: 600 }}>Customer</TableCell>
+                          <TableCell sx={{ fontWeight: 600 }}>{person}</TableCell>
                           <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
                           <TableCell sx={{ fontWeight: 600 }}>Sessions Used</TableCell>
                           <TableCell sx={{ fontWeight: 600 }}>Since</TableCell>
