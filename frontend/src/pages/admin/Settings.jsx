@@ -908,6 +908,27 @@ export default function Settings() {
             </Box>
           </CardContent>
         </Card>
+
+        <Card sx={{ mt: 2 }}>
+          <CardContent>
+            <Typography variant="subtitle1" fontWeight={600} mb={1}>Features</Typography>
+            <Typography variant="body2" color="text.secondary" mb={2}>
+              Enable or disable customer-facing features.
+            </Typography>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={siteSettings.messaging_enabled !== false && siteSettings.messaging_enabled !== 'false'}
+                  onChange={(e) => setSiteSettings(s => ({ ...s, messaging_enabled: e.target.checked }))}
+                />
+              }
+              label="Allow customers to send messages via the portal"
+            />
+            <Typography variant="caption" color="text.secondary" display="block" ml={6}>
+              When disabled, the Messages tab is hidden from the customer portal.
+            </Typography>
+          </CardContent>
+        </Card>
       </TabPanel>
 
       {/* About */}

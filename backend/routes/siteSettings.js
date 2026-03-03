@@ -112,6 +112,7 @@ publicRouter.get('/', asyncHandler(async (req, res) => {
     'social_embeds',
     'header_display', 'header_font', 'header_logo_url',
     'policy_cancellation', 'policy_noshow', 'policy_privacy', 'policy_terms',
+    'messaging_enabled',
   ];
 
   const placeholders = publicKeys.map((_, i) => `$${i + 2}`).join(',');

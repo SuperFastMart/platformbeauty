@@ -343,6 +343,15 @@ router.get('/messages', asyncHandler(async (req, res) => {
 
 // POST /api/t/:tenant/auth/messages — customer sends reply
 router.post('/messages', asyncHandler(async (req, res) => {
+  // Check if messaging is enabled for this tenant
+  const setting = await getOne(
+    `SELECT setting_value FROM tenant_settings WHERE tenant_id = $1 AND setting_key = 'messaging_enabled'`,
+    [req.tenantId]
+  );
+  if (setting && (setting.setting_value === 'false' || setting.setting_value === false)) {
+    return res.status(403).json({ error: 'Messaging is not enabled' });
+  }
+
   const { body, subject } = req.body;
   if (!body) return res.status(400).json({ error: 'Message body is required' });
 

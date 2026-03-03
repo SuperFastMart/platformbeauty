@@ -72,6 +72,9 @@ export default function CustomerPortal() {
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deletingAccount, setDeletingAccount] = useState(false);
 
+  // Feature flags
+  const [messagingEnabled, setMessagingEnabled] = useState(true);
+
   const customerToken = localStorage.getItem('customer_token');
 
   const authApi = (method, url, data) => {
@@ -88,19 +91,22 @@ export default function CustomerPortal() {
 
   const fetchData = async () => {
     try {
-      const [meRes, reqRes, msgRes, loyaltyRes, membershipRes, packagesRes] = await Promise.all([
+      const [meRes, reqRes, msgRes, loyaltyRes, membershipRes, packagesRes, settingsRes] = await Promise.all([
         authApi('get', `/t/${slug}/auth/me`),
         authApi('get', `/t/${slug}/auth/booking-requests`),
-        authApi('get', `/t/${slug}/auth/messages`),
+        authApi('get', `/t/${slug}/auth/messages`).catch(() => ({ data: [] })),
         authApi('get', `/t/${slug}/loyalty/status`).catch(() => ({ data: { active: false } })),
         authApi('get', `/t/${slug}/memberships/my-membership`).catch(() => ({ data: null })),
         authApi('get', `/t/${slug}/packages/my-packages`).catch(() => ({ data: [] })),
+        api.get(`/t/${slug}/settings`).catch(() => ({ data: {} })),
       ]);
       setCustomer(meRes.data.customer);
       setUpcoming(meRes.data.upcoming);
       setHistory(meRes.data.history);
       setRequests(reqRes.data);
-      setMessages(msgRes.data);
+      const msgEnabled = settingsRes.data.messaging_enabled !== false && settingsRes.data.messaging_enabled !== 'false';
+      setMessagingEnabled(msgEnabled);
+      if (msgEnabled) setMessages(msgRes.data);
       setLoyalty(loyaltyRes.data);
       setMyMembership(membershipRes.data);
       setMyPackages(packagesRes.data || []);
@@ -367,7 +373,7 @@ export default function CustomerPortal() {
         <Tab label={`Upcoming (${upcoming.length})`} />
         <Tab label="History" />
         <Tab label={`Requests (${requests.filter(r => r.status === 'pending').length})`} />
-        <Tab label={`Messages${messages.length > 0 ? ` (${messages.filter(m => m.direction === 'outbound' && !m.read_at).length})` : ''}`} />
+        {messagingEnabled && <Tab label={`Messages${messages.length > 0 ? ` (${messages.filter(m => m.direction === 'outbound' && !m.read_at).length})` : ''}`} />}
         {hasPlans && <Tab label="My Plans" />}
         {loyalty?.active && <Tab label="Loyalty" />}
         <Tab label="Profile" />
@@ -439,7 +445,7 @@ export default function CustomerPortal() {
       </TabPanel>
 
       {/* Messages */}
-      <TabPanel value={tab} index={3}>
+      {messagingEnabled && <TabPanel value={tab} index={3}>
         <Card sx={{ mb: 2 }}>
           <CardContent sx={{ maxHeight: 400, overflow: 'auto' }}>
             {messages.length === 0 ? (
@@ -491,11 +497,11 @@ export default function CustomerPortal() {
             Send
           </Button>
         </Box>
-      </TabPanel>
+      </TabPanel>}
 
       {/* My Plans (Membership + Packages) */}
       {hasPlans && (
-        <TabPanel value={tab} index={4}>
+        <TabPanel value={tab} index={3 + (messagingEnabled ? 1 : 0)}>
           {myMembership && (
             <Card sx={{ mb: 3, border: '2px solid', borderColor: '#D4A85330' }}>
               <CardContent>
@@ -589,7 +595,7 @@ export default function CustomerPortal() {
 
       {/* Loyalty */}
       {loyalty?.active && (
-        <TabPanel value={tab} index={hasPlans ? 5 : 4}>
+        <TabPanel value={tab} index={3 + (messagingEnabled ? 1 : 0) + (hasPlans ? 1 : 0)}>
           <Card sx={{ mb: 3 }}>
             <CardContent>
               <Box display="flex" alignItems="center" gap={1} mb={2}>
@@ -681,7 +687,7 @@ export default function CustomerPortal() {
       )}
 
       {/* Profile */}
-      <TabPanel value={tab} index={4 + (hasPlans ? 1 : 0) + (loyalty?.active ? 1 : 0)}>
+      <TabPanel value={tab} index={3 + (messagingEnabled ? 1 : 0) + (hasPlans ? 1 : 0) + (loyalty?.active ? 1 : 0)}>
         <Card sx={{ mb: 3 }}>
           <CardContent>
             <Typography fontWeight={600} mb={2}>Your Details</Typography>
