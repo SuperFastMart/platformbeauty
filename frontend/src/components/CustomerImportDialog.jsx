@@ -1,6 +1,9 @@
 import { useState, useMemo } from 'react';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
+import dayjs from 'dayjs';
+import customParseFormat from 'dayjs/plugin/customParseFormat';
+dayjs.extend(customParseFormat);
 import {
   Dialog, DialogTitle, DialogContent, DialogActions,
   Button, Box, Typography, Table, TableBody, TableCell,
@@ -21,6 +24,9 @@ const HEADER_MAP = {
   client_source: ['client source', 'source', 'referral source'],
   notes: ['notes', 'admin notes', 'comments'],
   tags: ['tags', 'labels', 'groups'],
+  first_visit: ['first appt.', 'first appt', 'first appointment', 'first visit'],
+  last_visit: ['last appt.', 'last appt', 'last appointment', 'last visit'],
+  added_on: ['added on', 'created', 'created at', 'date added', 'signup date'],
 };
 
 function detectMapping(headers) {
@@ -51,6 +57,19 @@ function fixPhone(value) {
 
 function validateEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function parseDate(val) {
+  if (!val) return null;
+  const str = String(val).trim();
+  if (!str) return null;
+  // Fresha format: "23 Jul 2024, 12:00am"
+  const d = dayjs(str, 'D MMM YYYY, h:mma', true);
+  if (d.isValid()) return d.format('YYYY-MM-DD');
+  // ISO or standard date
+  const d2 = dayjs(str);
+  if (d2.isValid()) return d2.format('YYYY-MM-DD');
+  return null;
 }
 
 function downloadTemplate() {
@@ -117,6 +136,7 @@ export default function CustomerImportDialog({ open, onClose, onComplete, existi
 
   const mapped = useMemo(() => {
     if (!mapping.name) return [];
+    const seenEmails = new Set();
     return rows.map((raw, i) => {
       const name = String(raw[mapping.name] || '').trim();
       const email = mapping.email ? String(raw[mapping.email] || '').trim().toLowerCase() : '';
@@ -126,6 +146,9 @@ export default function CustomerImportDialog({ open, onClose, onComplete, existi
       const clientSource = mapping.client_source ? String(raw[mapping.client_source] || '').trim() : '';
       const notes = mapping.notes ? String(raw[mapping.notes] || '').trim() : '';
       const tags = mapping.tags ? String(raw[mapping.tags] || '').trim() : '';
+      const firstVisit = mapping.first_visit ? parseDate(raw[mapping.first_visit]) : null;
+      const lastVisit = mapping.last_visit ? parseDate(raw[mapping.last_visit]) : null;
+      const addedOn = mapping.added_on ? parseDate(raw[mapping.added_on]) : null;
 
       const errors = [];
       if (!name) errors.push('Name is required');
@@ -135,22 +158,29 @@ export default function CustomerImportDialog({ open, onClose, onComplete, existi
         if (!/^[0-9]{7,15}$/.test(clean)) errors.push('Invalid phone format');
       }
 
-      const isDuplicate = existingEmails.has(email);
+      // Duplicate within the file itself
+      const isDuplicateInFile = email && seenEmails.has(email);
+      if (email) seenEmails.add(email);
+
+      const isDuplicate = existingEmails.has(email) || isDuplicateInFile;
       const cleanGender = gender === 'Not specified' ? '' : gender;
 
       return {
         row: i + 1, name, email, phone, gender: cleanGender, client_source: clientSource,
-        notes, tags, errors, isDuplicate, valid: errors.length === 0,
+        notes, tags, first_visit_date: firstVisit, last_visit_date: lastVisit,
+        added_on: addedOn, errors, isDuplicate, isDuplicateInFile, valid: errors.length === 0,
       };
     });
   }, [rows, mapping, existingEmails]);
 
-  const validCount = mapped.filter(r => r.valid && !r.isDuplicate).length;
+  const newCount = mapped.filter(r => r.valid && !r.isDuplicate && !r.isDuplicateInFile).length;
   const errorCount = mapped.filter(r => !r.valid).length;
-  const duplicateCount = mapped.filter(r => r.valid && r.isDuplicate).length;
+  const existingCount = mapped.filter(r => r.valid && r.isDuplicate && !r.isDuplicateInFile).length;
+  const inFileDupeCount = mapped.filter(r => r.valid && r.isDuplicateInFile).length;
+  // In-file duplicates are always skipped; existing customers can be merged
   const importableRows = skipDuplicates
-    ? mapped.filter(r => r.valid && !r.isDuplicate)
-    : mapped.filter(r => r.valid);
+    ? mapped.filter(r => r.valid && !r.isDuplicate && !r.isDuplicateInFile)
+    : mapped.filter(r => r.valid && !r.isDuplicateInFile);
 
   const handleFile = (e) => {
     const file = e.target.files?.[0];
@@ -184,6 +214,9 @@ export default function CustomerImportDialog({ open, onClose, onComplete, existi
         client_source: r.client_source || null,
         notes: r.notes || null,
         tags: r.tags || null,
+        first_visit_date: r.first_visit_date || null,
+        last_visit_date: r.last_visit_date || null,
+        added_on: r.added_on || null,
       }));
       const { data } = await api.post('/admin/customers/import', { customers: payload });
       setResults(data);
@@ -247,9 +280,10 @@ export default function CustomerImportDialog({ open, onClose, onComplete, existi
         {step === 1 && (
           <Box>
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 2 }}>
-              <Chip icon={<CheckCircle />} label={`${validCount} valid`} color="success" size="small" />
+              <Chip icon={<CheckCircle />} label={`${newCount} new`} color="success" size="small" />
+              {existingCount > 0 && <Chip icon={<Warning />} label={`${existingCount} already exist`} color="warning" size="small" />}
+              {inFileDupeCount > 0 && <Chip icon={<Warning />} label={`${inFileDupeCount} duplicates in file`} color="default" size="small" />}
               {errorCount > 0 && <Chip icon={<ErrorIcon />} label={`${errorCount} errors`} color="error" size="small" />}
-              {duplicateCount > 0 && <Chip icon={<Warning />} label={`${duplicateCount} duplicates`} color="warning" size="small" />}
               <Chip label={`${mapped.length} total rows`} variant="outlined" size="small" />
             </Box>
 
@@ -257,12 +291,27 @@ export default function CustomerImportDialog({ open, onClose, onComplete, existi
               <Alert severity="warning" sx={{ mb: 2 }}>No email column detected. All rows will fail validation.</Alert>
             )}
 
-            {duplicateCount > 0 && (
+            {existingCount > 0 && (
+              <Alert severity="info" sx={{ mb: 2 }}>
+                <strong>{existingCount}</strong> customer{existingCount !== 1 ? 's' : ''} already exist by email.
+                {skipDuplicates
+                  ? ' These will be skipped. Untick below to merge — missing fields (phone, gender, etc.) will be filled in without overwriting existing data.'
+                  : ' These will be smart-merged — only empty fields will be updated from the import.'}
+              </Alert>
+            )}
+
+            {existingCount > 0 && (
               <FormControlLabel
                 control={<Checkbox checked={skipDuplicates} onChange={(e) => setSkipDuplicates(e.target.checked)} />}
-                label={`Skip ${duplicateCount} duplicate(s) (already exist by email)`}
-                sx={{ mb: 2 }}
+                label={`Skip existing customers (${existingCount})`}
+                sx={{ mb: 1 }}
               />
+            )}
+
+            {inFileDupeCount > 0 && (
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                {inFileDupeCount} duplicate{inFileDupeCount !== 1 ? 's' : ''} found within the file (same email). These will be automatically skipped.
+              </Alert>
             )}
 
             <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 400 }}>
@@ -275,6 +324,8 @@ export default function CustomerImportDialog({ open, onClose, onComplete, existi
                     <TableCell>Email</TableCell>
                     <TableCell>Phone</TableCell>
                     {mapping.gender && <TableCell>Gender</TableCell>}
+                    {mapping.first_visit && <TableCell>First Appt.</TableCell>}
+                    {mapping.last_visit && <TableCell>Last Appt.</TableCell>}
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -290,6 +341,8 @@ export default function CustomerImportDialog({ open, onClose, onComplete, existi
                       <TableCell>
                         {!r.valid ? (
                           <Tooltip title={r.errors.join(', ')}><ErrorIcon color="error" fontSize="small" /></Tooltip>
+                        ) : r.isDuplicateInFile ? (
+                          <Tooltip title="Duplicate email within this file (will be skipped)"><Warning color="warning" fontSize="small" /></Tooltip>
                         ) : r.isDuplicate ? (
                           <Tooltip title="Customer with this email already exists (will update)"><Warning color="warning" fontSize="small" /></Tooltip>
                         ) : (
@@ -300,6 +353,8 @@ export default function CustomerImportDialog({ open, onClose, onComplete, existi
                       <TableCell>{r.email || <em style={{ color: '#999' }}>empty</em>}</TableCell>
                       <TableCell>{r.phone || '—'}</TableCell>
                       {mapping.gender && <TableCell>{r.gender || '—'}</TableCell>}
+                      {mapping.first_visit && <TableCell>{r.first_visit_date ? dayjs(r.first_visit_date).format('D MMM YYYY') : '—'}</TableCell>}
+                      {mapping.last_visit && <TableCell>{r.last_visit_date ? dayjs(r.last_visit_date).format('D MMM YYYY') : '—'}</TableCell>}
                     </TableRow>
                   ))}
                 </TableBody>

@@ -141,11 +141,9 @@ export default function Customers() {
               Filter
             </Button>
           )}
-          {hasAccess('growth') && (
-            <Button variant="outlined" size="small" startIcon={<Upload />} onClick={() => setImportOpen(true)}>
-              Import
-            </Button>
-          )}
+          <Button variant="outlined" size="small" startIcon={<Upload />} onClick={() => setImportOpen(true)}>
+            Import
+          </Button>
           <Button variant="contained" size="small" startIcon={<Add />} onClick={() => setDialogOpen(true)}>
             Add
           </Button>

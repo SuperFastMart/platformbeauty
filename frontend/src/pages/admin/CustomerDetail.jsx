@@ -215,6 +215,11 @@ export default function CustomerDetail() {
               <Typography variant="body2">
                 <strong>Customer since:</strong> {dayjs(customer.created_at).format('D MMM YYYY')}
               </Typography>
+              {customer.first_visit_date && (
+                <Typography variant="body2">
+                  <strong>First visit:</strong> {dayjs(customer.first_visit_date).format('D MMM YYYY')}
+                </Typography>
+              )}
               {customer.last_visit_date && (
                 <Typography variant="body2">
                   <strong>Last visit:</strong> {dayjs(customer.last_visit_date).format('D MMM YYYY')}

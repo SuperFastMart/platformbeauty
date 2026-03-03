@@ -1100,6 +1100,12 @@ const migrations = [
       ALTER TABLE customers ADD COLUMN IF NOT EXISTS client_source VARCHAR(50);
     `
   },
+  {
+    name: '064_add_first_visit_date_to_customers',
+    sql: `
+      ALTER TABLE customers ADD COLUMN IF NOT EXISTS first_visit_date DATE;
+    `
+  },
 
   // ============================================
   // MIGRATION TRACKING

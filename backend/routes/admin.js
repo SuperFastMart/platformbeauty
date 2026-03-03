@@ -1690,19 +1690,23 @@ router.post('/customers/import', asyncHandler(async (req, res) => {
 
     try {
       const result = await getOne(
-        `INSERT INTO customers (tenant_id, name, email, phone, admin_notes, tags, gender, client_source)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        `INSERT INTO customers (tenant_id, name, email, phone, admin_notes, tags, gender, client_source, first_visit_date, last_visit_date, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, COALESCE($11, NOW()))
          ON CONFLICT (tenant_id, email) DO UPDATE SET
            name = COALESCE(NULLIF($2, ''), customers.name),
            phone = COALESCE(NULLIF($4, ''), customers.phone),
            admin_notes = CASE WHEN $5 IS NOT NULL AND $5 != '' THEN COALESCE(customers.admin_notes || E'\n' || $5, $5) ELSE customers.admin_notes END,
            tags = CASE WHEN $6 IS NOT NULL AND $6 != '' THEN $6 ELSE customers.tags END,
            gender = COALESCE(NULLIF($7, ''), customers.gender),
-           client_source = COALESCE(NULLIF($8, ''), customers.client_source)
+           client_source = COALESCE(NULLIF($8, ''), customers.client_source),
+           first_visit_date = COALESCE($9, customers.first_visit_date),
+           last_visit_date = COALESCE($10, customers.last_visit_date)
          RETURNING id, (xmax = 0) as is_new`,
         [req.tenantId, row.name.trim(), row.email.trim().toLowerCase(),
          row.phone?.trim() || null, row.notes?.trim() || null, row.tags?.trim() || null,
-         row.gender?.trim() || null, row.client_source?.trim() || null]
+         row.gender?.trim() || null, row.client_source?.trim() || null,
+         row.first_visit_date || null, row.last_visit_date || null,
+         row.added_on || null]
       );
       if (result.is_new) imported++; else updated++;
     } catch (err) {
