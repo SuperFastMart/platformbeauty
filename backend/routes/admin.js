@@ -955,6 +955,29 @@ router.get('/bookings', asyncHandler(async (req, res) => {
   res.json(bookings);
 }));
 
+// GET /api/admin/bookings/requests (must be before :id route)
+router.get('/bookings/requests', asyncHandler(async (req, res) => {
+  const { status } = req.query;
+  let sql = `
+    SELECT br.*, b.service_names, b.date as booking_date, b.start_time as booking_time,
+           b.end_time as booking_end_time, b.total_price, b.customer_name, b.customer_email,
+           c.name as customer_name_full, c.phone as customer_phone
+    FROM booking_requests br
+    JOIN bookings b ON b.id = br.booking_id
+    LEFT JOIN customers c ON c.id = br.customer_id
+    WHERE br.tenant_id = $1`;
+  const params = [req.tenantId];
+
+  if (status && status !== 'all') {
+    params.push(status);
+    sql += ` AND br.status = $${params.length}`;
+  }
+
+  sql += ' ORDER BY br.created_at DESC';
+  const requests = await getAll(sql, params);
+  res.json(requests);
+}));
+
 // GET /api/admin/bookings/:id — single booking detail
 router.get('/bookings/:id', asyncHandler(async (req, res) => {
   const booking = await getOne(
@@ -1638,29 +1661,6 @@ router.get('/analytics', asyncHandler(async (req, res) => {
 // ============================================
 // BOOKING REQUESTS (cancel/amend from customers)
 // ============================================
-
-// GET /api/admin/bookings/requests
-router.get('/bookings/requests', asyncHandler(async (req, res) => {
-  const { status } = req.query;
-  let sql = `
-    SELECT br.*, b.service_names, b.date as booking_date, b.start_time as booking_time,
-           b.end_time as booking_end_time, b.total_price, b.customer_name, b.customer_email,
-           c.name as customer_name_full, c.phone as customer_phone
-    FROM booking_requests br
-    JOIN bookings b ON b.id = br.booking_id
-    LEFT JOIN customers c ON c.id = br.customer_id
-    WHERE br.tenant_id = $1`;
-  const params = [req.tenantId];
-
-  if (status && status !== 'all') {
-    params.push(status);
-    sql += ` AND br.status = $${params.length}`;
-  }
-
-  sql += ' ORDER BY br.created_at DESC';
-  const requests = await getAll(sql, params);
-  res.json(requests);
-}));
 
 // POST /api/admin/bookings/requests/:id/approve
 router.post('/bookings/requests/:id/approve', asyncHandler(async (req, res) => {
