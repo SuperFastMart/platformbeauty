@@ -5,7 +5,7 @@ import {
   Dialog, DialogTitle, DialogContent, DialogActions, Chip, Divider,
   Snackbar, Alert, IconButton, Autocomplete, CircularProgress
 } from '@mui/material';
-import { Send, Add, Delete, PersonAdd } from '@mui/icons-material';
+import { Send, Add, Delete, PersonAdd, MessageOutlined } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import api from '../../api/client';
 import useSubscriptionTier from '../../hooks/useSubscriptionTier';
@@ -13,6 +13,7 @@ import FeatureGate from '../../components/FeatureGate';
 
 export default function Messages() {
   const { hasAccess } = useSubscriptionTier();
+  const [messagingEnabled, setMessagingEnabled] = useState(true);
   const [conversations, setConversations] = useState([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState(null);
   const [selectedCustomerInfo, setSelectedCustomerInfo] = useState(null);
@@ -47,6 +48,9 @@ export default function Messages() {
   useEffect(() => {
     fetchConversations();
     fetchTemplates();
+    api.get('/admin/site-settings').then(({ data }) => {
+      setMessagingEnabled(data.messaging_enabled !== false && data.messaging_enabled !== 'false');
+    }).catch(() => {});
   }, []);
 
   // Search customers when typing in new conversation dialog
@@ -145,6 +149,12 @@ export default function Messages() {
 
   return (
     <Box>
+      {!messagingEnabled && (
+        <Alert severity="info" icon={<MessageOutlined />} sx={{ mb: 3 }}>
+          Customer messaging is currently disabled — your customers won't see the Messages tab in their portal.
+          You can re-enable it in <strong>Settings &gt; Business &gt; Features</strong>.
+        </Alert>
+      )}
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Typography variant="h5" fontWeight={600}>
           Messages {totalUnread > 0 && <Chip label={totalUnread} color="error" size="small" sx={{ ml: 1 }} />}
