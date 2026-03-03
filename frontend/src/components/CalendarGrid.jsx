@@ -2,6 +2,8 @@ import { useMemo } from 'react';
 import { Box, Typography, IconButton, Grid } from '@mui/material';
 import { ChevronLeft, ChevronRight } from '@mui/icons-material';
 import dayjs from 'dayjs';
+import isoWeek from 'dayjs/plugin/isoWeek';
+dayjs.extend(isoWeek);
 import { getCalendarDays } from '../utils/slotUtils';
 
 export default function CalendarGrid({

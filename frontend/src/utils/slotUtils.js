@@ -33,8 +33,9 @@ export function filterAvailableSlots(slots, totalDuration) {
 }
 
 export function getCalendarDays(calendarMonth) {
-  const start = calendarMonth.startOf('week');
-  const end = calendarMonth.endOf('month').endOf('week');
+  // Use isoWeek to ensure week starts on Monday (matching Mon-Sun headers)
+  const start = calendarMonth.startOf('isoWeek');
+  const end = calendarMonth.endOf('month').endOf('isoWeek');
   const days = [];
   let current = start;
   while (current.isBefore(end) || current.isSame(end, 'day')) {

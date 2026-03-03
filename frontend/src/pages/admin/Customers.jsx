@@ -4,9 +4,11 @@ import {
   Box, Typography, TextField, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, Paper, IconButton, Chip, InputAdornment,
   Card, CardContent, CardActionArea, Grid, useMediaQuery, useTheme,
-  Button, Dialog, DialogTitle, DialogContent, DialogActions, Snackbar, Alert
+  Button, Dialog, DialogTitle, DialogContent, DialogActions, Snackbar, Alert,
+  Checkbox
 } from '@mui/material';
-import { Search, ChevronRight, Add, Upload, Download, FilterList, Save, Close } from '@mui/icons-material';
+import { Search, ChevronRight, Add, Upload, Download, FilterList, Save, Close, Delete } from '@mui/icons-material';
+import ConfirmDialog from '../../components/ConfirmDialog';
 import dayjs from 'dayjs';
 import api from '../../api/client';
 import useSubscriptionTier from '../../hooks/useSubscriptionTier';
@@ -30,6 +32,11 @@ export default function Customers() {
 
   // Import dialog
   const [importOpen, setImportOpen] = useState(false);
+
+  // Bulk selection
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   // Filters / Segmentation
   const [showFilters, setShowFilters] = useState(false);
@@ -132,6 +139,36 @@ export default function Customers() {
     }
   };
 
+  const toggleSelect = (id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filtered.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filtered.map(c => c.id)));
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    setBulkDeleting(true);
+    try {
+      const { data } = await api.post('/admin/customers/bulk-delete', { customerIds: [...selectedIds] });
+      setSnackbar({ open: true, message: data.message, severity: 'success' });
+      setSelectedIds(new Set());
+      fetchCustomers();
+    } catch (err) {
+      setSnackbar({ open: true, message: err.response?.data?.error || 'Bulk delete failed', severity: 'error' });
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+
   return (
     <Box>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
@@ -204,7 +241,7 @@ export default function Customers() {
 
       <TextField
         placeholder="Search by name, email, or phone..."
-        size="small" sx={{ mb: 3, maxWidth: isMobile ? '100%' : 400 }}
+        size="small" sx={{ mb: 2, maxWidth: isMobile ? '100%' : 400 }}
         fullWidth
         value={search}
         onChange={e => setSearch(e.target.value)}
@@ -212,6 +249,25 @@ export default function Customers() {
           startAdornment: <InputAdornment position="start"><Search /></InputAdornment>
         }}
       />
+
+      {/* Bulk actions bar */}
+      {selectedIds.size > 0 && (
+        <Box display="flex" alignItems="center" gap={2} mb={2} p={1.5} borderRadius={2}
+          sx={{ bgcolor: 'error.lighter', border: '1px solid', borderColor: 'error.light' }}>
+          <Typography variant="body2" fontWeight={600}>
+            {selectedIds.size} selected
+          </Typography>
+          <Button
+            variant="outlined" color="error" size="small" startIcon={<Delete />}
+            onClick={() => setConfirmOpen(true)} disabled={bulkDeleting}
+          >
+            {bulkDeleting ? 'Deleting...' : 'Delete Selected'}
+          </Button>
+          <Button size="small" onClick={() => setSelectedIds(new Set())}>
+            Clear Selection
+          </Button>
+        </Box>
+      )}
 
       {loading ? (
         <Typography>Loading...</Typography>
@@ -228,12 +284,21 @@ export default function Customers() {
                 <CardActionArea onClick={() => navigate(`/admin/customers/${c.id}`)}>
                   <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
                     <Box display="flex" justifyContent="space-between" alignItems="center">
-                      <Box>
-                        <Typography fontWeight={600}>{c.name}</Typography>
-                        <Typography variant="body2" color="text.secondary">{c.email}</Typography>
-                        {c.phone && (
-                          <Typography variant="body2" color="text.secondary">{c.phone}</Typography>
-                        )}
+                      <Box display="flex" alignItems="center" gap={1}>
+                        <Checkbox
+                          size="small"
+                          checked={selectedIds.has(c.id)}
+                          onChange={() => toggleSelect(c.id)}
+                          onClick={e => e.stopPropagation()}
+                          sx={{ p: 0.5 }}
+                        />
+                        <Box>
+                          <Typography fontWeight={600}>{c.name}</Typography>
+                          <Typography variant="body2" color="text.secondary">{c.email}</Typography>
+                          {c.phone && (
+                            <Typography variant="body2" color="text.secondary">{c.phone}</Typography>
+                          )}
+                        </Box>
                       </Box>
                       <ChevronRight color="action" />
                     </Box>
@@ -256,6 +321,14 @@ export default function Customers() {
           <Table>
             <TableHead>
               <TableRow>
+                <TableCell padding="checkbox">
+                  <Checkbox
+                    size="small"
+                    checked={filtered.length > 0 && selectedIds.size === filtered.length}
+                    indeterminate={selectedIds.size > 0 && selectedIds.size < filtered.length}
+                    onChange={toggleSelectAll}
+                  />
+                </TableCell>
                 <TableCell><strong>Name</strong></TableCell>
                 <TableCell><strong>Email</strong></TableCell>
                 <TableCell><strong>Phone</strong></TableCell>
@@ -274,6 +347,9 @@ export default function Customers() {
                   sx={{ cursor: 'pointer' }}
                   onClick={() => navigate(`/admin/customers/${c.id}`)}
                 >
+                  <TableCell padding="checkbox" onClick={e => e.stopPropagation()}>
+                    <Checkbox size="small" checked={selectedIds.has(c.id)} onChange={() => toggleSelect(c.id)} />
+                  </TableCell>
                   <TableCell>{c.name}</TableCell>
                   <TableCell>
                     <Typography variant="body2" color="text.secondary">{c.email}</Typography>
@@ -346,6 +422,18 @@ export default function Customers() {
           <Button variant="contained" onClick={saveSegment} disabled={!segmentName}>Save</Button>
         </DialogActions>
       </Dialog>
+
+      {/* Bulk delete confirm */}
+      <ConfirmDialog
+        open={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        title={`Delete ${selectedIds.size} ${selectedIds.size === 1 ? person.toLowerCase() : people.toLowerCase()}?`}
+        message="This will permanently anonymise their personal data and remove their accounts. Booking revenue records will be preserved with anonymised data. This action cannot be undone."
+        warning="This is a GDPR-compliant deletion. All personal data will be permanently removed."
+        confirmLabel="Delete"
+        confirmColor="error"
+        onConfirm={handleBulkDelete}
+      />
 
       <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar(s => ({ ...s, open: false }))}>
         <Alert severity={snackbar.severity} onClose={() => setSnackbar(s => ({ ...s, open: false }))}>{snackbar.message}</Alert>

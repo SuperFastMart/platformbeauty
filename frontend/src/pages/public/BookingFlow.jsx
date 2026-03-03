@@ -9,6 +9,8 @@ import {
 } from '@mui/material';
 import { ChevronLeft, ChevronRight, Search, ExpandMore, CheckCircle, Add, Gavel, EventBusy, ReportProblem, Security, Article } from '@mui/icons-material';
 import dayjs from 'dayjs';
+import isoWeek from 'dayjs/plugin/isoWeek';
+dayjs.extend(isoWeek);
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements } from '@stripe/react-stripe-js';
 import api from '../../api/client';
@@ -392,8 +394,8 @@ export default function BookingFlow() {
 
   // Calendar helpers
   const calendarDays = useMemo(() => {
-    const start = calendarMonth.startOf('week');
-    const end = calendarMonth.endOf('month').endOf('week');
+    const start = calendarMonth.startOf('isoWeek');
+    const end = calendarMonth.endOf('month').endOf('isoWeek');
     const days = [];
     let current = start;
     while (current.isBefore(end) || current.isSame(end, 'day')) {

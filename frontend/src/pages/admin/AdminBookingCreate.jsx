@@ -3,11 +3,12 @@ import {
   Box, Typography, Stepper, Step, StepLabel, Button, Card, CardContent,
   TextField, Chip, Alert, CircularProgress, Autocomplete, Checkbox,
   FormControlLabel, ToggleButton, ToggleButtonGroup, Divider, MenuItem,
-  useMediaQuery, useTheme,
+  useMediaQuery, useTheme, Accordion, AccordionSummary, AccordionDetails,
+  InputAdornment,
 } from '@mui/material';
-import { ArrowBack, Search } from '@mui/icons-material';
+import { ArrowBack, Search, ExpandMore, CheckCircle, Add } from '@mui/icons-material';
 import dayjs from 'dayjs';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import api from '../../api/client';
 import CalendarGrid from '../../components/CalendarGrid';
 import TimeSlotPicker from '../../components/TimeSlotPicker';
@@ -24,6 +25,7 @@ export default function AdminBookingCreate() {
   const { person, people } = useTerminology();
   const steps = [person, 'Service', 'Date & Time', 'Confirm'];
   const navigate = useNavigate();
+  const location = useLocation();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [activeStep, setActiveStep] = useState(0);
@@ -39,6 +41,7 @@ export default function AdminBookingCreate() {
   // Services
   const [services, setServices] = useState([]);
   const [selectedServiceIds, setSelectedServiceIds] = useState([]);
+  const [serviceSearch, setServiceSearch] = useState('');
 
   // Date & Time
   const [selectedDate, setSelectedDate] = useState('');
@@ -64,7 +67,25 @@ export default function AdminBookingCreate() {
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurringFrequency, setRecurringFrequency] = useState('weekly');
   const [recurringCount, setRecurringCount] = useState(4);
-  const [recurringDates, setRecurringDates] = useState([]); // For 'specific' mode
+  const [recurringDates, setRecurringDates] = useState([]);
+
+  // Price override
+  const [priceOverrideEnabled, setPriceOverrideEnabled] = useState(false);
+  const [discountType, setDiscountType] = useState('fixed'); // 'fixed' or 'percent'
+  const [discountValue, setDiscountValue] = useState('');
+
+  // Pre-select customer from navigation state (e.g. from CustomerDetail)
+  useEffect(() => {
+    if (location.state?.customer) {
+      setSelectedCustomer(location.state.customer);
+      setActiveStep(1);
+    }
+  }, []);
+
+  // Scroll to top on step change
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [activeStep]);
 
   // Load services
   useEffect(() => {
@@ -92,6 +113,33 @@ export default function AdminBookingCreate() {
   const selectedServices = services.filter(s => selectedServiceIds.includes(s.id));
   const totalPrice = selectedServices.reduce((sum, s) => sum + parseFloat(s.price), 0);
   const totalDuration = selectedServices.reduce((sum, s) => sum + s.duration, 0);
+
+  // Calculate final price with override
+  const finalPrice = useMemo(() => {
+    if (!priceOverrideEnabled || !discountValue) return totalPrice;
+    const val = parseFloat(discountValue) || 0;
+    if (discountType === 'fixed') return Math.max(0, val);
+    if (discountType === 'percent') return Math.max(0, totalPrice * (1 - val / 100));
+    return totalPrice;
+  }, [totalPrice, priceOverrideEnabled, discountType, discountValue]);
+
+  // Group services by category for accordion display
+  const groupedServices = useMemo(() => {
+    const filtered = serviceSearch
+      ? services.filter(s =>
+          s.name.toLowerCase().includes(serviceSearch.toLowerCase()) ||
+          (s.category || '').toLowerCase().includes(serviceSearch.toLowerCase())
+        )
+      : services;
+
+    const grouped = {};
+    for (const s of filtered) {
+      const cat = s.category || 'General';
+      if (!grouped[cat]) grouped[cat] = [];
+      grouped[cat].push(s);
+    }
+    return Object.entries(grouped);
+  }, [services, serviceSearch]);
 
   const handleFindNext = async () => {
     if (!selectedServiceIds.length) return;
@@ -127,14 +175,11 @@ export default function AdminBookingCreate() {
     );
   };
 
-  // Generate dates from frequency
   const getFrequencyDates = () => {
     if (!selectedDate || recurringFrequency === 'specific') return recurringDates;
-
     const intervalWeeks = recurringFrequency === 'weekly' ? 1
       : recurringFrequency === 'fortnightly' ? 2
-      : 4; // 4weekly
-
+      : 4;
     const dates = [];
     for (let i = 0; i < recurringCount; i++) {
       dates.push(dayjs(selectedDate).add(i * intervalWeeks, 'week').format('YYYY-MM-DD'));
@@ -170,6 +215,11 @@ export default function AdminBookingCreate() {
         notes,
         bookingSource,
       };
+
+      // Include price override if enabled
+      if (priceOverrideEnabled && discountValue) {
+        basePayload.priceOverride = parseFloat(finalPrice.toFixed(2));
+      }
 
       if (isRecurring && allRecurringDates.length > 0) {
         await api.post('/admin/bookings/admin-create-recurring', {
@@ -247,7 +297,7 @@ export default function AdminBookingCreate() {
             ) : (
               <Autocomplete
                 options={customers}
-                getOptionLabel={(o) => `${o.name} (${o.email})`}
+                getOptionLabel={(o) => `${o.name} (${o.email || o.phone || 'no contact'})`}
                 value={selectedCustomer}
                 onChange={(_, v) => setSelectedCustomer(v)}
                 inputValue={customerSearch}
@@ -263,41 +313,133 @@ export default function AdminBookingCreate() {
         </Card>
       )}
 
-      {/* Step 1: Services */}
+      {/* Step 1: Services (accordion grouping with search) */}
       {activeStep === 1 && (
-        <Card>
-          <CardContent sx={{ p: 3 }}>
-            <Typography variant="h6" fontWeight={600} mb={2}>Select Services</Typography>
-            {services.map(s => {
-              const isSelected = selectedServiceIds.includes(s.id);
+        <Box>
+          <Card sx={{ mb: 2 }}>
+            <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+              <Typography variant="h6" fontWeight={600} mb={2}>Select Services</Typography>
+              <TextField
+                placeholder="Search services..."
+                size="small" fullWidth sx={{ mb: 2 }}
+                value={serviceSearch}
+                onChange={e => setServiceSearch(e.target.value)}
+                InputProps={{
+                  startAdornment: <InputAdornment position="start"><Search /></InputAdornment>
+                }}
+              />
+            </CardContent>
+          </Card>
+
+          <Box sx={{
+            '& .MuiAccordion-root': {
+              boxShadow: 'none',
+              border: '1px solid',
+              borderColor: 'divider',
+              borderRadius: '12px !important',
+              mb: 1.5,
+              '&:before': { display: 'none' },
+              '&.Mui-expanded': { margin: '0 0 12px 0' },
+            },
+            '& .MuiAccordionSummary-root': {
+              minHeight: 56,
+              '&.Mui-expanded': { minHeight: 56 },
+            },
+            '& .MuiAccordionSummary-content': {
+              margin: '12px 0',
+              '&.Mui-expanded': { margin: '12px 0' },
+            },
+          }}>
+            {groupedServices.map(([category, catServices]) => {
+              const selectedInCategory = catServices.filter(s => selectedServiceIds.includes(s.id)).length;
               return (
-                <Card key={s.id} variant="outlined" sx={{ mb: 1, cursor: 'pointer',
-                  border: isSelected ? 2 : 1, borderColor: isSelected ? 'primary.main' : 'divider'
-                }} onClick={() => toggleService(s.id)}>
-                  <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
-                    <Box display="flex" alignItems="center" gap={1}>
-                      <Checkbox checked={isSelected} size="small" sx={{ p: 0 }} />
-                      <Box flex={1}>
-                        <Typography fontWeight={500}>{s.name}</Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {s.duration} min — {s.category || 'General'}
-                        </Typography>
-                      </Box>
-                      <Typography fontWeight={600}>£{parseFloat(s.price).toFixed(2)}</Typography>
+                <Accordion key={category} defaultExpanded={groupedServices.length === 1}>
+                  <AccordionSummary expandIcon={<ExpandMore />}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, width: '100%' }}>
+                      <Typography fontWeight={600} sx={{ flex: 1 }}>{category}</Typography>
+                      {selectedInCategory > 0 && (
+                        <Chip
+                          icon={<CheckCircle sx={{ fontSize: 14 }} />}
+                          label={selectedInCategory}
+                          size="small"
+                          sx={{
+                            bgcolor: 'rgba(46, 125, 50, 0.85)', color: 'white',
+                            fontWeight: 600, height: 24,
+                            '& .MuiChip-icon': { color: 'white' },
+                          }}
+                        />
+                      )}
+                      <Chip
+                        label={catServices.length}
+                        size="small"
+                        sx={{
+                          bgcolor: 'rgba(139, 38, 53, 0.1)', color: 'primary.main',
+                          fontWeight: 600, height: 24,
+                        }}
+                      />
                     </Box>
-                  </CardContent>
-                </Card>
+                  </AccordionSummary>
+                  <AccordionDetails sx={{ p: 0 }}>
+                    {catServices.map((s, idx) => {
+                      const isSelected = selectedServiceIds.includes(s.id);
+                      return (
+                        <Box
+                          key={s.id}
+                          onClick={() => toggleService(s.id)}
+                          sx={{
+                            display: 'flex', alignItems: 'center', p: 2,
+                            cursor: 'pointer',
+                            borderTop: idx === 0 ? '1px solid' : 'none',
+                            borderBottom: '1px solid',
+                            borderColor: 'divider',
+                            bgcolor: isSelected ? 'rgba(46, 125, 50, 0.08)' : 'transparent',
+                            '&:hover': {
+                              bgcolor: isSelected ? 'rgba(46, 125, 50, 0.12)' : 'action.hover',
+                            },
+                          }}
+                        >
+                          <Checkbox
+                            checked={isSelected}
+                            sx={{ mr: 1, color: 'grey.400', '&.Mui-checked': { color: 'success.main' } }}
+                          />
+                          <Box sx={{ flex: 1, pr: 2 }}>
+                            <Typography fontWeight={isSelected ? 600 : 500}
+                              sx={{ color: isSelected ? 'success.dark' : 'text.primary' }}>
+                              {s.name}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {s.duration} min
+                            </Typography>
+                          </Box>
+                          <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
+                            <Typography fontWeight={700} color="primary.main">
+                              £{parseFloat(s.price).toFixed(2)}
+                            </Typography>
+                          </Box>
+                          {!isSelected && <Add sx={{ ml: 1, color: 'grey.400', fontSize: 20 }} />}
+                        </Box>
+                      );
+                    })}
+                  </AccordionDetails>
+                </Accordion>
               );
             })}
-            {selectedServiceIds.length > 0 && (
-              <Box mt={2} p={2} bgcolor="grey.100" borderRadius={2}>
-                <Typography variant="body2" fontWeight={500}>
-                  {selectedServiceIds.length} service{selectedServiceIds.length > 1 ? 's' : ''} — £{totalPrice.toFixed(2)} — {totalDuration} min
-                </Typography>
-              </Box>
-            )}
-          </CardContent>
-        </Card>
+          </Box>
+
+          {groupedServices.length === 0 && serviceSearch && (
+            <Typography color="text.secondary" textAlign="center" py={3}>
+              No services match "{serviceSearch}"
+            </Typography>
+          )}
+
+          {selectedServiceIds.length > 0 && (
+            <Box mt={2} p={2} bgcolor="grey.100" borderRadius={2}>
+              <Typography variant="body2" fontWeight={500}>
+                {selectedServiceIds.length} service{selectedServiceIds.length > 1 ? 's' : ''} — £{totalPrice.toFixed(2)} — {totalDuration} min
+              </Typography>
+            </Box>
+          )}
+        </Box>
       )}
 
       {/* Step 2: Date & Time */}
@@ -474,7 +616,7 @@ export default function AdminBookingCreate() {
           <Card>
             <CardContent>
               <Typography variant="subtitle2" color="text.secondary">{person}</Typography>
-              <Typography>{customerName} — {customerEmail}</Typography>
+              <Typography>{customerName}{customerEmail ? ` — ${customerEmail}` : ''}</Typography>
               {customerPhone && <Typography variant="body2">{customerPhone}</Typography>}
 
               <Typography variant="subtitle2" color="text.secondary" mt={2}>Services</Typography>
@@ -489,13 +631,48 @@ export default function AdminBookingCreate() {
                 <Typography fontWeight={600}>£{totalPrice.toFixed(2)} — {totalDuration} min</Typography>
               </Box>
 
+              {/* Price override section */}
+              <Box mt={2} p={2} bgcolor="grey.50" borderRadius={2}>
+                <FormControlLabel
+                  control={<Checkbox checked={priceOverrideEnabled} onChange={e => { setPriceOverrideEnabled(e.target.checked); setDiscountValue(''); }} />}
+                  label="Custom price"
+                />
+                {priceOverrideEnabled && (
+                  <Box display="flex" gap={2} alignItems="center" mt={1} flexWrap="wrap">
+                    <ToggleButtonGroup
+                      value={discountType}
+                      exclusive
+                      onChange={(_, v) => { if (v) { setDiscountType(v); setDiscountValue(''); } }}
+                      size="small"
+                    >
+                      <ToggleButton value="fixed">Fixed £</ToggleButton>
+                      <ToggleButton value="percent">% Off</ToggleButton>
+                    </ToggleButtonGroup>
+                    <TextField
+                      size="small"
+                      type="number"
+                      value={discountValue}
+                      onChange={e => setDiscountValue(e.target.value)}
+                      sx={{ width: 120 }}
+                      label={discountType === 'fixed' ? 'Price (£)' : 'Discount (%)'}
+                      inputProps={{ min: 0, max: discountType === 'percent' ? 100 : undefined, step: discountType === 'percent' ? 5 : 0.01 }}
+                    />
+                    {discountValue && (
+                      <Typography fontWeight={700} color="primary.main">
+                        Final: £{finalPrice.toFixed(2)}
+                      </Typography>
+                    )}
+                  </Box>
+                )}
+              </Box>
+
               <Typography variant="subtitle2" color="text.secondary" mt={2}>Date & Time</Typography>
               {isRecurring ? (
                 <Box>
                   {recurringFrequency !== 'specific' && (
                     <Typography variant="body2" color="text.secondary" mb={1}>
                       {recurringFrequency === 'weekly' ? 'Weekly' : recurringFrequency === 'fortnightly' ? 'Fortnightly' : '4-weekly'}
-                      {' '} — {allRecurringDates.length} sessions — £{(totalPrice * allRecurringDates.length).toFixed(2)} total
+                      {' '} — {allRecurringDates.length} sessions — £{(finalPrice * allRecurringDates.length).toFixed(2)} total
                     </Typography>
                   )}
                   <Box display="flex" flexWrap="wrap" gap={0.5}>
@@ -567,7 +744,7 @@ export default function AdminBookingCreate() {
                 {selectedServiceIds.length} service{selectedServiceIds.length > 1 ? 's' : ''} — {totalDuration} min
               </Typography>
               <Typography variant="body2" fontWeight={700} color="primary.main">
-                £{totalPrice.toFixed(2)}
+                £{(priceOverrideEnabled && discountValue ? finalPrice : totalPrice).toFixed(2)}
               </Typography>
             </Box>
           )}

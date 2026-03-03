@@ -1683,6 +1683,42 @@ router.delete('/customers/:id', asyncHandler(async (req, res) => {
   res.json({ message: 'Customer data deleted. Revenue records preserved with anonymised data.' });
 }));
 
+// POST /api/admin/customers/bulk-delete (GDPR delete multiple customers)
+router.post('/customers/bulk-delete', asyncHandler(async (req, res) => {
+  const { customerIds } = req.body;
+  if (!Array.isArray(customerIds) || customerIds.length === 0) {
+    return res.status(400).json({ error: 'customerIds array is required' });
+  }
+  if (customerIds.length > 500) {
+    return res.status(400).json({ error: 'Maximum 500 customers per bulk delete' });
+  }
+
+  const { deleteCustomerData } = require('../utils/gdprService');
+  const { logActivity } = require('../utils/activityLog');
+  let deleted = 0;
+  const errors = [];
+
+  for (const id of customerIds) {
+    try {
+      const customer = await getOne(
+        'SELECT id, email FROM customers WHERE id = $1 AND tenant_id = $2',
+        [id, req.tenantId]
+      );
+      if (!customer) {
+        errors.push({ id, error: 'Not found' });
+        continue;
+      }
+      await deleteCustomerData(customer.id, req.tenantId, customer.email);
+      logActivity(req.tenantId, 'tenant_admin', req.user.id, req.user.email, 'customer_gdpr_deleted', { customer_id: customer.id }).catch(() => {});
+      deleted++;
+    } catch (err) {
+      errors.push({ id, error: err.message });
+    }
+  }
+
+  res.json({ deleted, errors, message: `${deleted} customer(s) deleted. Revenue records preserved with anonymised data.` });
+}));
+
 // POST /api/admin/customers/import — bulk import customers from CSV/XLSX
 router.post('/customers/import', asyncHandler(async (req, res) => {
   const { customers: rows } = req.body;
@@ -2158,7 +2194,7 @@ router.get('/next-available', asyncHandler(async (req, res) => {
 
 // POST /api/admin/bookings/admin-create
 router.post('/bookings/admin-create', asyncHandler(async (req, res) => {
-  const { customerId, customerName, customerEmail, customerPhone, serviceIds, date, startTime, notes, bookingSource } = req.body;
+  const { customerId, customerName, customerEmail, customerPhone, serviceIds, date, startTime, notes, bookingSource, priceOverride } = req.body;
 
   if (!serviceIds?.length || !date || !startTime) {
     return res.status(400).json({ error: 'serviceIds, date, and startTime are required' });
@@ -2223,7 +2259,8 @@ router.post('/bookings/admin-create', asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'One or more services are invalid' });
   }
 
-  const totalPrice = services.reduce((sum, s) => sum + parseFloat(s.price), 0);
+  const serviceTotalPrice = services.reduce((sum, s) => sum + parseFloat(s.price), 0);
+  const totalPrice = (priceOverride != null && priceOverride >= 0) ? parseFloat(priceOverride) : serviceTotalPrice;
   const totalDuration = services.reduce((sum, s) => sum + s.duration, 0);
   const serviceNames = services.map(s => s.name).join(', ');
 
@@ -2255,7 +2292,7 @@ router.post('/bookings/admin-create', asyncHandler(async (req, res) => {
 
 // POST /api/admin/bookings/admin-create-recurring
 router.post('/bookings/admin-create-recurring', asyncHandler(async (req, res) => {
-  const { customerId, customerName, customerEmail, customerPhone, serviceIds, dates, notes } = req.body;
+  const { customerId, customerName, customerEmail, customerPhone, serviceIds, dates, notes, priceOverride } = req.body;
 
   if (!serviceIds?.length || !dates?.length) {
     return res.status(400).json({ error: 'serviceIds and dates are required' });
@@ -2291,7 +2328,8 @@ router.post('/bookings/admin-create-recurring', asyncHandler(async (req, res) =>
     [req.tenantId, ...serviceIds]
   );
 
-  const totalPrice = services.reduce((sum, s) => sum + parseFloat(s.price), 0);
+  const serviceTotalPrice = services.reduce((sum, s) => sum + parseFloat(s.price), 0);
+  const totalPrice = (priceOverride != null && priceOverride >= 0) ? parseFloat(priceOverride) : serviceTotalPrice;
   const totalDuration = services.reduce((sum, s) => sum + s.duration, 0);
   const serviceNames = services.map(s => s.name).join(', ');
 

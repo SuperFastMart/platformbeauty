@@ -159,6 +159,13 @@ export default function CustomerDetail() {
       <Box display="flex" alignItems="center" gap={1} mb={3}>
         <IconButton onClick={() => navigate('/admin/customers')}><ArrowBack /></IconButton>
         <Typography variant="h5" fontWeight={600} sx={{ flex: 1 }}>{customer.name}</Typography>
+        <Button
+          variant="contained" size="small"
+          startIcon={<Add />}
+          onClick={() => navigate('/admin/bookings/create', { state: { customer } })}
+        >
+          Book
+        </Button>
         {customer.allow_admin_impersonation && (
           <Button
             variant="outlined" size="small"
@@ -166,7 +173,6 @@ export default function CustomerDetail() {
             onClick={async () => {
               try {
                 const { data } = await api.post(`/admin/impersonate/customer/${id}`);
-                // Open customer portal in new tab with the impersonation token
                 localStorage.setItem('customer_token', data.token);
                 localStorage.setItem('customer_user', JSON.stringify(data.customer));
                 window.open(`/t/${data.tenantSlug}/portal`, '_blank');
