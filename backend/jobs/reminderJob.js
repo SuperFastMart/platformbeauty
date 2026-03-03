@@ -12,11 +12,13 @@ async function getTenantSetting(tenantId, key, defaultValue = null) {
 }
 
 function initReminderJob() {
-  // 24h reminders — daily at 9am
-  cron.schedule('0 9 * * *', async () => {
-    console.log('[Reminder Job] Running 24h appointment reminders...');
-
+  // 24h reminders — every 30 minutes, sends 24h before appointment time
+  cron.schedule('*/30 * * * *', async () => {
     try {
+      const now = new Date();
+      const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+      const in24h30 = new Date(now.getTime() + 24.5 * 60 * 60 * 1000);
+
       const bookings = await getAll(
         `SELECT b.*, t.id as t_id, t.name as t_name, t.slug as t_slug,
                 t.owner_email as t_owner_email, t.owner_name as t_owner_name,
@@ -25,11 +27,13 @@ function initReminderJob() {
                 t.subscription_tier as t_subscription_tier
          FROM bookings b
          JOIN tenants t ON t.id = b.tenant_id AND t.active = TRUE
-         WHERE b.date = CURRENT_DATE + INTERVAL '1 day'
-           AND b.status IN ('confirmed', 'pending')
-           AND b.reminder_24h_sent = FALSE`
+         WHERE b.status IN ('confirmed', 'pending')
+           AND b.reminder_24h_sent = FALSE
+           AND (b.date::text || ' ' || b.start_time)::timestamp BETWEEN $1 AND $2`,
+        [in24h.toISOString(), in24h30.toISOString()]
       );
 
+      if (bookings.length === 0) return;
       console.log(`[Reminder Job] Found ${bookings.length} bookings needing 24h reminders`);
 
       for (const b of bookings) {
@@ -58,10 +62,8 @@ function initReminderJob() {
           console.error(`[Reminder Job] Error for booking #${b.id}:`, err.message);
         }
       }
-
-      console.log('[Reminder Job] 24h reminders complete.');
     } catch (err) {
-      console.error('[Reminder Job] Fatal error:', err);
+      console.error('[Reminder Job] 24h reminder error:', err);
     }
   });
 
@@ -127,7 +129,7 @@ function initReminderJob() {
     }
   });
 
-  console.log('Reminder jobs scheduled (24h daily 9am, 2h every 30min, waitlist hourly).');
+  console.log('Reminder jobs scheduled (24h every 30min, 2h every 30min, waitlist hourly).');
 }
 
 module.exports = { initReminderJob };
