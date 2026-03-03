@@ -54,6 +54,10 @@ export default function CustomerDetail() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [viewPhoto, setViewPhoto] = useState(null);
 
+  // Contact editing
+  const [editingContact, setEditingContact] = useState(false);
+  const [editContact, setEditContact] = useState({ name: '', email: '', phone: '', gender: '' });
+
   // Communications & Forms
   const [communications, setCommunications] = useState([]);
   const [commsLoading, setCommsLoading] = useState(false);
@@ -73,6 +77,7 @@ export default function CustomerDetail() {
         setAllergies(data.customer.allergies || '');
         setPreferences(data.customer.preferences || '');
         setTags(data.customer.tags ? data.customer.tags.split(',').map(t => t.trim()).filter(Boolean) : []);
+        setEditContact({ name: data.customer.name || '', email: data.customer.email || '', phone: data.customer.phone || '', gender: data.customer.gender || '' });
       })
       .catch(err => {
         if (err.response?.status === 404) navigate('/admin/customers');
@@ -197,6 +202,17 @@ export default function CustomerDetail() {
     }
   };
 
+  const saveContact = async () => {
+    try {
+      const { data } = await api.put(`/admin/customers/${id}/contact`, editContact);
+      setCustomer(c => ({ ...c, ...data }));
+      setEditingContact(false);
+      setSnackbar({ open: true, message: 'Contact details updated', severity: 'success' });
+    } catch (err) {
+      setSnackbar({ open: true, message: err.response?.data?.error || 'Failed to update', severity: 'error' });
+    }
+  };
+
   const addTag = () => {
     const tag = newTag.trim();
     if (tag && !tags.includes(tag)) {
@@ -275,27 +291,63 @@ export default function CustomerDetail() {
         <Grid item xs={12} md={6}>
           <Card>
             <CardContent>
-              <Typography fontWeight={600} mb={1}>Contact Details</Typography>
-              <Typography variant="body2"><strong>Email:</strong> {customer.email}</Typography>
-              <Typography variant="body2"><strong>Phone:</strong> {customer.phone || 'Not provided'}</Typography>
-              {customer.gender && (
-                <Typography variant="body2"><strong>Gender:</strong> {customer.gender}</Typography>
-              )}
-              {customer.client_source && (
-                <Typography variant="body2"><strong>Source:</strong> {customer.client_source}</Typography>
-              )}
-              <Typography variant="body2">
-                <strong>{person} since:</strong> {dayjs(customer.created_at).format('D MMM YYYY')}
-              </Typography>
-              {customer.first_visit_date && (
-                <Typography variant="body2">
-                  <strong>First visit:</strong> {dayjs(customer.first_visit_date).format('D MMM YYYY')}
-                </Typography>
-              )}
-              {customer.last_visit_date && (
-                <Typography variant="body2">
-                  <strong>Last visit:</strong> {dayjs(customer.last_visit_date).format('D MMM YYYY')}
-                </Typography>
+              <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                <Typography fontWeight={600}>Contact Details</Typography>
+                {!editingContact && (
+                  <Button size="small" onClick={() => setEditingContact(true)}>Edit</Button>
+                )}
+              </Box>
+              {editingContact ? (
+                <Box>
+                  <TextField fullWidth size="small" label="Name" margin="dense"
+                    value={editContact.name} onChange={e => setEditContact(c => ({ ...c, name: e.target.value }))} />
+                  <TextField fullWidth size="small" label="Email" margin="dense"
+                    value={editContact.email} onChange={e => setEditContact(c => ({ ...c, email: e.target.value }))} />
+                  <TextField fullWidth size="small" label="Phone" margin="dense"
+                    value={editContact.phone} onChange={e => setEditContact(c => ({ ...c, phone: e.target.value }))} />
+                  <FormControl fullWidth size="small" margin="dense">
+                    <InputLabel>Gender</InputLabel>
+                    <Select value={editContact.gender} label="Gender"
+                      onChange={e => setEditContact(c => ({ ...c, gender: e.target.value }))}>
+                      <MenuItem value="">Not specified</MenuItem>
+                      <MenuItem value="female">Female</MenuItem>
+                      <MenuItem value="male">Male</MenuItem>
+                      <MenuItem value="non-binary">Non-binary</MenuItem>
+                      <MenuItem value="other">Other</MenuItem>
+                    </Select>
+                  </FormControl>
+                  <Box display="flex" gap={1} mt={1.5}>
+                    <Button size="small" variant="contained" onClick={saveContact}>Save</Button>
+                    <Button size="small" onClick={() => {
+                      setEditingContact(false);
+                      setEditContact({ name: customer.name || '', email: customer.email || '', phone: customer.phone || '', gender: customer.gender || '' });
+                    }}>Cancel</Button>
+                  </Box>
+                </Box>
+              ) : (
+                <>
+                  <Typography variant="body2"><strong>Email:</strong> {customer.email || 'Not provided'}</Typography>
+                  <Typography variant="body2"><strong>Phone:</strong> {customer.phone || 'Not provided'}</Typography>
+                  {customer.gender && (
+                    <Typography variant="body2"><strong>Gender:</strong> {customer.gender}</Typography>
+                  )}
+                  {customer.client_source && (
+                    <Typography variant="body2"><strong>Source:</strong> {customer.client_source}</Typography>
+                  )}
+                  <Typography variant="body2">
+                    <strong>{person} since:</strong> {dayjs(customer.created_at).format('D MMM YYYY')}
+                  </Typography>
+                  {customer.first_visit_date && (
+                    <Typography variant="body2">
+                      <strong>First visit:</strong> {dayjs(customer.first_visit_date).format('D MMM YYYY')}
+                    </Typography>
+                  )}
+                  {customer.last_visit_date && (
+                    <Typography variant="body2">
+                      <strong>Last visit:</strong> {dayjs(customer.last_visit_date).format('D MMM YYYY')}
+                    </Typography>
+                  )}
+                </>
               )}
 
               {/* Card confirmation exemption */}

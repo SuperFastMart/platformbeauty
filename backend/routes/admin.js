@@ -1842,6 +1842,29 @@ router.get('/customers/:id', asyncHandler(async (req, res) => {
   res.json({ customer, bookings, stats });
 }));
 
+// PUT /api/admin/customers/:id/contact — edit contact details
+router.put('/customers/:id/contact', asyncHandler(async (req, res) => {
+  const { name, email, phone, gender } = req.body;
+  if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required' });
+
+  // Check email uniqueness if changed
+  if (email) {
+    const existing = await getOne(
+      'SELECT id FROM customers WHERE email = $1 AND tenant_id = $2 AND id != $3',
+      [email.toLowerCase().trim(), req.tenantId, req.params.id]
+    );
+    if (existing) return res.status(409).json({ error: 'Another customer already has this email address' });
+  }
+
+  const customer = await getOne(
+    `UPDATE customers SET name = $1, email = $2, phone = $3, gender = $4
+     WHERE id = $5 AND tenant_id = $6 RETURNING *`,
+    [name.trim(), email ? email.toLowerCase().trim() : null, phone?.trim() || null, gender || null, req.params.id, req.tenantId]
+  );
+  if (!customer) return res.status(404).json({ error: 'Customer not found' });
+  res.json(customer);
+}));
+
 // PUT /api/admin/customers/:id/notes
 router.put('/customers/:id/notes', asyncHandler(async (req, res) => {
   const { notes } = req.body;
