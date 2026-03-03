@@ -802,4 +802,80 @@ router.post('/waitlist', asyncHandler(async (req, res) => {
   res.status(201).json(entry);
 }));
 
+// ============================================
+// CARD CONFIRMATION (Payment Policy)
+// ============================================
+
+// GET /api/t/:tenant/bookings/confirm-card/:token — load booking for card confirmation
+router.get('/bookings/confirm-card/:token', asyncHandler(async (req, res) => {
+  const booking = await getOne(
+    `SELECT b.id, b.customer_name, b.customer_email, b.service_names, b.date, b.start_time,
+            b.end_time, b.total_price, b.status, b.confirmation_token_expires
+     FROM bookings b
+     WHERE b.confirmation_token = $1 AND b.tenant_id = $2`,
+    [req.params.token, req.tenantId]
+  );
+
+  if (!booking) return res.status(404).json({ error: 'Booking not found or link has expired' });
+
+  if (booking.status !== 'pending_confirmation') {
+    return res.json({ already_confirmed: true, booking });
+  }
+  if (booking.confirmation_token_expires && new Date(booking.confirmation_token_expires) < new Date()) {
+    return res.status(410).json({ error: 'This confirmation link has expired. Please contact the business.' });
+  }
+
+  res.json({ ...booking, tenant: { name: req.tenant.name, primary_color: req.tenant.primary_color, logo_url: req.tenant.logo_url } });
+}));
+
+// POST /api/t/:tenant/bookings/confirm-card/:token/setup-intent — create Stripe SetupIntent
+router.post('/bookings/confirm-card/:token/setup-intent', asyncHandler(async (req, res) => {
+  const booking = await getOne(
+    'SELECT * FROM bookings WHERE confirmation_token = $1 AND tenant_id = $2 AND status = $3',
+    [req.params.token, req.tenantId, 'pending_confirmation']
+  );
+  if (!booking) return res.status(404).json({ error: 'Booking not found' });
+
+  const result = await createSetupIntent(req.tenant, booking.customer_email);
+  if (!result) return res.json({ available: false });
+
+  res.json({
+    available: true,
+    clientSecret: result.clientSecret,
+    stripePublishableKey: req.tenant.stripe_publishable_key || null,
+  });
+}));
+
+// POST /api/t/:tenant/bookings/confirm-card/:token/save-card — save card + auto-confirm
+router.post('/bookings/confirm-card/:token/save-card', asyncHandler(async (req, res) => {
+  const { paymentMethodId } = req.body;
+  const booking = await getOne(
+    'SELECT * FROM bookings WHERE confirmation_token = $1 AND tenant_id = $2 AND status = $3',
+    [req.params.token, req.tenantId, 'pending_confirmation']
+  );
+  if (!booking) return res.status(404).json({ error: 'Booking not found' });
+
+  // Save payment method to customer
+  if (booking.customer_id) {
+    await run('UPDATE customers SET stripe_payment_method_id = $1 WHERE id = $2 AND tenant_id = $3',
+      [paymentMethodId, booking.customer_id, req.tenantId]);
+  }
+
+  // Auto-confirm the booking
+  const updated = await getOne(
+    `UPDATE bookings SET status = 'confirmed', confirmation_token = NULL
+     WHERE id = $1 AND tenant_id = $2 RETURNING *`,
+    [booking.id, req.tenantId]
+  );
+
+  // Send confirmation notifications
+  const { sendBookingApprovedNotification, sendBookingConfirmedSMS } = require('../utils/emailService');
+  const { autoSendConsultationForms } = require('./consultationForms');
+  sendBookingApprovedNotification(updated, req.tenant).catch(err => console.error('Email error:', err));
+  sendBookingConfirmedSMS(updated, req.tenant).catch(err => console.error('SMS error:', err));
+  autoSendConsultationForms(updated, req.tenant).catch(err => console.error('Consultation form error:', err));
+
+  res.json({ success: true, booking: updated });
+}));
+
 module.exports = router;

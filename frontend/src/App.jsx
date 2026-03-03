@@ -61,6 +61,7 @@ const GiftCardPurchase = lazy(() => import('./pages/public/GiftCardPurchase'));
 const MembershipSignup = lazy(() => import('./pages/public/MembershipSignup'));
 const PackagePurchase = lazy(() => import('./pages/public/PackagePurchase'));
 const FormFill = lazy(() => import('./pages/public/FormFill'));
+const CardConfirmation = lazy(() => import('./pages/public/CardConfirmation'));
 const LandingPage = lazy(() => import('./pages/public/LandingPage'));
 const EmailVerification = lazy(() => import('./pages/public/EmailVerification'));
 
@@ -136,6 +137,7 @@ export default function App() {
           <Route path="memberships" element={<MembershipSignup />} />
           <Route path="packages" element={<PackagePurchase />} />
           <Route path="form/:token" element={<FormFill />} />
+          <Route path="confirm-card/:token" element={<CardConfirmation />} />
         </Route>
 
         {/* Embeddable widget (no layout wrapper) */}

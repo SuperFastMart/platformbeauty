@@ -5,11 +5,11 @@ import {
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
   Grid, Alert, Snackbar, Dialog, DialogTitle, DialogContent, DialogActions,
   IconButton, useMediaQuery, useTheme, Tooltip, Accordion, AccordionSummary,
-  AccordionDetails, FormControl, InputLabel, Select, MenuItem, CircularProgress
+  AccordionDetails, FormControl, FormControlLabel, InputLabel, Select, MenuItem, CircularProgress, Switch
 } from '@mui/material';
 import {
   ArrowBack, Delete, PersonOutline, ReportProblem, LocalOffer, Add, CameraAlt, Close,
-  ExpandMore, Email, Sms, Send, Assignment
+  ExpandMore, Email, Sms, Send, Assignment, CreditCardOff
 } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import api from '../../api/client';
@@ -297,6 +297,36 @@ export default function CustomerDetail() {
                   <strong>Last visit:</strong> {dayjs(customer.last_visit_date).format('D MMM YYYY')}
                 </Typography>
               )}
+
+              {/* Card confirmation exemption */}
+              <Box mt={2} pt={2} borderTop={1} borderColor="divider">
+                <FormControlLabel
+                  control={
+                    <Switch
+                      size="small"
+                      checked={!!customer.card_required_exempt}
+                      onChange={async (e) => {
+                        const exempt = e.target.checked;
+                        try {
+                          await api.put(`/admin/customers/${id}/card-exempt`, { exempt });
+                          setCustomer(c => ({ ...c, card_required_exempt: exempt }));
+                          setSnackbar({ open: true, message: exempt ? 'Card confirmation exemption enabled' : 'Card confirmation exemption removed', severity: 'success' });
+                        } catch {
+                          setSnackbar({ open: true, message: 'Failed to update exemption', severity: 'error' });
+                        }
+                      }}
+                    />
+                  }
+                  label={
+                    <Box>
+                      <Typography variant="body2" fontWeight={500}>Exempt from card confirmation</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Skip card requirement when booking for this {person.toLowerCase()}
+                      </Typography>
+                    </Box>
+                  }
+                />
+              </Box>
             </CardContent>
           </Card>
         </Grid>

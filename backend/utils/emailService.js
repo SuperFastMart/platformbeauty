@@ -343,6 +343,95 @@ async function sendBookingRejectedNotification(booking, tenant, reason, alternat
   });
 }
 
+async function sendBookingEditedNotification(booking, tenant, oldBooking) {
+  const dayjs = require('dayjs');
+  const bookingDate = dayjs(booking.date).format('dddd D MMMM YYYY');
+  const oldDate = dayjs(oldBooking.date).format('dddd D MMMM YYYY');
+
+  let changes = '';
+  if (String(booking.date).slice(0, 10) !== String(oldBooking.date).slice(0, 10) || booking.start_time.slice(0, 5) !== oldBooking.start_time.slice(0, 5)) {
+    changes += `<p style="margin:4px 0;"><strong>New date/time:</strong> ${bookingDate} at ${booking.start_time.slice(0, 5)}</p>`;
+    changes += `<p style="margin:4px 0;color:#888;"><s>Was: ${oldDate} at ${oldBooking.start_time.slice(0, 5)}</s></p>`;
+  }
+  if (booking.service_names !== oldBooking.service_names) {
+    changes += `<p style="margin:4px 0;"><strong>Services:</strong> ${booking.service_names}</p>`;
+  }
+  if (parseFloat(booking.total_price) !== parseFloat(oldBooking.total_price)) {
+    changes += `<p style="margin:4px 0;"><strong>Updated price:</strong> &pound;${parseFloat(booking.total_price).toFixed(2)}</p>`;
+  }
+
+  const html = `
+    <h2 style="margin:0 0 16px;">Your Booking Has Been Updated</h2>
+    <p>Hi ${booking.customer_name},</p>
+    <p>Your booking with <strong>${tenant.name}</strong> has been updated:</p>
+    ${changes}
+    <div style="background:#f9f9f9;border-radius:8px;padding:16px;margin:16px 0;">
+      <p style="margin:4px 0;"><strong>Services:</strong> ${booking.service_names}</p>
+      <p style="margin:4px 0;"><strong>Date:</strong> ${bookingDate}</p>
+      <p style="margin:4px 0;"><strong>Time:</strong> ${booking.start_time.slice(0, 5)} - ${booking.end_time.slice(0, 5)}</p>
+      <p style="margin:4px 0;"><strong>Total:</strong> &pound;${parseFloat(booking.total_price).toFixed(2)}</p>
+    </div>
+    <p>If you have any questions, please contact us directly.</p>`;
+
+  return sendEmail({
+    to: booking.customer_email,
+    toName: booking.customer_name,
+    subject: `Booking Updated — ${tenant.name}`,
+    html,
+    tenant,
+    emailType: 'booking_edited',
+    bookingId: booking.id,
+  });
+}
+
+async function sendBookingCardConfirmationEmail(booking, tenant, token) {
+  const dayjs = require('dayjs');
+  const platformUrl = process.env.PLATFORM_URL || 'https://boukd.com';
+  const confirmUrl = `${platformUrl}/t/${tenant.slug}/confirm-card/${token}`;
+  const bookingDate = dayjs(booking.date).format('dddd D MMMM YYYY');
+
+  const html = `
+    <h2 style="margin:0 0 16px;">Card Confirmation Required</h2>
+    <p>Hi ${booking.customer_name},</p>
+    <p><strong>${tenant.name}</strong> has booked you in for an appointment. To confirm your booking, please save a card on file.</p>
+    <div style="background:#f9f9f9;border-radius:8px;padding:16px;margin:16px 0;">
+      <p style="margin:4px 0;"><strong>Services:</strong> ${booking.service_names}</p>
+      <p style="margin:4px 0;"><strong>Date:</strong> ${bookingDate}</p>
+      <p style="margin:4px 0;"><strong>Time:</strong> ${booking.start_time.slice(0, 5)} - ${booking.end_time.slice(0, 5)}</p>
+      <p style="margin:4px 0;"><strong>Total:</strong> &pound;${parseFloat(booking.total_price).toFixed(2)}</p>
+    </div>
+    <p>Your card won't be charged now — this is only used for no-show protection.</p>
+    <p style="text-align:center;margin:24px 0;">
+      <a href="${confirmUrl}" style="display:inline-block;background:${tenant.primary_color || '#8B2635'};color:#fff;text-decoration:none;padding:14px 32px;border-radius:8px;font-weight:600;font-size:16px;">Confirm &amp; Save Card</a>
+    </p>
+    <p style="font-size:13px;color:#888;">This link expires in 48 hours. If you have any questions, contact ${tenant.name} directly.</p>`;
+
+  return sendEmail({
+    to: booking.customer_email,
+    toName: booking.customer_name,
+    subject: `Card Confirmation Required — ${tenant.name}`,
+    html,
+    tenant,
+    emailType: 'card_confirmation',
+    bookingId: booking.id,
+  });
+}
+
+async function sendBookingCardConfirmationSMS(booking, tenant, token) {
+  const platformUrl = process.env.PLATFORM_URL || 'https://boukd.com';
+  const confirmUrl = `${platformUrl}/t/${tenant.slug}/confirm-card/${token}`;
+  const dayjs = require('dayjs');
+  const dateStr = dayjs(booking.date).format('ddd D MMM');
+  const message = `Hi ${booking.customer_name}, ${tenant.name} has booked you in for ${booking.service_names} on ${dateStr} at ${booking.start_time.slice(0, 5)}. Please confirm by saving your card: ${confirmUrl}`;
+
+  return sendSMS(booking.customer_phone, message, tenant, {
+    smsType: 'card_confirmation',
+    bookingId: booking.id,
+    customerId: booking.customer_id,
+    recipientName: booking.customer_name,
+  });
+}
+
 async function sendAppointmentReminder(booking, tenant) {
   const date = booking.date.toISOString ? booking.date.toISOString().split('T')[0] : String(booking.date).split('T')[0];
   const html = `
@@ -777,4 +866,7 @@ module.exports = {
   sendWaitlistSMS,
   sendCompletionFollowUpEmail,
   sendConsultationFormEmail,
+  sendBookingEditedNotification,
+  sendBookingCardConfirmationEmail,
+  sendBookingCardConfirmationSMS,
 };

@@ -1214,6 +1214,53 @@ export default function Settings() {
           </CardContent>
         </Card>
 
+        {/* Payment Policy */}
+        <Card sx={{ mt: 3 }}>
+          <CardContent>
+            <Box display="flex" alignItems="center" gap={1} mb={1}>
+              <Security sx={{ color: 'text.secondary' }} />
+              <Typography variant="subtitle1" fontWeight={600}>Payment Policy</Typography>
+            </Box>
+            <Typography variant="body2" color="text.secondary" mb={2}>
+              When enabled, admin-created bookings will require customers to save a card before the appointment is confirmed.
+              This helps protect against no-shows. Customers receive an email or SMS with a link to save their card details securely.
+            </Typography>
+
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={siteSettings.require_card_confirmation === true || siteSettings.require_card_confirmation === 'true'}
+                  onChange={(e) => setSiteSettings(s => ({
+                    ...s,
+                    require_card_confirmation: e.target.checked ? 'true' : 'false',
+                  }))}
+                  disabled={!settings.stripe_secret_key_set}
+                />
+              }
+              label="Require card confirmation for admin-created bookings"
+            />
+
+            {!settings.stripe_secret_key_set && (
+              <Alert severity="warning" sx={{ mt: 1 }}>
+                You need to connect Stripe above before enabling the payment policy.
+              </Alert>
+            )}
+
+            {(siteSettings.require_card_confirmation === true || siteSettings.require_card_confirmation === 'true') && (
+              <Alert severity="info" sx={{ mt: 1.5 }}>
+                <Typography variant="body2" fontWeight={500} gutterBottom>How it works:</Typography>
+                <Typography variant="body2" component="ul" sx={{ pl: 2, mb: 0 }}>
+                  <li>When you create a booking, it will be set to <strong>"Awaiting Card"</strong> status</li>
+                  <li>The customer receives an email (or SMS if no email) with a secure link</li>
+                  <li>Once they save their card, the booking is automatically confirmed</li>
+                  <li>You can exempt specific clients in their profile, or confirm manually without a card</li>
+                  <li>Customers who already have a saved card are confirmed immediately</li>
+                </Typography>
+              </Alert>
+            )}
+          </CardContent>
+        </Card>
+
       </TabPanel>
 
       {/* Social Embeds */}

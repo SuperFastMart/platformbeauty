@@ -1,16 +1,18 @@
 import { useState, useEffect } from 'react';
 import {
   Box, Typography, Card, CardContent, Chip, Button, TextField,
-  ToggleButton, ToggleButtonGroup, Snackbar, Alert, Grid,
+  ToggleButton, ToggleButtonGroup, Snackbar, Alert, Grid, IconButton,
   Dialog, DialogTitle, DialogContent, DialogActions, Divider,
   useMediaQuery, useTheme, Tooltip
 } from '@mui/material';
-import { Check, Close, SwapHoriz, CurrencyPound, CreditCardOff, CreditCard, Add, Upload, ReportProblem } from '@mui/icons-material';
+import { Check, Close, SwapHoriz, CurrencyPound, CreditCardOff, CreditCard, Add, Upload, ReportProblem, ListAlt, CalendarMonth, ChevronLeft, ChevronRight } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api/client';
 import NoShowChargeModal from '../../components/NoShowChargeModal';
 import BookingImportDialog from '../../components/BookingImportDialog';
+import BookingDetailDrawer from '../../components/BookingDetailDrawer';
+import WeekCalendar from '../../components/WeekCalendar';
 import useTerminology from '../../hooks/useTerminology';
 
 const statusColors = {
@@ -19,7 +21,9 @@ const statusColors = {
   completed: 'success',
   rejected: 'error',
   cancelled: 'default',
+  pending_confirmation: 'info',
 };
+const statusLabels = { pending_confirmation: 'Awaiting Card' };
 
 export default function Bookings() {
   const { person } = useTerminology();
@@ -55,10 +59,23 @@ export default function Bookings() {
   // Import dialog
   const [importOpen, setImportOpen] = useState(false);
 
+  // Booking detail drawer
+  const [selectedBookingId, setSelectedBookingId] = useState(null);
+
+  // Calendar view
+  const [viewMode, setViewMode] = useState('list');
+  const [weekStart, setWeekStart] = useState(dayjs().startOf('isoWeek'));
+
   const fetchBookings = () => {
     setLoading(true);
     const params = new URLSearchParams();
-    if (date) params.append('date', date);
+
+    if (viewMode === 'week') {
+      params.append('from', weekStart.format('YYYY-MM-DD'));
+      params.append('to', weekStart.add(6, 'day').format('YYYY-MM-DD'));
+    } else {
+      if (date) params.append('date', date);
+    }
     if (statusFilter !== 'all') params.append('status', statusFilter);
 
     Promise.all([
@@ -73,7 +90,7 @@ export default function Bookings() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { fetchBookings(); }, [date, statusFilter]);
+  useEffect(() => { fetchBookings(); }, [date, statusFilter, viewMode, weekStart]);
 
   const updateStatus = async (id, status, reason, alternative) => {
     try {
@@ -149,7 +166,11 @@ export default function Bookings() {
     <Box>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3} flexWrap="wrap" gap={1}>
         <Typography variant="h5" fontWeight={600}>Bookings</Typography>
-        <Box display="flex" gap={1}>
+        <Box display="flex" gap={1} alignItems="center">
+          <ToggleButtonGroup value={viewMode} exclusive onChange={(_, v) => v && setViewMode(v)} size="small">
+            <ToggleButton value="list"><ListAlt sx={{ fontSize: 18 }} /></ToggleButton>
+            <ToggleButton value="week"><CalendarMonth sx={{ fontSize: 18 }} /></ToggleButton>
+          </ToggleButtonGroup>
           <Button variant="outlined" size="small" startIcon={<Upload />} onClick={() => setImportOpen(true)}>
             Import
           </Button>
@@ -158,6 +179,18 @@ export default function Bookings() {
           </Button>
         </Box>
       </Box>
+
+      {/* Week navigation (calendar view) */}
+      {viewMode === 'week' && (
+        <Box display="flex" alignItems="center" gap={1} mb={2}>
+          <IconButton size="small" onClick={() => setWeekStart(s => s.subtract(1, 'week'))}><ChevronLeft /></IconButton>
+          <Button size="small" variant="text" onClick={() => setWeekStart(dayjs().startOf('isoWeek'))}>Today</Button>
+          <Typography fontWeight={600} variant="body2">
+            {weekStart.format('D')} – {weekStart.add(6, 'day').format('D MMM YYYY')}
+          </Typography>
+          <IconButton size="small" onClick={() => setWeekStart(s => s.add(1, 'week'))}><ChevronRight /></IconButton>
+        </Box>
+      )}
 
       {/* Pending Booking Requests */}
       {requests.length > 0 && (
@@ -223,8 +256,19 @@ export default function Bookings() {
         </Button>
       </Box>
 
-      {/* Booking cards */}
-      {loading ? (
+      {/* Calendar view */}
+      {viewMode === 'week' && (
+        <WeekCalendar
+          bookings={bookings}
+          weekStart={weekStart}
+          loading={loading}
+          onBookingClick={(id) => setSelectedBookingId(id)}
+          onEmptySlotClick={(date, time) => navigate('/admin/bookings/create', { state: { date, time } })}
+        />
+      )}
+
+      {/* Booking cards (list view) */}
+      {viewMode === 'list' && (loading ? (
         <Typography>Loading...</Typography>
       ) : bookings.length === 0 ? (
         <Typography color="text.secondary">No bookings found</Typography>
@@ -232,7 +276,8 @@ export default function Bookings() {
         <Grid container spacing={2}>
           {bookings.map(b => (
             <Grid item xs={12} md={6} key={b.id}>
-              <Card>
+              <Card sx={{ cursor: 'pointer', transition: 'box-shadow 0.2s', '&:hover': { boxShadow: '0 4px 16px rgba(0,0,0,0.08)' } }}
+                onClick={() => setSelectedBookingId(b.id)}>
                 <CardContent>
                   <Box display="flex" justifyContent="space-between" alignItems="start" mb={1}>
                     <Box>
@@ -248,7 +293,7 @@ export default function Bookings() {
                         {b.customer_email} {b.customer_phone && `| ${b.customer_phone}`}
                       </Typography>
                     </Box>
-                    <Chip label={b.status} color={statusColors[b.status] || 'default'} size="small" />
+                    <Chip label={statusLabels[b.status] || b.status} color={statusColors[b.status] || 'default'} size="small" />
                   </Box>
 
                   <Typography variant="body2" mt={1}>
@@ -305,7 +350,7 @@ export default function Bookings() {
                   )}
 
                   {b.status === 'pending' && (
-                    <Box display="flex" gap={1} mt={2}>
+                    <Box display="flex" gap={1} mt={2} onClick={e => e.stopPropagation()}>
                       <Button
                         size="small" variant="contained" color="success"
                         startIcon={<Check />}
@@ -324,7 +369,7 @@ export default function Bookings() {
                   )}
 
                   {b.status === 'confirmed' && (
-                    <Box display="flex" gap={1} mt={2} flexWrap="wrap">
+                    <Box display="flex" gap={1} mt={2} flexWrap="wrap" onClick={e => e.stopPropagation()}>
                       <Button
                         size="small" variant="contained" color="success"
                         startIcon={<CreditCard />}
@@ -357,7 +402,7 @@ export default function Bookings() {
             </Grid>
           ))}
         </Grid>
-      )}
+      ))}
 
       {/* Reject Dialog */}
       <Dialog open={rejectDialog} onClose={() => setRejectDialog(false)} maxWidth="sm" fullWidth>
@@ -460,6 +505,14 @@ export default function Bookings() {
         open={importOpen}
         onClose={() => setImportOpen(false)}
         onComplete={fetchBookings}
+      />
+
+      {/* Booking Detail Drawer */}
+      <BookingDetailDrawer
+        open={!!selectedBookingId}
+        bookingId={selectedBookingId}
+        onClose={() => setSelectedBookingId(null)}
+        onUpdate={fetchBookings}
       />
 
       <Snackbar open={snackbar.open} autoHideDuration={3000} onClose={() => setSnackbar(s => ({ ...s, open: false }))}>

@@ -74,11 +74,18 @@ export default function AdminBookingCreate() {
   const [discountType, setDiscountType] = useState('fixed'); // 'fixed' or 'percent'
   const [discountValue, setDiscountValue] = useState('');
 
-  // Pre-select customer from navigation state (e.g. from CustomerDetail)
+  // Pre-select from navigation state (e.g. from CustomerDetail or calendar click)
   useEffect(() => {
     if (location.state?.customer) {
       setSelectedCustomer(location.state.customer);
       setActiveStep(1);
+    }
+    if (location.state?.date) {
+      setSelectedDate(location.state.date);
+      setCalendarMonth(dayjs(location.state.date).startOf('month'));
+    }
+    if (location.state?.time) {
+      setSelectedSlot(location.state.time);
     }
   }, []);
 

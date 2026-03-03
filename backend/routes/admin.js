@@ -955,6 +955,138 @@ router.get('/bookings', asyncHandler(async (req, res) => {
   res.json(bookings);
 }));
 
+// GET /api/admin/bookings/:id — single booking detail
+router.get('/bookings/:id', asyncHandler(async (req, res) => {
+  const booking = await getOne(
+    `SELECT b.*, dc.code as discount_code, c.allergies as customer_allergies,
+            c.preferences as customer_preferences, c.admin_notes as customer_notes,
+            c.stripe_payment_method_id as has_saved_card
+     FROM bookings b
+     LEFT JOIN discount_codes dc ON dc.id = b.discount_code_id
+     LEFT JOIN customers c ON c.id = b.customer_id
+     WHERE b.id = $1 AND b.tenant_id = $2`,
+    [req.params.id, req.tenantId]
+  );
+  if (!booking) return res.status(404).json({ error: 'Booking not found' });
+
+  let services = [];
+  if (booking.service_ids) {
+    const ids = booking.service_ids.split(',').map(Number).filter(Boolean);
+    if (ids.length > 0) {
+      const placeholders = ids.map((_, i) => `$${i + 2}`).join(',');
+      services = await getAll(
+        `SELECT id, name, price, duration, category FROM services WHERE id IN (${placeholders}) AND tenant_id = $1`,
+        [req.tenantId, ...ids]
+      );
+    }
+  }
+  res.json({ ...booking, services });
+}));
+
+// PUT /api/admin/bookings/:id — edit booking
+router.put('/bookings/:id', asyncHandler(async (req, res) => {
+  const { serviceIds, date, startTime, customerId, customerName, customerEmail,
+          customerPhone, notes, priceOverride, notifyCustomer } = req.body;
+
+  const existing = await getOne(
+    'SELECT * FROM bookings WHERE id = $1 AND tenant_id = $2',
+    [req.params.id, req.tenantId]
+  );
+  if (!existing) return res.status(404).json({ error: 'Booking not found' });
+
+  if (!['pending', 'confirmed', 'pending_confirmation'].includes(existing.status)) {
+    return res.status(400).json({ error: 'Cannot edit a booking with status: ' + existing.status });
+  }
+
+  // Resolve services
+  let totalDuration = existing.total_duration;
+  let totalPrice = existing.total_price;
+  let serviceNames = existing.service_names;
+  let serviceIdStr = existing.service_ids;
+
+  if (serviceIds && serviceIds.length > 0) {
+    const placeholders = serviceIds.map((_, i) => `$${i + 2}`).join(',');
+    const services = await getAll(
+      `SELECT * FROM services WHERE id IN (${placeholders}) AND tenant_id = $1 AND active = TRUE`,
+      [req.tenantId, ...serviceIds]
+    );
+    if (services.length !== serviceIds.length) {
+      return res.status(400).json({ error: 'One or more services are invalid' });
+    }
+    totalDuration = services.reduce((sum, s) => sum + s.duration, 0);
+    totalPrice = services.reduce((sum, s) => sum + parseFloat(s.price), 0);
+    serviceNames = services.map(s => s.name).join(', ');
+    serviceIdStr = serviceIds.join(',');
+  }
+
+  if (priceOverride != null && priceOverride >= 0) {
+    totalPrice = parseFloat(priceOverride);
+  }
+
+  const finalDate = date || existing.date;
+  const finalStartTime = startTime || existing.start_time;
+
+  // Calculate end time
+  const [hours, minutes] = finalStartTime.split(':').map(Number);
+  const endMinutes = hours * 60 + minutes + totalDuration;
+  const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
+
+  // Manage time slots if date/time changed
+  const dateChanged = String(finalDate).slice(0, 10) !== String(existing.date).slice(0, 10);
+  const timeChanged = finalStartTime.slice(0, 5) !== existing.start_time.slice(0, 5);
+
+  if (dateChanged || timeChanged) {
+    // Free old slots
+    await run(
+      `UPDATE time_slots SET is_available = TRUE
+       WHERE tenant_id = $1 AND date = $2 AND start_time >= $3 AND start_time < $4`,
+      [req.tenantId, existing.date, existing.start_time, existing.end_time]
+    );
+    // Mark new slots unavailable
+    await run(
+      `UPDATE time_slots SET is_available = FALSE
+       WHERE tenant_id = $1 AND date = $2 AND start_time >= $3 AND start_time < $4`,
+      [req.tenantId, finalDate, finalStartTime, endTime]
+    );
+  }
+
+  const finalCustomerId = customerId || existing.customer_id;
+  const finalCustomerName = customerName || existing.customer_name;
+  const finalCustomerEmail = customerEmail || existing.customer_email;
+  const finalCustomerPhone = customerPhone !== undefined ? customerPhone : existing.customer_phone;
+
+  const updated = await getOne(
+    `UPDATE bookings SET
+       customer_id = $1, customer_name = $2, customer_email = $3, customer_phone = $4,
+       service_ids = $5, service_names = $6, date = $7, start_time = $8, end_time = $9,
+       total_price = $10, total_duration = $11, notes = $12
+     WHERE id = $13 AND tenant_id = $14
+     RETURNING *`,
+    [finalCustomerId, finalCustomerName, finalCustomerEmail, finalCustomerPhone,
+     serviceIdStr, serviceNames, finalDate, finalStartTime, endTime,
+     totalPrice, totalDuration, notes !== undefined ? notes : existing.notes,
+     req.params.id, req.tenantId]
+  );
+
+  // Notify customer if toggled and something changed
+  if (notifyCustomer && (dateChanged || timeChanged || serviceIds)) {
+    const tenant = await getOne('SELECT * FROM tenants WHERE id = $1', [req.tenantId]);
+    if (tenant) {
+      const { sendBookingEditedNotification } = require('../utils/emailService');
+      sendBookingEditedNotification(updated, tenant, existing).catch(err =>
+        console.error('Edit notification error:', err)
+      );
+    }
+  }
+
+  const { logActivity } = require('../utils/activityLog');
+  logActivity(req.tenantId, 'tenant_admin', req.user.id, req.user.email, 'booking_edited', {
+    booking_id: updated.id, changes: { dateChanged, timeChanged, servicesChanged: !!serviceIds },
+  });
+
+  res.json(updated);
+}));
+
 // PUT /api/admin/bookings/:id/status
 router.put('/bookings/:id/status', asyncHandler(async (req, res) => {
   const { status, reason, alternative } = req.body;
@@ -1665,6 +1797,17 @@ router.put('/customers/:id/preferences', asyncHandler(async (req, res) => {
   res.json(customer);
 }));
 
+// PUT /api/admin/customers/:id/card-exempt
+router.put('/customers/:id/card-exempt', asyncHandler(async (req, res) => {
+  const { exempt } = req.body;
+  const customer = await getOne(
+    'UPDATE customers SET card_required_exempt = $1 WHERE id = $2 AND tenant_id = $3 RETURNING *',
+    [!!exempt, req.params.id, req.tenantId]
+  );
+  if (!customer) return res.status(404).json({ error: 'Customer not found' });
+  res.json(customer);
+}));
+
 // GET /api/admin/customers/:id/communications — email + SMS history
 router.get('/customers/:id/communications', asyncHandler(async (req, res) => {
   const customer = await getOne(
@@ -2304,16 +2447,37 @@ router.post('/bookings/admin-create', asyncHandler(async (req, res) => {
   const endMinutes = hours * 60 + minutes + totalDuration;
   const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
 
-  // Create booking (auto-confirmed when admin creates)
+  // Check payment policy: card confirmation required?
+  const cardConfSetting = await getOne(
+    "SELECT setting_value FROM tenant_settings WHERE tenant_id = $1 AND setting_key = 'require_card_confirmation'",
+    [req.tenantId]
+  );
+  const requireCardConfirmation = cardConfSetting?.setting_value === 'true';
+  const customerExempt = customer.card_required_exempt === true;
+  const hasSavedCard = !!customer.stripe_payment_method_id;
+
+  let bookingStatus = 'confirmed';
+  let confirmationToken = null;
+  let confirmationExpires = null;
+
+  if (requireCardConfirmation && !customerExempt && !hasSavedCard) {
+    bookingStatus = 'pending_confirmation';
+    confirmationToken = crypto.randomBytes(32).toString('hex');
+    confirmationExpires = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
+  }
+
+  // Create booking
   const booking = await getOne(
     `INSERT INTO bookings (tenant_id, customer_id, customer_name, customer_email, customer_phone,
        service_ids, service_names, date, start_time, end_time,
-       total_price, total_duration, status, notes, created_by, booking_source)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'confirmed', $13, 'admin', $14)
+       total_price, total_duration, status, notes, created_by, booking_source,
+       confirmation_token, confirmation_token_expires)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'admin', $15, $16, $17)
      RETURNING *`,
     [req.tenantId, customer.id, customer.name, customer.email, customer.phone || null,
      serviceIds.join(','), serviceNames, date, startTime, endTime,
-     totalPrice, totalDuration, notes || null, bookingSource || 'walk_in']
+     totalPrice, totalDuration, bookingStatus, notes || null, bookingSource || 'walk_in',
+     confirmationToken, confirmationExpires]
   );
 
   // Mark time slots as unavailable
@@ -2322,6 +2486,23 @@ router.post('/bookings/admin-create', asyncHandler(async (req, res) => {
      WHERE tenant_id = $1 AND date = $2 AND start_time >= $3 AND start_time < $4`,
     [req.tenantId, date, startTime, endTime]
   );
+
+  // Send card confirmation notification if payment policy triggered
+  if (bookingStatus === 'pending_confirmation') {
+    const tenant = await getOne('SELECT * FROM tenants WHERE id = $1', [req.tenantId]);
+    if (tenant) {
+      const { sendBookingCardConfirmationEmail, sendBookingCardConfirmationSMS } = require('../utils/emailService');
+      if (customer.email) {
+        sendBookingCardConfirmationEmail(booking, tenant, confirmationToken).catch(err =>
+          console.error('Card confirmation email error:', err)
+        );
+      } else if (customer.phone) {
+        sendBookingCardConfirmationSMS(booking, tenant, confirmationToken).catch(err =>
+          console.error('Card confirmation SMS error:', err)
+        );
+      }
+    }
+  }
 
   res.status(201).json(booking);
 }));

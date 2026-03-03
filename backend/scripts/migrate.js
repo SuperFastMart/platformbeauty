@@ -1205,6 +1205,19 @@ const migrations = [
   },
 
   // ============================================
+  // SPRINT: BOOKING DETAIL + PAYMENT POLICY
+  // ============================================
+  {
+    name: '070_payment_policy',
+    sql: `
+      ALTER TABLE customers ADD COLUMN IF NOT EXISTS card_required_exempt BOOLEAN DEFAULT FALSE;
+      ALTER TABLE bookings ADD COLUMN IF NOT EXISTS confirmation_token VARCHAR(255);
+      ALTER TABLE bookings ADD COLUMN IF NOT EXISTS confirmation_token_expires TIMESTAMP;
+      CREATE INDEX IF NOT EXISTS idx_bookings_conf_token ON bookings(confirmation_token);
+    `
+  },
+
+  // ============================================
   // MIGRATION TRACKING
   // ============================================
   {
