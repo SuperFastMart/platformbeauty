@@ -565,7 +565,7 @@ router.post('/bookings', bookingLimiter, asyncHandler(async (req, res) => {
   const customer = await getOne(
     `INSERT INTO customers (tenant_id, name, email, phone)
      VALUES ($1, $2, $3, $4)
-     ON CONFLICT (tenant_id, email) DO UPDATE SET
+     ON CONFLICT (tenant_id, email) WHERE email IS NOT NULL DO UPDATE SET
        name = EXCLUDED.name,
        phone = COALESCE(EXCLUDED.phone, customers.phone)
      RETURNING id`,

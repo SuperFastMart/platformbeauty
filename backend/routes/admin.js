@@ -1723,7 +1723,7 @@ router.post('/customers/import', asyncHandler(async (req, res) => {
         result = await getOne(
           `INSERT INTO customers (tenant_id, name, email, phone, admin_notes, tags, gender, client_source, first_visit_date, last_visit_date, created_at)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, COALESCE($11, NOW()))
-           ON CONFLICT (tenant_id, email) DO UPDATE SET
+           ON CONFLICT (tenant_id, email) WHERE email IS NOT NULL DO UPDATE SET
              name = COALESCE(NULLIF($2, ''), customers.name),
              phone = COALESCE(NULLIF($4, ''), customers.phone),
              admin_notes = CASE WHEN $5 IS NOT NULL AND $5 != '' THEN COALESCE(customers.admin_notes || E'\n' || $5, $5) ELSE customers.admin_notes END,
@@ -2205,7 +2205,7 @@ router.post('/bookings/admin-create', asyncHandler(async (req, res) => {
     customer = await getOne(
       `INSERT INTO customers (tenant_id, name, email, phone)
        VALUES ($1, $2, $3, $4)
-       ON CONFLICT (tenant_id, email) DO UPDATE SET
+       ON CONFLICT (tenant_id, email) WHERE email IS NOT NULL DO UPDATE SET
          name = EXCLUDED.name, phone = COALESCE(EXCLUDED.phone, customers.phone)
        RETURNING *`,
       [req.tenantId, customerName, customerEmail, customerPhone || null]
@@ -2276,7 +2276,7 @@ router.post('/bookings/admin-create-recurring', asyncHandler(async (req, res) =>
     customer = await getOne(
       `INSERT INTO customers (tenant_id, name, email, phone)
        VALUES ($1, $2, $3, $4)
-       ON CONFLICT (tenant_id, email) DO UPDATE SET
+       ON CONFLICT (tenant_id, email) WHERE email IS NOT NULL DO UPDATE SET
          name = EXCLUDED.name, phone = COALESCE(EXCLUDED.phone, customers.phone)
        RETURNING *`,
       [req.tenantId, customerName, customerEmail, customerPhone || null]
