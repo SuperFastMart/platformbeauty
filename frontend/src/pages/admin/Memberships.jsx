@@ -10,9 +10,11 @@ import dayjs from 'dayjs';
 import api from '../../api/client';
 import FeatureGate from '../../components/FeatureGate';
 import useTerminology from '../../hooks/useTerminology';
+import useCurrency, { formatCurrency } from '../../hooks/useCurrency';
 
 export default function Memberships() {
   const { person } = useTerminology();
+  const currency = useCurrency();
   const [plans, setPlans] = useState([]);
   const [services, setServices] = useState([]);
   const [stats, setStats] = useState(null);
@@ -166,7 +168,7 @@ export default function Memberships() {
             {[
               { label: 'Active Plans', value: stats.active_plans, color: '#8B2635' },
               { label: 'Active Members', value: stats.active_members, color: '#2e7d32' },
-              { label: 'Monthly Revenue', value: `£${parseFloat(stats.monthly_revenue || 0).toFixed(2)}`, color: '#D4A853' },
+              { label: 'Monthly Revenue', value: formatCurrency(stats.monthly_revenue || 0, currency), color: '#D4A853' },
               { label: 'Past Due', value: stats.past_due, color: '#d32f2f' },
             ].map(s => (
               <Grid item xs={6} sm={3} key={s.label}>
@@ -219,7 +221,7 @@ export default function Memberships() {
                     )}
 
                     <Typography variant="h4" fontWeight={700} color="#D4A853" mb={1}>
-                      £{parseFloat(plan.price_monthly).toFixed(2)}
+                      {formatCurrency(plan.price_monthly, currency)}
                       <Typography component="span" variant="body2" color="text.secondary">/month</Typography>
                     </Typography>
 
@@ -273,7 +275,7 @@ export default function Memberships() {
             <TextField fullWidth label="Description" margin="normal" multiline rows={2}
               value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
             {!editId && (
-              <TextField fullWidth label="Monthly Price (£)" type="number" margin="normal" required
+              <TextField fullWidth label={`Monthly Price (${currency.symbol})`} type="number" margin="normal" required
                 value={form.priceMonthly} onChange={e => setForm(f => ({ ...f, priceMonthly: e.target.value }))}
                 inputProps={{ min: 0, step: 0.01 }} />
             )}

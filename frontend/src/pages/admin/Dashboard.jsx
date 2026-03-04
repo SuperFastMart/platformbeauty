@@ -12,6 +12,7 @@ import {
 import dayjs from 'dayjs';
 import api from '../../api/client';
 import useTerminology from '../../hooks/useTerminology';
+import useCurrency, { formatCurrency } from '../../hooks/useCurrency';
 
 function StatCard({ title, value, icon, color, onClick, subtitle }) {
   return (
@@ -107,6 +108,7 @@ function StatusBars({ data }) {
 
 export default function Dashboard() {
   const { people } = useTerminology();
+  const currency = useCurrency();
   const [stats, setStats] = useState(null);
   const [analytics, setAnalytics] = useState(null);
   const [analyticsPeriod, setAnalyticsPeriod] = useState(30);
@@ -162,7 +164,7 @@ export default function Dashboard() {
         <Grid item xs={6} sm={6} md={3}>
           <StatCard
             title="Week Revenue"
-            value={`£${stats.weekRevenue.toFixed(2)}`}
+            value={formatCurrency(stats.weekRevenue, currency)}
             icon={<CurrencyPound fontSize="inherit" />}
             color="success.main"
           />
@@ -266,7 +268,7 @@ export default function Dashboard() {
               <Card variant="outlined">
                 <CardContent sx={{ py: 1.5, textAlign: 'center' }}>
                   <Typography variant="h5" fontWeight={700} color="#D4A853">
-                    £{analytics.revenue_trends.reduce((s, d) => s + parseFloat(d.revenue || 0), 0).toFixed(2)}
+                    {formatCurrency(analytics.revenue_trends.reduce((s, d) => s + parseFloat(d.revenue || 0), 0), currency)}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">Period Revenue</Typography>
                 </CardContent>
@@ -344,7 +346,7 @@ export default function Dashboard() {
                           <Box display="flex" gap={1} ml={1}>
                             <Chip label={`${s.count}`} size="small" variant="outlined" />
                             <Typography variant="body2" fontWeight={600} color="success.main" sx={{ minWidth: 50, textAlign: 'right' }}>
-                              £{parseFloat(s.revenue || 0).toFixed(0)}
+                              {currency.symbol}{parseFloat(s.revenue || 0).toFixed(0)}
                             </Typography>
                           </Box>
                         </Box>
@@ -373,7 +375,7 @@ export default function Dashboard() {
                           {dayjs(m.month).format('MMM YYYY')}
                         </Typography>
                         <Typography variant="h6" fontWeight={700} color="success.main">
-                          £{parseFloat(m.revenue || 0).toFixed(0)}
+                          {currency.symbol}{parseFloat(m.revenue || 0).toFixed(0)}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
                           {m.bookings} booking{m.bookings !== 1 ? 's' : ''}
@@ -432,7 +434,7 @@ export default function Dashboard() {
                           />
                         </Box>
                       }
-                      secondary={`${appt.service_names} — £${parseFloat(appt.total_price).toFixed(2)}`}
+                      secondary={`${appt.service_names} — ${formatCurrency(appt.total_price, currency)}`}
                     />
                   </ListItem>
                 </Box>

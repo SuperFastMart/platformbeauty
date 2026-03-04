@@ -53,10 +53,13 @@ adminRouter.post('/', asyncHandler(async (req, res) => {
     });
     stripeProductId = product.id;
 
+    const currSetting = await getOne(`SELECT setting_value FROM tenant_settings WHERE tenant_id = $1 AND setting_key = 'currency'`, [req.user.tenantId]);
+    const tenantCurrency = (currSetting?.setting_value || 'GBP').toLowerCase();
+
     const price = await stripe.prices.create({
       product: product.id,
       unit_amount: Math.round(parseFloat(priceMonthly) * 100),
-      currency: 'gbp',
+      currency: tenantCurrency,
       recurring: { interval: 'month' },
     });
     stripePriceId = price.id;

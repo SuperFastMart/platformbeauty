@@ -7,6 +7,7 @@ import { Elements } from '@stripe/react-stripe-js';
 import dayjs from 'dayjs';
 import api from '../../api/client';
 import { useTenant } from './TenantPublicLayout';
+import { formatCurrency, CURRENCIES } from '../../hooks/useCurrency';
 import CardSetupForm from '../../components/CardSetupForm';
 
 const stripeCache = {};
@@ -18,6 +19,7 @@ const getStripePromise = (key) => {
 export default function CardConfirmation() {
   const { slug, token } = useParams();
   const tenant = useTenant();
+  const curr = CURRENCIES[tenant?.currency || 'GBP'];
   const [booking, setBooking] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -182,7 +184,7 @@ export default function CardConfirmation() {
               <Box display="flex" justifyContent="space-between">
                 <Typography variant="body2" color="text.secondary">Total</Typography>
                 <Typography variant="body2" fontWeight={600}>
-                  £{parseFloat(booking.total_price).toFixed(2)}
+                  {formatCurrency(booking.total_price, curr)}
                 </Typography>
               </Box>
             </>

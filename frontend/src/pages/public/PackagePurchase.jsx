@@ -9,6 +9,7 @@ import { loadStripe } from '@stripe/stripe-js';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import api from '../../api/client';
 import { useTenant } from './TenantPublicLayout';
+import { formatCurrency, CURRENCIES } from '../../hooks/useCurrency';
 
 const stripeCache = {};
 function getStripe(key) {
@@ -56,6 +57,7 @@ export default function PackagePurchase() {
   const { slug } = useParams();
   const navigate = useNavigate();
   const tenant = useTenant();
+  const curr = CURRENCIES[tenant?.currency || 'GBP'];
   const [packages, setPackages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedPkg, setSelectedPkg] = useState(null);
@@ -156,7 +158,7 @@ export default function PackagePurchase() {
           <CardContent sx={{ p: { xs: 3, sm: 4 } }}>
             <Typography variant="h6" fontWeight={700} mb={0.5}>{selectedPkg.name}</Typography>
             <Typography color="text.secondary" mb={3}>
-              {selectedPkg.session_count} sessions — £{parseFloat(selectedPkg.package_price).toFixed(2)}
+              {selectedPkg.session_count} sessions — {formatCurrency(selectedPkg.package_price, curr)}
             </Typography>
             {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
             <Elements stripe={getStripe(tenant.stripe_publishable_key)} options={{ clientSecret }}>
@@ -211,11 +213,11 @@ export default function PackagePurchase() {
 
                     <Box display="flex" alignItems="baseline" gap={1} mb={1}>
                       <Typography variant="h4" fontWeight={700} color="#D4A853">
-                        £{parseFloat(pkg.package_price).toFixed(2)}
+                        {formatCurrency(pkg.package_price, curr)}
                       </Typography>
                       {pkg.original_price && parseFloat(pkg.original_price) > parseFloat(pkg.package_price) && (
                         <Typography color="text.secondary" sx={{ textDecoration: 'line-through' }}>
-                          £{parseFloat(pkg.original_price).toFixed(2)}
+                          {formatCurrency(pkg.original_price, curr)}
                         </Typography>
                       )}
                     </Box>
@@ -223,7 +225,7 @@ export default function PackagePurchase() {
                     {savings > 0 && (
                       <Chip
                         icon={<LocalOffer sx={{ fontSize: 14 }} />}
-                        label={`Save £${savings.toFixed(2)}`}
+                        label={`Save ${formatCurrency(savings, curr)}`}
                         size="small"
                         sx={{ bgcolor: '#2e7d3215', color: '#2e7d32', fontWeight: 600, mb: 1.5, alignSelf: 'flex-start' }}
                       />

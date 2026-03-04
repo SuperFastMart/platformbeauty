@@ -17,6 +17,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import useSubscriptionTier from '../../hooks/useSubscriptionTier';
 import FeatureGate from '../../components/FeatureGate';
 import useTerminology from '../../hooks/useTerminology';
+import useCurrency, { formatCurrency } from '../../hooks/useCurrency';
 
 const statusColors = {
   pending: 'warning', confirmed: 'success', rejected: 'error',
@@ -43,6 +44,7 @@ export default function CustomerDetail() {
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { hasAccess } = useSubscriptionTier();
   const { person } = useTerminology();
+  const currency = useCurrency();
 
   // Photos
   const [photos, setPhotos] = useState([]);
@@ -272,7 +274,7 @@ export default function CustomerDetail() {
           { label: 'Total Bookings', value: stats.total || 0 },
           { label: 'Completed', value: stats.completed || 0 },
           { label: 'Cancelled', value: stats.cancelled || 0 },
-          { label: 'Total Spent', value: `£${(stats.totalSpent || 0).toFixed(2)}` },
+          { label: 'Total Spent', value: formatCurrency(stats.totalSpent || 0, currency) },
           { label: 'Favourite', value: stats.favouriteService || '-' },
         ].map(s => (
           <Grid item xs={6} sm={4} md key={s.label}>
@@ -465,7 +467,7 @@ export default function CustomerDetail() {
               </Typography>
               <Typography variant="body2" mt={0.3}>{b.service_names}</Typography>
               <Typography variant="body2" fontWeight={600} mt={0.3}>
-                £{parseFloat(b.total_price).toFixed(2)}
+                {formatCurrency(b.total_price, currency)}
               </Typography>
             </CardContent>
           </Card>
@@ -487,7 +489,7 @@ export default function CustomerDetail() {
                   <TableCell>{dayjs(b.date).format('D MMM YYYY')}</TableCell>
                   <TableCell>{b.start_time?.slice(0, 5)} - {b.end_time?.slice(0, 5)}</TableCell>
                   <TableCell>{b.service_names}</TableCell>
-                  <TableCell align="right">£{parseFloat(b.total_price).toFixed(2)}</TableCell>
+                  <TableCell align="right">{formatCurrency(b.total_price, currency)}</TableCell>
                   <TableCell>
                     <Chip label={b.status} color={statusColors[b.status] || 'default'} size="small" />
                   </TableCell>

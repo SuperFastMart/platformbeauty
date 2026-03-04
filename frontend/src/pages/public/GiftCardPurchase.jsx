@@ -9,6 +9,7 @@ import { loadStripe } from '@stripe/stripe-js';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import api from '../../api/client';
 import { useTenant } from './TenantPublicLayout';
+import { formatCurrency, CURRENCIES } from '../../hooks/useCurrency';
 
 const stripeCache = {};
 function getStripe(key) {
@@ -55,6 +56,7 @@ function GiftCardPaymentForm({ onSuccess, onError }) {
 export default function GiftCardPurchase() {
   const { slug } = useParams();
   const tenant = useTenant();
+  const curr = CURRENCIES[tenant?.currency || 'GBP'];
   const [step, setStep] = useState('form'); // form, payment, success
   const [amountOption, setAmountOption] = useState(null);
   const [customAmount, setCustomAmount] = useState('');
@@ -126,7 +128,7 @@ export default function GiftCardPurchase() {
             <CheckCircle sx={{ fontSize: 56, color: 'success.main', mb: 2 }} />
             <Typography variant="h5" fontWeight={700} mb={1}>Gift Card Sent!</Typography>
             <Typography color="text.secondary" mb={2}>
-              A £{amount.toFixed(2)} gift card has been emailed to <strong>{form.recipientName}</strong> at {form.recipientEmail}.
+              A {formatCurrency(amount, curr)} gift card has been emailed to <strong>{form.recipientName}</strong> at {form.recipientEmail}.
             </Typography>
             <Paper variant="outlined" sx={{ p: 2, bgcolor: 'grey.50', mb: 2 }}>
               <Typography variant="body2" color="text.secondary" mb={0.5}>Gift Card Code</Typography>
@@ -167,15 +169,15 @@ export default function GiftCardPurchase() {
                 onChange={(_, v) => { if (v !== null) setAmountOption(v); }}
                 sx={{ mb: 2 }}
               >
-                <ToggleButton value="25">£25</ToggleButton>
-                <ToggleButton value="50">£50</ToggleButton>
-                <ToggleButton value="100">£100</ToggleButton>
+                <ToggleButton value="25">{curr.symbol}25</ToggleButton>
+                <ToggleButton value="50">{curr.symbol}50</ToggleButton>
+                <ToggleButton value="100">{curr.symbol}100</ToggleButton>
                 <ToggleButton value="custom">Custom</ToggleButton>
               </ToggleButtonGroup>
 
               {amountOption === 'custom' && (
                 <TextField
-                  fullWidth size="small" type="number" label="Amount (£)"
+                  fullWidth size="small" type="number" label={`Amount (${curr.symbol})`}
                   value={customAmount} onChange={e => setCustomAmount(e.target.value)}
                   inputProps={{ min: 5, step: 5 }}
                   sx={{ mb: 2 }}
@@ -221,7 +223,7 @@ export default function GiftCardPurchase() {
                 disabled={!amountOption || amount <= 0 || loading}
                 sx={{ mt: 3, bgcolor: '#D4A853', color: '#1a1a1a', fontWeight: 700, '&:hover': { bgcolor: '#c49a3f' }, minHeight: 48 }}
               >
-                {loading ? <CircularProgress size={24} /> : `Purchase £${amount.toFixed(2)} Gift Card`}
+                {loading ? <CircularProgress size={24} /> : `Purchase ${formatCurrency(amount, curr)} Gift Card`}
               </Button>
             </>
           )}
@@ -229,7 +231,7 @@ export default function GiftCardPurchase() {
           {step === 'payment' && clientSecret && stripeKey && (
             <Elements stripe={getStripe(stripeKey)} options={{ clientSecret }}>
               <Typography variant="subtitle2" fontWeight={600} mb={2}>
-                £{amount.toFixed(2)} Gift Card for {form.recipientName}
+                {formatCurrency(amount, curr)} Gift Card for {form.recipientName}
               </Typography>
               {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
               <GiftCardPaymentForm

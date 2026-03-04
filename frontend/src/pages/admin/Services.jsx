@@ -11,6 +11,7 @@ import api from '../../api/client';
 import CsvImportDialog from '../../components/CsvImportDialog';
 import IntakeQuestions from './IntakeQuestions';
 import ServiceForms from './ServiceForms';
+import useCurrency, { formatCurrency } from '../../hooks/useCurrency';
 
 const emptyService = { name: '', description: '', duration: 30, price: '', category: '', display_order: 0, deposit_enabled: false, deposit_type: 'fixed', deposit_value: '', is_addon: false };
 
@@ -32,6 +33,7 @@ export default function Services() {
   const [addonLinkLoading, setAddonLinkLoading] = useState(false);
   const [selectedAddonId, setSelectedAddonId] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState(null); // { id, name, active }
+  const currency = useCurrency();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
@@ -282,11 +284,11 @@ export default function Services() {
                         )}
                         <Box display="flex" gap={1.5} mt={0.5} alignItems="center" flexWrap="wrap">
                           <Typography variant="body2">{s.duration} min</Typography>
-                          <Typography variant="body2" fontWeight={600}>£{parseFloat(s.price).toFixed(2)}</Typography>
+                          <Typography variant="body2" fontWeight={600}>{formatCurrency(s.price, currency)}</Typography>
                           <Chip label={s.active ? 'Active' : 'Inactive'} size="small"
                             color={s.active ? 'success' : 'default'} sx={{ height: 20, fontSize: 11 }} />
                           {s.deposit_enabled && (
-                            <Chip label={s.deposit_type === 'percentage' ? `${s.deposit_value}% deposit` : `£${parseFloat(s.deposit_value).toFixed(2)} deposit`}
+                            <Chip label={s.deposit_type === 'percentage' ? `${s.deposit_value}% deposit` : `${formatCurrency(s.deposit_value, currency)} deposit`}
                               size="small" color="info" sx={{ height: 20, fontSize: 11 }} />
                           )}
                           {s.is_addon && (
@@ -346,11 +348,11 @@ export default function Services() {
                           )}
                         </TableCell>
                         <TableCell>{s.duration} min</TableCell>
-                        <TableCell>£{parseFloat(s.price).toFixed(2)}</TableCell>
+                        <TableCell>{formatCurrency(s.price, currency)}</TableCell>
                         <TableCell>
                           {s.deposit_enabled ? (
                             <Chip
-                              label={s.deposit_type === 'percentage' ? `${s.deposit_value}%` : `£${parseFloat(s.deposit_value).toFixed(2)}`}
+                              label={s.deposit_type === 'percentage' ? `${s.deposit_value}%` : formatCurrency(s.deposit_value, currency)}
                               size="small" color="info" sx={{ height: 22 }}
                             />
                           ) : (
@@ -413,7 +415,7 @@ export default function Services() {
               value={form.duration} onChange={e => setForm(f => ({ ...f, duration: parseInt(e.target.value) || 0 }))}
             />
             <TextField
-              label="Price (£)" type="number" margin="normal" required sx={{ flex: 1 }}
+              label={`Price (${currency.symbol})`} type="number" margin="normal" required sx={{ flex: 1 }}
               inputProps={{ min: 0, max: 10000, step: 0.01 }}
               value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))}
             />
@@ -511,11 +513,11 @@ export default function Services() {
                 onChange={(_, v) => v && setForm(f => ({ ...f, deposit_type: v, deposit_value: '' }))}
                 size="small"
               >
-                <ToggleButton value="fixed">Fixed (£)</ToggleButton>
+                <ToggleButton value="fixed">Fixed ({currency.symbol})</ToggleButton>
                 <ToggleButton value="percentage">Percentage (%)</ToggleButton>
               </ToggleButtonGroup>
               <TextField
-                label={form.deposit_type === 'fixed' ? 'Amount (£)' : 'Percentage (%)'}
+                label={form.deposit_type === 'fixed' ? `Amount (${currency.symbol})` : 'Percentage (%)'}
                 type="number"
                 size="small"
                 sx={{ width: 140 }}
@@ -523,7 +525,7 @@ export default function Services() {
                 value={form.deposit_value}
                 onChange={e => setForm(f => ({ ...f, deposit_value: e.target.value }))}
                 helperText={form.deposit_type === 'percentage' && form.price && form.deposit_value
-                  ? `£${(parseFloat(form.price) * parseFloat(form.deposit_value) / 100).toFixed(2)} deposit`
+                  ? `${formatCurrency(parseFloat(form.price) * parseFloat(form.deposit_value) / 100, currency)} deposit`
                   : undefined}
               />
             </Box>
@@ -586,7 +588,7 @@ export default function Services() {
                       <Box>
                         <Typography fontWeight={500}>{link.name}</Typography>
                         <Typography variant="body2" color="text.secondary">
-                          {link.duration} min — £{parseFloat(link.price).toFixed(2)}
+                          {link.duration} min — {formatCurrency(link.price, currency)}
                         </Typography>
                       </Box>
                       <Button size="small" color="error" variant="outlined" onClick={() => unlinkAddon(link.link_id)}
@@ -610,7 +612,7 @@ export default function Services() {
                       <Box>
                         <Typography fontWeight={500}>{a.name}</Typography>
                         <Typography variant="body2" color="text.secondary">
-                          {a.duration} min — £{parseFloat(a.price).toFixed(2)}
+                          {a.duration} min — {formatCurrency(a.price, currency)}
                         </Typography>
                       </Box>
                       <Button size="small" variant="outlined"

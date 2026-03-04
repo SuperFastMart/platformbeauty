@@ -13,6 +13,7 @@ import api from '../../api/client';
 import CalendarGrid from '../../components/CalendarGrid';
 import TimeSlotPicker from '../../components/TimeSlotPicker';
 import useTerminology from '../../hooks/useTerminology';
+import useCurrency, { formatCurrency } from '../../hooks/useCurrency';
 
 const FREQUENCY_OPTIONS = [
   { value: 'specific', label: 'Specific Days' },
@@ -23,6 +24,7 @@ const FREQUENCY_OPTIONS = [
 
 export default function AdminBookingCreate() {
   const { person, people } = useTerminology();
+  const currency = useCurrency();
   const steps = [person, 'Service', 'Date & Time', 'Confirm'];
   const navigate = useNavigate();
   const location = useLocation();
@@ -420,7 +422,7 @@ export default function AdminBookingCreate() {
                           </Box>
                           <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
                             <Typography fontWeight={700} color="primary.main">
-                              £{parseFloat(s.price).toFixed(2)}
+                              {formatCurrency(s.price, currency)}
                             </Typography>
                           </Box>
                           {!isSelected && <Add sx={{ ml: 1, color: 'grey.400', fontSize: 20 }} />}
@@ -442,7 +444,7 @@ export default function AdminBookingCreate() {
           {selectedServiceIds.length > 0 && (
             <Box mt={2} p={2} bgcolor="grey.100" borderRadius={2}>
               <Typography variant="body2" fontWeight={500}>
-                {selectedServiceIds.length} service{selectedServiceIds.length > 1 ? 's' : ''} — £{totalPrice.toFixed(2)} — {totalDuration} min
+                {selectedServiceIds.length} service{selectedServiceIds.length > 1 ? 's' : ''} — {formatCurrency(totalPrice, currency)} — {totalDuration} min
               </Typography>
             </Box>
           )}
@@ -473,7 +475,7 @@ export default function AdminBookingCreate() {
           {selectedServiceIds.length > 0 && (
             <Box mb={2} p={1.5} bgcolor="grey.100" borderRadius={2}>
               <Typography variant="body2" color="text.secondary">
-                {selectedServices.map(s => s.name).join(', ')} — {totalDuration} min — £{totalPrice.toFixed(2)}
+                {selectedServices.map(s => s.name).join(', ')} — {totalDuration} min — {formatCurrency(totalPrice, currency)}
               </Typography>
             </Box>
           )}
@@ -630,12 +632,12 @@ export default function AdminBookingCreate() {
               {selectedServices.map(s => (
                 <Box key={s.id} display="flex" justifyContent="space-between" py={0.5}>
                   <Typography variant="body2">{s.name} ({s.duration} min)</Typography>
-                  <Typography variant="body2">£{parseFloat(s.price).toFixed(2)}</Typography>
+                  <Typography variant="body2">{formatCurrency(s.price, currency)}</Typography>
                 </Box>
               ))}
               <Box display="flex" justifyContent="space-between" pt={1} mt={1} borderTop={1} borderColor="divider">
                 <Typography fontWeight={600}>Total per session</Typography>
-                <Typography fontWeight={600}>£{totalPrice.toFixed(2)} — {totalDuration} min</Typography>
+                <Typography fontWeight={600}>{formatCurrency(totalPrice, currency)} — {totalDuration} min</Typography>
               </Box>
 
               {/* Price override section */}
@@ -652,7 +654,7 @@ export default function AdminBookingCreate() {
                       onChange={(_, v) => { if (v) { setDiscountType(v); setDiscountValue(''); } }}
                       size="small"
                     >
-                      <ToggleButton value="fixed">Fixed £</ToggleButton>
+                      <ToggleButton value="fixed">Fixed {currency.symbol}</ToggleButton>
                       <ToggleButton value="percent">% Off</ToggleButton>
                     </ToggleButtonGroup>
                     <TextField
@@ -661,12 +663,12 @@ export default function AdminBookingCreate() {
                       value={discountValue}
                       onChange={e => setDiscountValue(e.target.value)}
                       sx={{ width: 120 }}
-                      label={discountType === 'fixed' ? 'Price (£)' : 'Discount (%)'}
+                      label={discountType === 'fixed' ? `Price (${currency.symbol})` : 'Discount (%)'}
                       inputProps={{ min: 0, max: discountType === 'percent' ? 100 : undefined, step: discountType === 'percent' ? 5 : 0.01 }}
                     />
                     {discountValue && (
                       <Typography fontWeight={700} color="primary.main">
-                        Final: £{finalPrice.toFixed(2)}
+                        Final: {formatCurrency(finalPrice, currency)}
                       </Typography>
                     )}
                   </Box>
@@ -679,7 +681,7 @@ export default function AdminBookingCreate() {
                   {recurringFrequency !== 'specific' && (
                     <Typography variant="body2" color="text.secondary" mb={1}>
                       {recurringFrequency === 'weekly' ? 'Weekly' : recurringFrequency === 'fortnightly' ? 'Fortnightly' : '4-weekly'}
-                      {' '} — {allRecurringDates.length} sessions — £{(finalPrice * allRecurringDates.length).toFixed(2)} total
+                      {' '} — {allRecurringDates.length} sessions — {formatCurrency(finalPrice * allRecurringDates.length, currency)} total
                     </Typography>
                   )}
                   <Box display="flex" flexWrap="wrap" gap={0.5}>
@@ -751,7 +753,7 @@ export default function AdminBookingCreate() {
                 {selectedServiceIds.length} service{selectedServiceIds.length > 1 ? 's' : ''} — {totalDuration} min
               </Typography>
               <Typography variant="body2" fontWeight={700} color="primary.main">
-                £{(priceOverrideEnabled && discountValue ? finalPrice : totalPrice).toFixed(2)}
+                {formatCurrency(priceOverrideEnabled && discountValue ? finalPrice : totalPrice, currency)}
               </Typography>
             </Box>
           )}

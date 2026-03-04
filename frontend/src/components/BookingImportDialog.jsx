@@ -14,6 +14,7 @@ import {
 import dayjs from 'dayjs';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
 import api from '../api/client';
+import useCurrency, { formatCurrency } from '../hooks/useCurrency';
 
 dayjs.extend(customParseFormat);
 
@@ -124,6 +125,7 @@ const STATUS_MAP = {
 };
 
 export default function BookingImportDialog({ open, onClose, onComplete }) {
+  const currency = useCurrency();
   const [step, setStep] = useState(0);
   const [rows, setRows] = useState([]);
   const [mapping, setMapping] = useState({});
@@ -340,7 +342,7 @@ export default function BookingImportDialog({ open, onClose, onComplete }) {
                       <TableCell>{r.service || '—'}</TableCell>
                       <TableCell>{r.date || '—'}</TableCell>
                       <TableCell>{r.start_time && r.end_time ? `${r.start_time}-${r.end_time}` : '—'}</TableCell>
-                      <TableCell align="right">{r.price ? `£${r.price.toFixed(2)}` : '—'}</TableCell>
+                      <TableCell align="right">{r.price ? formatCurrency(r.price, currency) : '—'}</TableCell>
                       <TableCell>
                         <Chip
                           label={r.status}

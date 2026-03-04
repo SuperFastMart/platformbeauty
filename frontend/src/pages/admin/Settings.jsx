@@ -3,17 +3,19 @@ import { useSearchParams } from 'react-router-dom';
 import {
   Box, Typography, Card, CardContent, TextField, Button, Tabs, Tab,
   Snackbar, Alert, CircularProgress, InputAdornment, Chip, Switch, FormControlLabel, Grid, MenuItem,
-  useMediaQuery, useTheme, LinearProgress
+  useMediaQuery, useTheme, LinearProgress, FormControl, InputLabel, Select
 } from '@mui/material';
 import { Save, CreditCard, Store, Palette, Info, Schedule, Code, ContentCopy, Share, Delete, Add, DragIndicator, Gavel, Subscriptions, OpenInNew, CheckCircle, Security, Lock, LockOpen, AccountBalance, Sms } from '@mui/icons-material';
 import api from '../../api/client';
 import useTerminology, { updateTerminology } from '../../hooks/useTerminology';
+import useCurrency, { updateCurrency, formatCurrency } from '../../hooks/useCurrency';
 
 function TabPanel({ children, value, index }) {
   return value === index ? <Box mt={3}>{children}</Box> : null;
 }
 
 function SubscriptionTab({ snackbar, setSnackbar }) {
+  const currency = useCurrency();
   const [subData, setSubData] = useState(null);
   const [subLoading, setSubLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
@@ -146,7 +148,7 @@ function SubscriptionTab({ snackbar, setSnackbar }) {
               )}
               {subData.current_plan?.price_monthly > 0 && subData.status === 'active' && (
                 <Typography variant="body2" color="text.secondary" mt={0.5}>
-                  £{parseFloat(subData.current_plan.price_monthly).toFixed(2)}/month
+                  {formatCurrency(subData.current_plan.price_monthly, currency)}/month
                 </Typography>
               )}
             </Box>
@@ -260,7 +262,7 @@ function SubscriptionTab({ snackbar, setSnackbar }) {
                   <Typography variant="h6" fontWeight={700}>{plan.name}</Typography>
                   <Box display="flex" alignItems="baseline" gap={0.5} mb={2}>
                     <Typography variant="h4" fontWeight={800}>
-                      {plan.price_monthly > 0 ? `£${parseFloat(plan.price_monthly).toFixed(2)}` : 'Free'}
+                      {plan.price_monthly > 0 ? formatCurrency(plan.price_monthly, currency) : 'Free'}
                     </Typography>
                     {plan.price_monthly > 0 && (
                       <Typography variant="body2" color="text.secondary">/month</Typography>
@@ -832,6 +834,9 @@ export default function Settings() {
       // Save site settings too
       await api.put('/admin/site-settings', siteSettings);
 
+      // Update currency cache for immediate effect
+      if (siteSettings.currency) updateCurrency(siteSettings.currency);
+
       setSnackbar({ open: true, message: 'Settings saved', severity: 'success' });
 
       // Refresh to get updated masked values
@@ -883,6 +888,15 @@ export default function Settings() {
               value={settings.business_phone || ''} onChange={handleChange('business_phone')} />
             <TextField fullWidth label="Address" margin="normal" multiline rows={2}
               value={settings.business_address || ''} onChange={handleChange('business_address')} />
+            <FormControl fullWidth margin="normal" size="small">
+              <InputLabel>Currency</InputLabel>
+              <Select value={siteSettings.currency || 'GBP'} label="Currency"
+                onChange={e => setSiteSettings(s => ({ ...s, currency: e.target.value }))}>
+                <MenuItem value="GBP">British Pound (£)</MenuItem>
+                <MenuItem value="USD">US Dollar ($)</MenuItem>
+                <MenuItem value="EUR">Euro (€)</MenuItem>
+              </Select>
+            </FormControl>
           </CardContent>
         </Card>
 

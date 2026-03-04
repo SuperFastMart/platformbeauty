@@ -15,6 +15,10 @@ router.use(resolveTenant);
 // GET /api/t/:tenant/ - tenant public info
 router.get('/', asyncHandler(async (req, res) => {
   const t = req.tenant;
+  const currSetting = await getOne(
+    `SELECT setting_value FROM tenant_settings WHERE tenant_id = $1 AND setting_key = 'currency'`,
+    [t.id]
+  );
   res.json({
     id: t.id,
     name: t.name,
@@ -23,6 +27,7 @@ router.get('/', asyncHandler(async (req, res) => {
     business_address: t.business_address,
     logo_url: t.logo_url,
     primary_color: t.primary_color,
+    currency: currSetting?.setting_value || 'GBP',
   });
 }));
 
@@ -132,10 +137,12 @@ router.post('/tip/:token', asyncHandler(async (req, res) => {
 
     const stripe = require('stripe')(tenant.stripe_secret_key);
     const tipPence = Math.round(parseFloat(amount) * 100);
+    const currSetting = await getOne(`SELECT setting_value FROM tenant_settings WHERE tenant_id = $1 AND setting_key = 'currency'`, [req.tenantId]);
+    const tenantCurrency = (currSetting?.setting_value || 'GBP').toLowerCase();
 
     const paymentIntent = await stripe.paymentIntents.create({
       amount: tipPence,
-      currency: 'gbp',
+      currency: tenantCurrency,
       metadata: {
         type: 'tip',
         booking_id: booking.id.toString(),

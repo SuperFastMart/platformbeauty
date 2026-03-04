@@ -8,12 +8,14 @@ import { AccessTime, Schedule, Star, Place, Gavel, ExpandMore, EventBusy, Report
 import dayjs from 'dayjs';
 import api from '../../api/client';
 import { useTenant } from './TenantPublicLayout';
+import { formatCurrency, CURRENCIES } from '../../hooks/useCurrency';
 
 const DAY_ORDER = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
 export default function TenantLanding() {
   const { slug } = useParams();
   const tenant = useTenant();
+  const curr = CURRENCIES[tenant?.currency || 'GBP'];
   const navigate = useNavigate();
   const [services, setServices] = useState({});
   const [allServices, setAllServices] = useState([]);
@@ -385,7 +387,7 @@ export default function TenantLanding() {
                         )}
                       </Box>
                       <Box textAlign="right" flexShrink={0}>
-                        <Typography fontWeight={600} color="primary.main">£{parseFloat(service.price).toFixed(2)}</Typography>
+                        <Typography fontWeight={600} color="primary.main">{formatCurrency(service.price, curr)}</Typography>
                         <Typography variant="caption" color="text.secondary">{service.duration} min</Typography>
                       </Box>
                     </Box>
@@ -493,7 +495,7 @@ export default function TenantLanding() {
                 {selected.length} service{selected.length > 1 ? 's' : ''} selected
               </Typography>
               <Box display="flex" gap={2}>
-                <Typography fontWeight={600}>£{totalPrice.toFixed(2)}</Typography>
+                <Typography fontWeight={600}>{formatCurrency(totalPrice, curr)}</Typography>
                 <Typography color="text.secondary">{totalDuration} min</Typography>
               </Box>
             </Box>

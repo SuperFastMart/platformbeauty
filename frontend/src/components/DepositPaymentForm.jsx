@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useStripe, useElements, CardElement } from '@stripe/react-stripe-js';
 import { Box, Button, Typography, Alert, CircularProgress } from '@mui/material';
+import useCurrency, { formatCurrency } from '../hooks/useCurrency';
 
 const cardStyle = {
   style: {
@@ -17,6 +18,7 @@ const cardStyle = {
 export default function DepositPaymentForm({ clientSecret, depositAmount, onSuccess, disabled }) {
   const stripe = useStripe();
   const elements = useElements();
+  const currency = useCurrency();
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState('');
 
@@ -74,7 +76,7 @@ export default function DepositPaymentForm({ clientSecret, depositAmount, onSucc
         {processing ? (
           <CircularProgress size={22} color="inherit" />
         ) : (
-          `Confirm & Pay £${depositAmount.toFixed(2)} Deposit`
+          `Confirm & Pay ${formatCurrency(depositAmount, currency)} Deposit`
         )}
       </Button>
 

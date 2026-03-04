@@ -14,6 +14,7 @@ import api from '../api/client';
 import CalendarGrid from './CalendarGrid';
 import TimeSlotPicker from './TimeSlotPicker';
 import useTerminology from '../hooks/useTerminology';
+import useCurrency, { formatCurrency } from '../hooks/useCurrency';
 
 const statusColors = {
   pending: 'warning', confirmed: 'success', completed: 'success',
@@ -23,6 +24,7 @@ const statusLabels = { pending_confirmation: 'Awaiting Card' };
 
 export default function BookingDetailDrawer({ open, bookingId, onClose, onUpdate }) {
   const { person } = useTerminology();
+  const currency = useCurrency();
   const [booking, setBooking] = useState(null);
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -302,7 +304,7 @@ export default function BookingDetailDrawer({ open, bookingId, onClose, onUpdate
                   <Box key={s.id} display="flex" justifyContent="space-between" mb={0.5}>
                     <Typography variant="body2">{s.name}</Typography>
                     <Typography variant="body2" color="text.secondary">
-                      {s.duration}min — £{parseFloat(s.price).toFixed(2)}
+                      {s.duration}min — {formatCurrency(s.price, currency)}
                     </Typography>
                   </Box>
                 )) : (
@@ -343,18 +345,18 @@ export default function BookingDetailDrawer({ open, bookingId, onClose, onUpdate
                   <Typography variant="subtitle2" color="text.secondary">Price</Typography>
                 </Box>
                 <Typography variant="h6" fontWeight={700}>
-                  £{parseFloat(booking.total_price).toFixed(2)}
+                  {formatCurrency(booking.total_price, currency)}
                 </Typography>
                 {parseFloat(booking.deposit_amount) > 0 && (
                   <Chip
-                    label={`Deposit: £${parseFloat(booking.deposit_amount).toFixed(2)} (${booking.deposit_status})`}
+                    label={`Deposit: ${formatCurrency(booking.deposit_amount, currency)} (${booking.deposit_status})`}
                     size="small" color={booking.deposit_status === 'paid' ? 'info' : 'warning'}
                     sx={{ mt: 0.5 }}
                   />
                 )}
                 {booking.discount_code && (
                   <Chip
-                    label={`${booking.discount_code} -£${parseFloat(booking.discount_amount).toFixed(2)}`}
+                    label={`${booking.discount_code} -${formatCurrency(booking.discount_amount, currency)}`}
                     size="small" color="success" variant="outlined" sx={{ mt: 0.5, ml: 0.5 }}
                   />
                 )}
@@ -564,7 +566,7 @@ export default function BookingDetailDrawer({ open, bookingId, onClose, onUpdate
                           label={
                             <Box display="flex" justifyContent="space-between" width="100%">
                               <Typography variant="body2">{s.name}</Typography>
-                              <Typography variant="body2" color="text.secondary" ml={1}>{s.duration}min · £{parseFloat(s.price).toFixed(2)}</Typography>
+                              <Typography variant="body2" color="text.secondary" ml={1}>{s.duration}min · {formatCurrency(s.price, currency)}</Typography>
                             </Box>
                           }
                           sx={{ display: 'flex', width: '100%', mr: 0 }}
@@ -575,7 +577,7 @@ export default function BookingDetailDrawer({ open, bookingId, onClose, onUpdate
                 ))}
                 {selectedServiceIds.length > 0 && (
                   <Typography variant="body2" color="text.secondary" mt={1}>
-                    {selectedServiceIds.length} service{selectedServiceIds.length > 1 ? 's' : ''} · {computedDuration}min · £{computedPrice.toFixed(2)}
+                    {selectedServiceIds.length} service{selectedServiceIds.length > 1 ? 's' : ''} · {computedDuration}min · {formatCurrency(computedPrice, currency)}
                   </Typography>
                 )}
               </Box>
@@ -626,7 +628,7 @@ export default function BookingDetailDrawer({ open, bookingId, onClose, onUpdate
                 {priceOverride && (
                   <TextField
                     size="small" type="number" fullWidth
-                    label="Price (£)" value={editPrice}
+                    label={`Price (${currency.symbol})`} value={editPrice}
                     onChange={e => setEditPrice(e.target.value)}
                     inputProps={{ min: 0, step: 0.01 }}
                     sx={{ mt: 1 }}
@@ -634,7 +636,7 @@ export default function BookingDetailDrawer({ open, bookingId, onClose, onUpdate
                 )}
                 {!priceOverride && (
                   <Typography variant="body2" color="text.secondary">
-                    £{computedPrice.toFixed(2)} (from services)
+                    {formatCurrency(computedPrice, currency)} (from services)
                   </Typography>
                 )}
               </Box>

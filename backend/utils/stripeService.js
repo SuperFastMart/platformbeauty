@@ -1,5 +1,10 @@
 const { getOne, run } = require('../config/database');
 
+async function getTenantCurrency(tenantId) {
+  const row = await getOne(`SELECT setting_value FROM tenant_settings WHERE tenant_id = $1 AND setting_key = 'currency'`, [tenantId]);
+  return (row?.setting_value || 'GBP').toLowerCase();
+}
+
 // Get a Stripe instance for a specific tenant
 function getStripeInstance(tenant) {
   if (!tenant.stripe_secret_key) {
@@ -35,9 +40,10 @@ async function createPaymentIntent(tenant, amount, customerEmail, metadata = {})
 
   const stripeCustomerId = await getOrCreateStripeCustomer(stripe, tenant, customerEmail);
 
+  const tenantCurrency = await getTenantCurrency(tenant.id);
   const paymentIntent = await stripe.paymentIntents.create({
-    amount: Math.round(amount * 100), // Convert to pence
-    currency: 'gbp',
+    amount: Math.round(amount * 100),
+    currency: tenantCurrency,
     customer: stripeCustomerId,
     metadata,
   });
@@ -62,9 +68,10 @@ async function chargeNoShow(tenant, customerEmail, paymentMethodId, amount, book
     throw new Error('Customer has no saved payment method');
   }
 
+  const tenantCurrency = await getTenantCurrency(tenant.id);
   const paymentIntent = await stripe.paymentIntents.create({
     amount: Math.round(amount * 100),
-    currency: 'gbp',
+    currency: tenantCurrency,
     customer: customer.stripe_customer_id,
     payment_method: paymentMethodId,
     off_session: true,
@@ -85,9 +92,10 @@ async function createDepositIntent(tenant, amount, customerEmail, metadata = {})
 
   const stripeCustomerId = await getOrCreateStripeCustomer(stripe, tenant, customerEmail);
 
+  const tenantCurrency = await getTenantCurrency(tenant.id);
   const paymentIntent = await stripe.paymentIntents.create({
     amount: Math.round(amount * 100),
-    currency: 'gbp',
+    currency: tenantCurrency,
     customer: stripeCustomerId,
     metadata: { ...metadata, type: 'deposit' },
   });

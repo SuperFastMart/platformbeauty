@@ -10,9 +10,11 @@ import api from '../../api/client';
 import useSubscriptionTier from '../../hooks/useSubscriptionTier';
 import FeatureGate from '../../components/FeatureGate';
 import useTerminology from '../../hooks/useTerminology';
+import useCurrency, { formatCurrency } from '../../hooks/useCurrency';
 
 export default function Reports() {
   const { person, people } = useTerminology();
+  const currency = useCurrency();
   const { hasAccess } = useSubscriptionTier();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -130,7 +132,7 @@ export default function Reports() {
                 <Card>
                   <CardContent sx={{ textAlign: 'center', py: 2 }}>
                     <Typography variant="h5" fontWeight={700}>
-                      £{revenue.total_revenue.toFixed(2)}
+                      {formatCurrency(revenue.total_revenue, currency)}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">Total Revenue</Typography>
                   </CardContent>
@@ -140,7 +142,7 @@ export default function Reports() {
                 <Card>
                   <CardContent sx={{ textAlign: 'center', py: 2 }}>
                     <Typography variant="h5" fontWeight={700}>
-                      £{revenue.card_revenue.toFixed(2)}
+                      {formatCurrency(revenue.card_revenue, currency)}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">Card</Typography>
                   </CardContent>
@@ -150,7 +152,7 @@ export default function Reports() {
                 <Card>
                   <CardContent sx={{ textAlign: 'center', py: 2 }}>
                     <Typography variant="h5" fontWeight={700}>
-                      £{revenue.cash_revenue.toFixed(2)}
+                      {formatCurrency(revenue.cash_revenue, currency)}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">Cash</Typography>
                   </CardContent>
@@ -170,7 +172,7 @@ export default function Reports() {
                 <Card>
                   <CardContent sx={{ textAlign: 'center', py: 2 }}>
                     <Typography variant="h5" fontWeight={700}>
-                      £{revenue.average_payment.toFixed(2)}
+                      {formatCurrency(revenue.average_payment, currency)}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">Average</Typography>
                   </CardContent>
@@ -226,9 +228,9 @@ export default function Reports() {
                         <TableRow key={s.id}>
                           <TableCell>{s.name}</TableCell>
                           {!isMobile && <TableCell>{s.category || '—'}</TableCell>}
-                          <TableCell align="right">£{s.service_price.toFixed(2)}</TableCell>
+                          <TableCell align="right">{formatCurrency(s.service_price, currency)}</TableCell>
                           <TableCell align="right">{s.booking_count}</TableCell>
-                          <TableCell align="right">£{s.estimated_revenue.toFixed(2)}</TableCell>
+                          <TableCell align="right">{formatCurrency(s.estimated_revenue, currency)}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -258,9 +260,9 @@ export default function Reports() {
                       {dailyRevenue.map(d => (
                         <TableRow key={d.date}>
                           <TableCell>{dayjs(d.date).format(isMobile ? 'D MMM' : 'ddd D MMM')}</TableCell>
-                          <TableCell align="right">£{d.revenue.toFixed(2)}</TableCell>
-                          {!isMobile && <TableCell align="right">£{d.card.toFixed(2)}</TableCell>}
-                          {!isMobile && <TableCell align="right">£{d.cash.toFixed(2)}</TableCell>}
+                          <TableCell align="right">{formatCurrency(d.revenue, currency)}</TableCell>
+                          {!isMobile && <TableCell align="right">{formatCurrency(d.card, currency)}</TableCell>}
+                          {!isMobile && <TableCell align="right">{formatCurrency(d.cash, currency)}</TableCell>}
                           <TableCell align="right">{d.payments}</TableCell>
                         </TableRow>
                       ))}
@@ -302,7 +304,7 @@ export default function Reports() {
                               color={t.payment_method === 'card' ? 'primary' : 'default'}
                             />
                           </TableCell>
-                          <TableCell align="right">£{t.amount.toFixed(2)}</TableCell>
+                          <TableCell align="right">{formatCurrency(t.amount, currency)}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -320,12 +322,12 @@ export default function Reports() {
                 <Card sx={{ height: '100%' }}>
                   <CardContent sx={{ textAlign: 'center', py: 2 }}>
                     <Typography variant="h5" fontWeight={700}>
-                      £{tipsData.total_tips.toFixed(2)}
+                      {formatCurrency(tipsData.total_tips, currency)}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">Total Tips</Typography>
                     {tipsData.bookings_with_tips > 0 && (
                       <Typography variant="caption" color="text.secondary" display="block" mt={0.5}>
-                        Avg £{tipsData.avg_tip.toFixed(2)} across {tipsData.bookings_with_tips} booking{tipsData.bookings_with_tips !== 1 ? 's' : ''}
+                        Avg {formatCurrency(tipsData.avg_tip, currency)} across {tipsData.bookings_with_tips} booking{tipsData.bookings_with_tips !== 1 ? 's' : ''}
                       </Typography>
                     )}
                   </CardContent>
@@ -349,7 +351,7 @@ export default function Reports() {
                             <Box sx={{ width: `${pct}%`, height: '100%', bgcolor: '#8B2635', borderRadius: 1, transition: 'width 0.3s' }} />
                           </Box>
                           <Typography variant="body2" fontWeight={600} sx={{ minWidth: 40, textAlign: 'right' }}>{s.count}</Typography>
-                          <Typography variant="caption" color="text.secondary" sx={{ minWidth: 60, textAlign: 'right' }}>£{s.revenue.toFixed(0)}</Typography>
+                          <Typography variant="caption" color="text.secondary" sx={{ minWidth: 60, textAlign: 'right' }}>{currency.symbol}{parseFloat(s.revenue).toFixed(0)}</Typography>
                         </Box>
                       );
                     })}
@@ -386,7 +388,7 @@ export default function Reports() {
                   <Grid item xs={6} sm={3}>
                     <Box textAlign="center">
                       <Typography variant="h5" fontWeight={700}>
-                        £{retention.avg_ltv.toFixed(0)}
+                        {currency.symbol}{retention.avg_ltv.toFixed(0)}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">Avg lifetime value</Typography>
                     </Box>
@@ -435,7 +437,7 @@ export default function Reports() {
                           <TableCell align="right">
                             <Chip label={`${c.days_since_last_visit}d`} size="small" color="error" variant="outlined" />
                           </TableCell>
-                          <TableCell align="right">£{c.total_spent.toFixed(2)}</TableCell>
+                          <TableCell align="right">{formatCurrency(c.total_spent, currency)}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>

@@ -8,6 +8,7 @@ import {
 import { ChevronLeft, ChevronRight, ExpandMore, CheckCircle } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import api from '../../api/client';
+import { formatCurrency, CURRENCIES } from '../../hooks/useCurrency';
 
 const steps = ['Services', 'Date', 'Time', 'Details', 'Confirm'];
 
@@ -37,6 +38,7 @@ export default function BookingWidget() {
   const [submitting, setSubmitting] = useState(false);
   const [bookingResult, setBookingResult] = useState(null);
   const [error, setError] = useState('');
+  const curr = CURRENCIES[tenant?.currency || 'GBP'];
   const [calendarMonth, setCalendarMonth] = useState(dayjs().startOf('month'));
 
   // Create theme from tenant settings
@@ -186,7 +188,7 @@ export default function BookingWidget() {
                 {bookingResult.start_time?.slice(0, 5)} - {bookingResult.end_time?.slice(0, 5)}
               </Typography>
               <Typography variant="body2" fontWeight={600} mt={1}>
-                Total: £{parseFloat(bookingResult.total_price).toFixed(2)}
+                Total: {formatCurrency(bookingResult.total_price, curr)}
               </Typography>
             </CardContent>
           </Card>
@@ -248,7 +250,7 @@ export default function BookingWidget() {
                             <Typography variant="body2" fontWeight={500}>{s.name}</Typography>
                             <Typography variant="caption" color="text.secondary">{s.duration} min</Typography>
                           </Box>
-                          <Typography variant="body2" fontWeight={700} color="primary">£{parseFloat(s.price).toFixed(2)}</Typography>
+                          <Typography variant="body2" fontWeight={700} color="primary">{formatCurrency(s.price, curr)}</Typography>
                         </Box>
                       ))}
                     </AccordionDetails>
@@ -363,13 +365,13 @@ export default function BookingWidget() {
                 {selectedServices.map(s => (
                   <Box key={s.id} display="flex" justifyContent="space-between" mb={0.5}>
                     <Typography variant="body2">{s.name} ({s.duration}min)</Typography>
-                    <Typography variant="body2">£{parseFloat(s.price).toFixed(2)}</Typography>
+                    <Typography variant="body2">{formatCurrency(s.price, curr)}</Typography>
                   </Box>
                 ))}
                 <Box borderTop="1px solid" borderColor="divider" mt={1} pt={1}>
                   <Box display="flex" justifyContent="space-between">
                     <Typography variant="body2" fontWeight={600}>Total</Typography>
-                    <Typography variant="body2" fontWeight={700} color="primary">£{totalPrice.toFixed(2)}</Typography>
+                    <Typography variant="body2" fontWeight={700} color="primary">{formatCurrency(totalPrice, curr)}</Typography>
                   </Box>
                 </Box>
                 <Box mt={2}>
@@ -405,7 +407,7 @@ export default function BookingWidget() {
               <Typography variant="caption" color="text.secondary">{selectedIds.length} services · {totalDuration} min</Typography>
             </Box>
             <Box display="flex" alignItems="center" gap={1}>
-              <Typography variant="body1" fontWeight={700} color="primary">£{totalPrice.toFixed(2)}</Typography>
+              <Typography variant="body1" fontWeight={700} color="primary">{formatCurrency(totalPrice, curr)}</Typography>
               <Button size="small" variant="contained" onClick={() => setActiveStep(1)}>Continue</Button>
             </Box>
           </Box>

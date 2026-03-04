@@ -9,6 +9,7 @@ import { loadStripe } from '@stripe/stripe-js';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import api from '../../api/client';
 import { useTenant } from './TenantPublicLayout';
+import { formatCurrency, CURRENCIES } from '../../hooks/useCurrency';
 
 const stripeCache = {};
 function getStripe(key) {
@@ -56,6 +57,7 @@ export default function MembershipSignup() {
   const { slug } = useParams();
   const navigate = useNavigate();
   const tenant = useTenant();
+  const curr = CURRENCIES[tenant?.currency || 'GBP'];
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedPlan, setSelectedPlan] = useState(null);
@@ -140,7 +142,7 @@ export default function MembershipSignup() {
           <CardContent sx={{ p: { xs: 3, sm: 4 } }}>
             <Typography variant="h6" fontWeight={700} mb={0.5}>{selectedPlan.name}</Typography>
             <Typography color="text.secondary" mb={3}>
-              £{parseFloat(selectedPlan.price_monthly).toFixed(2)}/month
+              {formatCurrency(selectedPlan.price_monthly, curr)}/month
             </Typography>
             {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
             <Elements stripe={getStripe(tenant.stripe_publishable_key)} options={{ clientSecret }}>
@@ -199,7 +201,7 @@ export default function MembershipSignup() {
                   <Typography variant="h6" fontWeight={700} mb={0.5}>{plan.name}</Typography>
                   <Box display="flex" alignItems="baseline" gap={0.5} mb={1}>
                     <Typography variant="h4" fontWeight={700} color="#D4A853">
-                      £{parseFloat(plan.price_monthly).toFixed(2)}
+                      {formatCurrency(plan.price_monthly, curr)}
                     </Typography>
                     <Typography color="text.secondary">/month</Typography>
                   </Box>

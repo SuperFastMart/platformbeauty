@@ -9,9 +9,11 @@ import dayjs from 'dayjs';
 import api from '../../api/client';
 import useSubscriptionTier from '../../hooks/useSubscriptionTier';
 import FeatureGate from '../../components/FeatureGate';
+import useCurrency, { formatCurrency } from '../../hooks/useCurrency';
 
 export default function DiscountCodes() {
   const { hasAccess } = useSubscriptionTier();
+  const currency = useCurrency();
   const [codes, setCodes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [dialog, setDialog] = useState(false);
@@ -139,12 +141,12 @@ export default function DiscountCodes() {
                     </Box>
                   </Box>
                   <Box display="flex" gap={1} mt={1} flexWrap="wrap" alignItems="center">
-                    <Chip label={c.discount_type === 'percentage' ? `${parseFloat(c.discount_value)}%` : `£${parseFloat(c.discount_value).toFixed(2)} off`} size="small" variant="outlined" />
+                    <Chip label={c.discount_type === 'percentage' ? `${parseFloat(c.discount_value)}%` : `${formatCurrency(c.discount_value, currency)} off`} size="small" variant="outlined" />
                     <Typography variant="caption" color="text.secondary">
                       {c.uses_count}{c.max_uses ? ` / ${c.max_uses}` : ''} uses
                     </Typography>
                     {parseFloat(c.min_spend) > 0 && (
-                      <Typography variant="caption" color="text.secondary">Min £{parseFloat(c.min_spend).toFixed(2)}</Typography>
+                      <Typography variant="caption" color="text.secondary">Min {formatCurrency(c.min_spend, currency)}</Typography>
                     )}
                     {c.category && <Chip label={c.category} size="small" sx={{ height: 20, fontSize: 11 }} />}
                     {c.expires_at && (
@@ -184,13 +186,13 @@ export default function DiscountCodes() {
                       <TableCell>
                         {c.discount_type === 'percentage'
                           ? `${parseFloat(c.discount_value)}%`
-                          : `£${parseFloat(c.discount_value).toFixed(2)}`}
+                          : formatCurrency(c.discount_value, currency)}
                       </TableCell>
                       <TableCell>
                         {c.uses_count}{c.max_uses ? ` / ${c.max_uses}` : ''}
                       </TableCell>
                       <TableCell>
-                        {parseFloat(c.min_spend) > 0 ? `£${parseFloat(c.min_spend).toFixed(2)}` : '—'}
+                        {parseFloat(c.min_spend) > 0 ? formatCurrency(c.min_spend, currency) : '—'}
                       </TableCell>
                       <TableCell>{c.category || '—'}</TableCell>
                       <TableCell>
@@ -242,7 +244,7 @@ export default function DiscountCodes() {
               onChange={(e) => setForm(f => ({ ...f, discount_type: e.target.value }))}
             >
               <MenuItem value="percentage">Percentage (%)</MenuItem>
-              <MenuItem value="fixed">Fixed Amount (£)</MenuItem>
+              <MenuItem value="fixed">Fixed Amount ({currency.symbol})</MenuItem>
             </TextField>
             <TextField
               fullWidth label="Value" type="number" margin="normal" required
@@ -257,7 +259,7 @@ export default function DiscountCodes() {
               onChange={(e) => setForm(f => ({ ...f, max_uses: e.target.value }))}
             />
             <TextField
-              fullWidth label="Min Spend (£)" type="number" margin="normal"
+              fullWidth label={`Min Spend (${currency.symbol})`} type="number" margin="normal"
               value={form.min_spend}
               onChange={(e) => setForm(f => ({ ...f, min_spend: e.target.value }))}
             />

@@ -14,6 +14,7 @@ import api from '../../api/client';
 import useSubscriptionTier from '../../hooks/useSubscriptionTier';
 import CustomerImportDialog from '../../components/CustomerImportDialog';
 import useTerminology from '../../hooks/useTerminology';
+import useCurrency, { formatCurrency } from '../../hooks/useCurrency';
 
 export default function Customers() {
   const navigate = useNavigate();
@@ -29,6 +30,7 @@ export default function Customers() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { person, people } = useTerminology();
+  const currency = useCurrency();
 
   // Import dialog
   const [importOpen, setImportOpen] = useState(false);
@@ -210,11 +212,11 @@ export default function Customers() {
             </Box>
             <Grid container spacing={1.5}>
               <Grid item xs={6} sm={3}>
-                <TextField fullWidth size="small" label="Min spent (£)" type="number"
+                <TextField fullWidth size="small" label={`Min spent (${currency.symbol})`} type="number"
                   value={filters.min_spent || ''} onChange={e => setFilters(f => ({ ...f, min_spent: e.target.value }))} />
               </Grid>
               <Grid item xs={6} sm={3}>
-                <TextField fullWidth size="small" label="Max spent (£)" type="number"
+                <TextField fullWidth size="small" label={`Max spent (${currency.symbol})`} type="number"
                   value={filters.max_spent || ''} onChange={e => setFilters(f => ({ ...f, max_spent: e.target.value }))} />
               </Grid>
               <Grid item xs={6} sm={3}>
@@ -304,7 +306,7 @@ export default function Customers() {
                     </Box>
                     <Box display="flex" gap={1} mt={1} flexWrap="wrap">
                       <Chip label={`${c.booking_count || 0} bookings`} size="small" variant="outlined" />
-                      <Chip label={`£${parseFloat(c.total_spent || 0).toFixed(2)}`} size="small" variant="outlined" />
+                      <Chip label={formatCurrency(c.total_spent || 0, currency)} size="small" variant="outlined" />
                       {c.last_booking_date && (
                         <Chip label={dayjs(c.last_booking_date).format('D MMM YYYY')} size="small" variant="outlined" />
                       )}
@@ -364,7 +366,7 @@ export default function Customers() {
                     <Chip label={c.booking_count || 0} size="small" variant="outlined" />
                   </TableCell>
                   <TableCell align="right">
-                    £{parseFloat(c.total_spent || 0).toFixed(2)}
+                    {formatCurrency(c.total_spent || 0, currency)}
                   </TableCell>
                   <TableCell>
                     {c.last_booking_date

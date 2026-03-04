@@ -6,15 +6,19 @@ import {
 } from '@mui/material';
 import { Favorite, CheckCircle } from '@mui/icons-material';
 import api from '../../api/client';
+import { useTenant } from './TenantPublicLayout';
+import { formatCurrency, CURRENCIES } from '../../hooks/useCurrency';
 
 export default function TipPage() {
   const { slug, token } = useParams();
+  const tenant = useTenant();
   const [loading, setLoading] = useState(true);
   const [booking, setBooking] = useState(null);
   const [tenantName, setTenantName] = useState('');
   const [stripeKey, setStripeKey] = useState('');
   const [alreadyTipped, setAlreadyTipped] = useState(false);
   const [error, setError] = useState('');
+  const curr = CURRENCIES[tenant?.currency || 'GBP'];
 
   const [tipOption, setTipOption] = useState(null);
   const [customTip, setCustomTip] = useState('');
@@ -134,7 +138,7 @@ export default function TipPage() {
               Tip Already Received
             </Typography>
             <Typography color="text.secondary">
-              Thank you — a tip of £{parseFloat(booking.tip_amount).toFixed(2)} has already been recorded for this booking.
+              Thank you — a tip of {formatCurrency(booking.tip_amount, curr)} has already been recorded for this booking.
             </Typography>
           </CardContent>
         </Card>
@@ -152,7 +156,7 @@ export default function TipPage() {
               Thank You!
             </Typography>
             <Typography color="text.secondary" mb={1}>
-              Your tip of £{tipAmount.toFixed(2)} has been received. We truly appreciate your generosity.
+              Your tip of {formatCurrency(tipAmount, curr)} has been received. We truly appreciate your generosity.
             </Typography>
             <Typography variant="body2" color="text.secondary">
               — {tenantName}
@@ -195,15 +199,15 @@ export default function TipPage() {
             onChange={(_, v) => { if (v !== null) setTipOption(v); }}
             sx={{ mb: 2 }}
           >
-            <ToggleButton value="2">£2</ToggleButton>
-            <ToggleButton value="5">£5</ToggleButton>
-            <ToggleButton value="10">£10</ToggleButton>
+            <ToggleButton value="2">{curr.symbol}2</ToggleButton>
+            <ToggleButton value="5">{curr.symbol}5</ToggleButton>
+            <ToggleButton value="10">{curr.symbol}10</ToggleButton>
             <ToggleButton value="custom">Custom</ToggleButton>
           </ToggleButtonGroup>
 
           {tipOption === 'custom' && (
             <TextField
-              fullWidth size="small" type="number" label="Tip amount (£)"
+              fullWidth size="small" type="number" label={`Tip amount (${curr.symbol})`}
               value={customTip} onChange={e => setCustomTip(e.target.value)}
               inputProps={{ min: 0.5, step: 0.5 }}
               sx={{ mb: 2 }}
@@ -224,7 +228,7 @@ export default function TipPage() {
               minHeight: 48,
             }}
           >
-            {processing ? <CircularProgress size={24} /> : `Tip £${tipAmount.toFixed(2)}`}
+            {processing ? <CircularProgress size={24} /> : `Tip ${formatCurrency(tipAmount, curr)}`}
           </Button>
         </CardContent>
       </Card>

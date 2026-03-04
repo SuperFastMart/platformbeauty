@@ -4,8 +4,10 @@ import {
   Button, Typography, Box, Alert, CircularProgress, Chip, TextField
 } from '@mui/material';
 import api from '../api/client';
+import useCurrency, { formatCurrency } from '../hooks/useCurrency';
 
 export default function NoShowChargeModal({ open, onClose, booking, onSuccess }) {
+  const currency = useCurrency();
   const [paymentMethods, setPaymentMethods] = useState([]);
   const [loading, setLoading] = useState(false);
   const [charging, setCharging] = useState(false);
@@ -61,7 +63,7 @@ export default function NoShowChargeModal({ open, onClose, booking, onSuccess })
           <Box mb={2}>
             <Typography variant="body2"><strong>Customer:</strong> {booking.customer_name}</Typography>
             <Typography variant="body2"><strong>Service:</strong> {booking.service_names}</Typography>
-            <Typography variant="body2"><strong>Booking Total:</strong> £{bookingPrice.toFixed(2)}</Typography>
+            <Typography variant="body2"><strong>Booking Total:</strong> {formatCurrency(bookingPrice, currency)}</Typography>
           </Box>
         )}
 
@@ -84,7 +86,7 @@ export default function NoShowChargeModal({ open, onClose, booking, onSuccess })
               {[50, 75, 100].map(pct => (
                 <Chip
                   key={pct}
-                  label={`${pct}% — £${(bookingPrice * pct / 100).toFixed(2)}`}
+                  label={`${pct}% — ${formatCurrency(bookingPrice * pct / 100, currency)}`}
                   onClick={() => { setChargePercent(pct); setCustomAmount(''); }}
                   variant={!customAmount && chargePercent === pct ? 'filled' : 'outlined'}
                   color={!customAmount && chargePercent === pct ? 'primary' : 'default'}
@@ -92,7 +94,7 @@ export default function NoShowChargeModal({ open, onClose, booking, onSuccess })
               ))}
             </Box>
             <TextField
-              size="small" label="Custom amount (£)" type="number"
+              size="small" label={`Custom amount (${currency.symbol})`} type="number"
               value={customAmount}
               onChange={e => setCustomAmount(e.target.value)}
               inputProps={{ min: 0, max: bookingPrice, step: 0.01 }}
@@ -101,7 +103,7 @@ export default function NoShowChargeModal({ open, onClose, booking, onSuccess })
 
             <Box mt={2} p={2} bgcolor="warning.light" borderRadius={1}>
               <Typography variant="body2" fontWeight={600}>
-                Charge: £{chargeAmount.toFixed(2)}
+                Charge: {formatCurrency(chargeAmount, currency)}
               </Typography>
               <Typography variant="caption" color="text.secondary">
                 This will charge the customer's saved card immediately.
@@ -120,7 +122,7 @@ export default function NoShowChargeModal({ open, onClose, booking, onSuccess })
           onClick={handleCharge}
           disabled={charging || loading || paymentMethods.length === 0 || success}
         >
-          {charging ? <CircularProgress size={20} /> : `Charge £${chargeAmount.toFixed(2)}`}
+          {charging ? <CircularProgress size={20} /> : `Charge ${formatCurrency(chargeAmount, currency)}`}
         </Button>
       </DialogActions>
     </Dialog>

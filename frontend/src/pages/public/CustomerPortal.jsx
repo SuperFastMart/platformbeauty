@@ -10,6 +10,7 @@ import { Logout, Edit, EmojiEvents, Search, DeleteForever } from '@mui/icons-mat
 import dayjs from 'dayjs';
 import api from '../../api/client';
 import { useTenant } from './TenantPublicLayout';
+import { formatCurrency, CURRENCIES } from '../../hooks/useCurrency';
 import CalendarGrid from '../../components/CalendarGrid';
 import TimeSlotPicker from '../../components/TimeSlotPicker';
 import ConfirmDialog from '../../components/ConfirmDialog';
@@ -27,6 +28,7 @@ export default function CustomerPortal() {
   const { slug } = useParams();
   const navigate = useNavigate();
   const tenant = useTenant();
+  const curr = CURRENCIES[tenant?.currency || 'GBP'];
 
   const [tab, setTab] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -316,7 +318,7 @@ export default function CustomerPortal() {
               {booking.start_time?.slice(0, 5)} - {booking.end_time?.slice(0, 5)}
             </Typography>
             <Typography variant="body2" fontWeight={500} mt={0.5}>
-              £{parseFloat(booking.total_price).toFixed(2)}
+              {formatCurrency(booking.total_price, curr)}
             </Typography>
           </Box>
           <Box textAlign="right">
@@ -513,7 +515,7 @@ export default function CustomerPortal() {
                       sx={{ mt: 0.5 }} />
                   </Box>
                   <Typography variant="h5" fontWeight={700} color="#D4A853">
-                    £{parseFloat(myMembership.price_monthly).toFixed(2)}/mo
+                    {formatCurrency(myMembership.price_monthly, curr)}/mo
                   </Typography>
                 </Box>
                 <Grid container spacing={2} mb={2}>

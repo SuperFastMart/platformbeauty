@@ -11,6 +11,7 @@ import {
   VisibilityOff
 } from '@mui/icons-material';
 import api from '../../api/client';
+import { formatCurrency, CURRENCIES } from '../../hooks/useCurrency';
 
 const PRIMARY = '#8B2635';
 const GOLD = '#D4A853';
@@ -33,6 +34,7 @@ const steps = [
 
 export default function LandingPage() {
   const navigate = useNavigate();
+  const curr = CURRENCIES['GBP'];
   const [showSignup, setShowSignup] = useState(false);
   const [form, setForm] = useState({ business_name: '', slug: '', owner_name: '', owner_email: '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
@@ -257,7 +259,7 @@ export default function LandingPage() {
                 </Box>
                 <Box sx={{ bgcolor: 'rgba(255,255,255,0.12)', borderRadius: 2, p: 2, mb: 2 }}>
                   <Typography variant="caption" sx={{ opacity: 0.7 }}>This Month's Revenue</Typography>
-                  <Typography variant="h4" fontWeight={700} sx={{ color: GOLD }}>£2,480</Typography>
+                  <Typography variant="h4" fontWeight={700} sx={{ color: GOLD }}>{curr.symbol}2,480</Typography>
                 </Box>
                 <Box sx={{ bgcolor: 'rgba(255,255,255,0.12)', borderRadius: 2, p: 2 }}>
                   <Typography variant="caption" sx={{ opacity: 0.7 }}>Active Customers</Typography>
@@ -435,7 +437,7 @@ export default function LandingPage() {
                           <Typography fontWeight={500}>{service}</Typography>
                           <Typography variant="caption" color="text.secondary">{30 + i * 30} min</Typography>
                         </Box>
-                        <Chip label={`£${25 + i * 25}`} size="small"
+                        <Chip label={`${curr.symbol}${25 + i * 25}`} size="small"
                           sx={{ bgcolor: `${PRIMARY}10`, color: PRIMARY, fontWeight: 700 }} />
                       </Box>
                     ))}
@@ -484,7 +486,7 @@ export default function LandingPage() {
                         <Typography variant="h6" fontWeight={700} mb={0.5}>{plan.name}</Typography>
                         <Box display="flex" alignItems="baseline" gap={0.5} mb={2}>
                           <Typography variant="h3" fontWeight={800} sx={{ color: PRIMARY }}>
-                            {plan.price_monthly > 0 ? `£${parseFloat(plan.price_monthly).toFixed(2)}` : 'Free'}
+                            {plan.price_monthly > 0 ? formatCurrency(plan.price_monthly, curr) : 'Free'}
                           </Typography>
                           {plan.price_monthly > 0 && (
                             <Typography variant="body1" color="text.secondary">/month</Typography>

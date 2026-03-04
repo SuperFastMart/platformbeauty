@@ -11,6 +11,7 @@ import {
   Warning, Download, Close,
 } from '@mui/icons-material';
 import api from '../api/client';
+import useCurrency, { formatCurrency } from '../hooks/useCurrency';
 
 // Header aliases for auto-detection (Fresha + our template)
 const HEADER_MAP = {
@@ -61,6 +62,7 @@ function downloadTemplate() {
 }
 
 export default function CsvImportDialog({ open, onClose, onComplete, existingServices = [] }) {
+  const currency = useCurrency();
   const [step, setStep] = useState(0); // 0=upload, 1=preview, 2=results
   const [rows, setRows] = useState([]);
   const [mapping, setMapping] = useState({});
@@ -291,7 +293,7 @@ export default function CsvImportDialog({ open, onClose, onComplete, existingSer
                       <TableCell>{r.name || <em style={{ color: '#999' }}>empty</em>}</TableCell>
                       <TableCell>{r.category}</TableCell>
                       <TableCell align="right">{isNaN(r.duration) ? '—' : `${r.duration}m`}</TableCell>
-                      <TableCell align="right">{isNaN(r.price) ? '—' : `£${r.price.toFixed(2)}`}</TableCell>
+                      <TableCell align="right">{isNaN(r.price) ? '—' : formatCurrency(r.price, currency)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

@@ -9,6 +9,7 @@ import dayjs from 'dayjs';
 import api from '../../api/client';
 import { useSubscriptionTier } from '../../hooks/useSubscriptionTier';
 import FeatureGate from '../../components/FeatureGate';
+import useCurrency, { formatCurrency } from '../../hooks/useCurrency';
 
 const statusColors = {
   active: 'success',
@@ -18,6 +19,7 @@ const statusColors = {
 };
 
 export default function GiftCards() {
+  const currency = useCurrency();
   const [cards, setCards] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -122,9 +124,9 @@ export default function GiftCards() {
             {[
               { label: 'Total Cards', value: stats.total_cards, color: '#8B2635' },
               { label: 'Active', value: stats.active_cards, color: '#2e7d32' },
-              { label: 'Total Sold', value: `£${parseFloat(stats.total_sold).toFixed(2)}`, color: '#D4A853' },
-              { label: 'Total Redeemed', value: `£${parseFloat(stats.total_redeemed).toFixed(2)}`, color: '#1976d2' },
-              { label: 'Outstanding', value: `£${parseFloat(stats.outstanding_balance).toFixed(2)}`, color: '#ed6c02' },
+              { label: 'Total Sold', value: formatCurrency(stats.total_sold, currency), color: '#D4A853' },
+              { label: 'Total Redeemed', value: formatCurrency(stats.total_redeemed, currency), color: '#1976d2' },
+              { label: 'Outstanding', value: formatCurrency(stats.outstanding_balance, currency), color: '#ed6c02' },
             ].map(s => (
               <Grid item xs={6} sm={4} md key={s.label}>
                 <Card sx={{ borderTop: `3px solid ${s.color}` }}>
@@ -176,9 +178,9 @@ export default function GiftCards() {
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2">
-                        £{parseFloat(card.remaining_balance).toFixed(2)}
+                        {formatCurrency(card.remaining_balance, currency)}
                         <Typography component="span" variant="caption" color="text.secondary">
-                          {' / £'}{parseFloat(card.initial_balance).toFixed(2)}
+                          {' / '}{formatCurrency(card.initial_balance, currency)}
                         </Typography>
                       </Typography>
                     </TableCell>
@@ -209,7 +211,7 @@ export default function GiftCards() {
           <DialogContent>
             {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
             <TextField
-              fullWidth label="Amount (£)" type="number" margin="normal" required
+              fullWidth label={`Amount (${currency.symbol})`} type="number" margin="normal" required
               value={form.initialBalance}
               onChange={e => setForm(f => ({ ...f, initialBalance: e.target.value }))}
               inputProps={{ min: 1, step: 0.01 }}
@@ -269,9 +271,9 @@ export default function GiftCards() {
                     {detailOpen.code}
                   </Typography>
                   <Typography variant="h5" fontWeight={700} color="#D4A853" mt={1}>
-                    £{parseFloat(detailOpen.remaining_balance).toFixed(2)}
+                    {formatCurrency(detailOpen.remaining_balance, currency)}
                     <Typography component="span" variant="body2" color="text.secondary">
-                      {' / £'}{parseFloat(detailOpen.initial_balance).toFixed(2)}
+                      {' / '}{formatCurrency(detailOpen.initial_balance, currency)}
                     </Typography>
                   </Typography>
                   <Chip label={detailOpen.status} size="small" color={statusColors[detailOpen.status] || 'default'}
@@ -325,9 +327,9 @@ export default function GiftCards() {
                                 sx={{ textTransform: 'capitalize', fontSize: 11 }} />
                             </TableCell>
                             <TableCell>
-                              {t.transaction_type === 'redemption' ? '-' : '+'}£{parseFloat(t.amount).toFixed(2)}
+                              {t.transaction_type === 'redemption' ? '-' : '+'}{formatCurrency(t.amount, currency)}
                             </TableCell>
-                            <TableCell>£{parseFloat(t.balance_after).toFixed(2)}</TableCell>
+                            <TableCell>{formatCurrency(t.balance_after, currency)}</TableCell>
                             <TableCell>{dayjs(t.created_at).format('D MMM YYYY HH:mm')}</TableCell>
                           </TableRow>
                         ))}

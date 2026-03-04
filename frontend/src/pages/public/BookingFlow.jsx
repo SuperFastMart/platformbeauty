@@ -18,6 +18,7 @@ import { useTenant } from './TenantPublicLayout';
 import CardSetupForm from '../../components/CardSetupForm';
 import DepositPaymentForm from '../../components/DepositPaymentForm';
 import ConfirmDialog from '../../components/ConfirmDialog';
+import { formatCurrency, CURRENCIES } from '../../hooks/useCurrency';
 
 // Cache Stripe instance per publishable key
 const stripeCache = {};
@@ -47,6 +48,7 @@ export default function BookingFlow() {
   const location = useLocation();
   const navigate = useNavigate();
   const tenant = useTenant();
+  const curr = CURRENCIES[tenant?.currency || 'GBP'];
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
@@ -570,15 +572,15 @@ export default function BookingFlow() {
               {bookingResult.start_time?.slice(0, 5)} - {bookingResult.end_time?.slice(0, 5)}
             </Typography>
             <Typography variant="body2" fontWeight={600} mt={1}>
-              Total: £{parseFloat(bookingResult.total_price).toFixed(2)}
+              Total: {formatCurrency(bookingResult.total_price, curr)}
             </Typography>
             {depositPaid && (
               <Box mt={1.5} p={1.5} bgcolor="success.50" borderRadius={2} sx={{ bgcolor: 'rgba(46, 125, 50, 0.08)' }}>
                 <Typography variant="body2" color="success.main" fontWeight={600}>
-                  Deposit paid: £{parseFloat(bookingResult.deposit_amount).toFixed(2)}
+                  Deposit paid: {formatCurrency(bookingResult.deposit_amount, curr)}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Remaining £{(parseFloat(bookingResult.total_price) - parseFloat(bookingResult.deposit_amount)).toFixed(2)} payable at your appointment
+                  Remaining {formatCurrency(parseFloat(bookingResult.total_price) - parseFloat(bookingResult.deposit_amount), curr)} payable at your appointment
                 </Typography>
               </Box>
             )}
@@ -780,7 +782,7 @@ export default function BookingFlow() {
                                 color="primary.main"
                                 sx={{ fontSize: { xs: '0.95rem', sm: '1.1rem' } }}
                               >
-                                £{parseFloat(s.price).toFixed(2)}
+                                {formatCurrency(s.price, curr)}
                               </Typography>
                               <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
                                 {s.duration} min
@@ -829,11 +831,11 @@ export default function BookingFlow() {
                   {selectedIds.length} service{selectedIds.length !== 1 ? 's' : ''} • {totalDuration} min
                 </Typography>
                 <Typography fontWeight={700} fontSize="1.25rem" color="primary.main">
-                  £{totalPrice.toFixed(2)}
+                  {formatCurrency(totalPrice, curr)}
                 </Typography>
                 {depositRequired && (
                   <Typography variant="caption" color="info.main" fontWeight={600}>
-                    Deposit: £{totalDeposit.toFixed(2)}
+                    Deposit: {formatCurrency(totalDeposit, curr)}
                   </Typography>
                 )}
               </Box>
@@ -910,7 +912,7 @@ export default function BookingFlow() {
                         </Box>
                         <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
                           <Typography fontWeight={600} color="#D4A853" sx={{ fontSize: '0.95rem' }}>
-                            +£{parseFloat(addon.price).toFixed(2)}
+                            +{formatCurrency(addon.price, curr)}
                           </Typography>
                           <Typography variant="caption" color="text.secondary">
                             +{addon.duration} min
@@ -933,7 +935,7 @@ export default function BookingFlow() {
             return (
               <Box mt={2} p={2} bgcolor="rgba(212, 168, 83, 0.08)" borderRadius={2}>
                 <Typography variant="body2" fontWeight={600} color="#8a7020">
-                  {selectedAddonServices.length} add-on{selectedAddonServices.length !== 1 ? 's' : ''} selected — +£{addonTotal.toFixed(2)}
+                  {selectedAddonServices.length} add-on{selectedAddonServices.length !== 1 ? 's' : ''} selected — +{formatCurrency(addonTotal, curr)}
                 </Typography>
               </Box>
             );
@@ -968,7 +970,7 @@ export default function BookingFlow() {
             <Box mb={2} p={1.5} bgcolor="grey.50" borderRadius={2}>
               <Box display="flex" justifyContent="space-between" alignItems="center">
                 <Typography variant="body2" color="text.secondary">
-                  {selectedServices.map(s => s.name).join(', ')} — {totalDuration} min — £{totalPrice.toFixed(2)}
+                  {selectedServices.map(s => s.name).join(', ')} — {totalDuration} min — {formatCurrency(totalPrice, curr)}
                 </Typography>
                 <Button size="small" variant="text" onClick={() => setActiveStep(STEP_SERVICES)} sx={{ minWidth: 'auto' }}>
                   Change
@@ -1357,8 +1359,8 @@ export default function BookingFlow() {
               <Alert severity="success" sx={{ mt: 1 }} variant="outlined">
                 {discountResult.discount_type === 'percentage'
                   ? `${discountResult.discount_value}% off`
-                  : `£${discountResult.discount_value.toFixed(2)} off`}
-                {' — '}you save £{discountResult.discount_amount.toFixed(2)}
+                  : `${formatCurrency(discountResult.discount_value, curr)} off`}
+                {' — '}you save {formatCurrency(discountResult.discount_amount, curr)}
               </Alert>
             )}
           </Box>
@@ -1378,7 +1380,7 @@ export default function BookingFlow() {
               {selectedServices.map(s => (
                 <Box key={s.id} display="flex" justifyContent="space-between" py={0.5}>
                   <Typography variant="body2">{s.name} ({s.duration} min)</Typography>
-                  <Typography variant="body2">£{parseFloat(s.price).toFixed(2)}</Typography>
+                  <Typography variant="body2">{formatCurrency(s.price, curr)}</Typography>
                 </Box>
               ))}
               {discountResult && (
@@ -1387,7 +1389,7 @@ export default function BookingFlow() {
                     Discount ({discountResult.code})
                   </Typography>
                   <Typography variant="body2" color="success.main">
-                    -£{discountAmount.toFixed(2)}
+                    -{formatCurrency(discountAmount, curr)}
                   </Typography>
                 </Box>
               )}
@@ -1436,7 +1438,7 @@ export default function BookingFlow() {
                   {selectedPackageId ? 'Total (Package Applied)' : 'Subtotal'}
                 </Typography>
                 <Typography fontWeight={600}>
-                  {selectedPackageId ? '£0.00' : `£${finalPrice.toFixed(2)}`} — {totalDuration} min
+                  {selectedPackageId ? formatCurrency(0, curr) : formatCurrency(finalPrice, curr)} — {totalDuration} min
                 </Typography>
               </Box>
 
@@ -1475,9 +1477,9 @@ export default function BookingFlow() {
                 )}
                 {giftCardResult && (
                   <Alert severity="success" sx={{ mt: 1 }} variant="outlined">
-                    Gift card applied — £{giftCardApplied.toFixed(2)} off
+                    Gift card applied — {formatCurrency(giftCardApplied, curr)} off
                     {giftCardResult.remaining_balance > giftCardApplied && (
-                      <> (£{(giftCardResult.remaining_balance - giftCardApplied).toFixed(2)} will remain on card)</>
+                      <> ({formatCurrency(giftCardResult.remaining_balance - giftCardApplied, curr)} will remain on card)</>
                     )}
                   </Alert>
                 )}
@@ -1487,7 +1489,7 @@ export default function BookingFlow() {
               {giftCardApplied > 0 && (
                 <Box display="flex" justifyContent="space-between" mt={1.5} pt={1} borderTop={1} borderColor="divider">
                   <Typography fontWeight={700} color="primary">Amount to pay</Typography>
-                  <Typography fontWeight={700} color="primary">£{grandTotal.toFixed(2)}</Typography>
+                  <Typography fontWeight={700} color="primary">{formatCurrency(grandTotal, curr)}</Typography>
                 </Box>
               )}
 
@@ -1495,11 +1497,11 @@ export default function BookingFlow() {
                 <Box mt={1.5} p={1.5} borderRadius={2} sx={{ bgcolor: 'rgba(25, 118, 210, 0.08)' }}>
                   <Box display="flex" justifyContent="space-between">
                     <Typography variant="body2" fontWeight={600} color="info.main">Deposit due now</Typography>
-                    <Typography variant="body2" fontWeight={600} color="info.main">£{totalDeposit.toFixed(2)}</Typography>
+                    <Typography variant="body2" fontWeight={600} color="info.main">{formatCurrency(totalDeposit, curr)}</Typography>
                   </Box>
                   <Box display="flex" justifyContent="space-between">
                     <Typography variant="body2" color="text.secondary">Remaining at appointment</Typography>
-                    <Typography variant="body2" color="text.secondary">£{remainingBalance.toFixed(2)}</Typography>
+                    <Typography variant="body2" color="text.secondary">{formatCurrency(remainingBalance, curr)}</Typography>
                   </Box>
                 </Box>
               )}
@@ -1617,7 +1619,7 @@ export default function BookingFlow() {
             disabled={submitting || (hasPolicies && !policyAgreed)}
             sx={{ minHeight: 44 }}
           >
-            {submitting ? 'Setting up payment...' : `Pay £${totalDeposit.toFixed(2)} Deposit`}
+            {submitting ? 'Setting up payment...' : `Pay ${formatCurrency(totalDeposit, curr)} Deposit`}
           </Button>
         ) : !depositRequired ? (
           <Button

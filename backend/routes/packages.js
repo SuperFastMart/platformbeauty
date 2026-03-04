@@ -149,10 +149,12 @@ publicRouter.post('/:id/purchase', customerAuth, asyncHandler(async (req, res) =
 
   const stripe = require('stripe')(tenant.stripe_secret_key);
   const amountInPence = Math.round(parseFloat(pkg.package_price) * 100);
+  const currSetting = await getOne(`SELECT setting_value FROM tenant_settings WHERE tenant_id = $1 AND setting_key = 'currency'`, [req.tenantId]);
+  const tenantCurrency = (currSetting?.setting_value || 'GBP').toLowerCase();
 
   const paymentIntent = await stripe.paymentIntents.create({
     amount: amountInPence,
-    currency: 'gbp',
+    currency: tenantCurrency,
     metadata: {
       type: 'package_purchase',
       package_id: pkg.id.toString(),

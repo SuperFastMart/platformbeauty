@@ -14,6 +14,7 @@ import BookingImportDialog from '../../components/BookingImportDialog';
 import BookingDetailDrawer from '../../components/BookingDetailDrawer';
 import WeekCalendar from '../../components/WeekCalendar';
 import useTerminology from '../../hooks/useTerminology';
+import useCurrency, { formatCurrency } from '../../hooks/useCurrency';
 
 const statusColors = {
   pending: 'warning',
@@ -27,6 +28,7 @@ const statusLabels = { pending_confirmation: 'Awaiting Card' };
 
 export default function Bookings() {
   const { person } = useTerminology();
+  const currency = useCurrency();
   const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -308,11 +310,11 @@ export default function Bookings() {
                       {b.start_time?.slice(0, 5)} - {b.end_time?.slice(0, 5)}
                     </Typography>
                     <Typography variant="body2" fontWeight={500}>
-                      £{parseFloat(b.total_price).toFixed(2)}
+                      {formatCurrency(b.total_price, currency)}
                     </Typography>
                     {b.discount_code && (
                       <Chip
-                        label={`${b.discount_code} -£${parseFloat(b.discount_amount).toFixed(2)}`}
+                        label={`${b.discount_code} -${formatCurrency(b.discount_amount, currency)}`}
                         size="small" color="success" variant="outlined"
                       />
                     )}
@@ -326,7 +328,7 @@ export default function Bookings() {
 
                   {parseFloat(b.deposit_amount) > 0 && (
                     <Chip
-                      label={`Deposit: £${parseFloat(b.deposit_amount).toFixed(2)} (${b.deposit_status})`}
+                      label={`Deposit: ${formatCurrency(b.deposit_amount, currency)} (${b.deposit_status})`}
                       size="small"
                       color={b.deposit_status === 'paid' ? 'info' : 'warning'}
                       sx={{ mt: 1 }}
@@ -473,7 +475,7 @@ export default function Bookings() {
                 {dayjs(completeBooking.date).format('D MMM YYYY')} at {completeBooking.start_time?.slice(0, 5)}
               </Typography>
               <Typography variant="h6" fontWeight={600}>
-                Charge: £{parseFloat(completeBooking.total_price).toFixed(2)}
+                Charge: {formatCurrency(completeBooking.total_price, currency)}
               </Typography>
               <Typography variant="caption" color="text.secondary">
                 The {person.toLowerCase()}'s saved card will be charged the full amount.

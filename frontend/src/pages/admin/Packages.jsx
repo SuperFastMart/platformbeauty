@@ -9,8 +9,10 @@ import { Add, Edit, Delete, Inventory2 } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import api from '../../api/client';
 import FeatureGate from '../../components/FeatureGate';
+import useCurrency, { formatCurrency } from '../../hooks/useCurrency';
 
 export default function Packages() {
+  const currency = useCurrency();
   const [packages, setPackages] = useState([]);
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -160,11 +162,11 @@ export default function Packages() {
 
                       <Box display="flex" alignItems="baseline" gap={1} mb={1}>
                         <Typography variant="h5" fontWeight={700} color="#D4A853">
-                          £{parseFloat(pkg.package_price).toFixed(2)}
+                          {formatCurrency(pkg.package_price, currency)}
                         </Typography>
                         {pkg.original_price && (
                           <Typography variant="body2" color="text.secondary" sx={{ textDecoration: 'line-through' }}>
-                            £{parseFloat(pkg.original_price).toFixed(2)}
+                            {formatCurrency(pkg.original_price, currency)}
                           </Typography>
                         )}
                         {savings > 0 && (
@@ -213,12 +215,12 @@ export default function Packages() {
               value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
             <Grid container spacing={2}>
               <Grid item xs={6}>
-                <TextField fullWidth label="Package Price (£)" type="number" margin="normal" required
+                <TextField fullWidth label={`Package Price (${currency.symbol})`} type="number" margin="normal" required
                   value={form.packagePrice} onChange={e => setForm(f => ({ ...f, packagePrice: e.target.value }))}
                   inputProps={{ min: 0, step: 0.01 }} />
               </Grid>
               <Grid item xs={6}>
-                <TextField fullWidth label="Original Price (£)" type="number" margin="normal"
+                <TextField fullWidth label={`Original Price (${currency.symbol})`} type="number" margin="normal"
                   helperText="Shows as strikethrough"
                   value={form.originalPrice} onChange={e => setForm(f => ({ ...f, originalPrice: e.target.value }))}
                   inputProps={{ min: 0, step: 0.01 }} />
@@ -247,7 +249,7 @@ export default function Packages() {
                 {services.filter(s => s.active !== false).map(s => (
                   <MenuItem key={s.id} value={s.id}>
                     <Checkbox checked={form.serviceIds.includes(s.id)} />
-                    <ListItemText primary={s.name} secondary={`£${parseFloat(s.price).toFixed(2)} · ${s.duration}min`} />
+                    <ListItemText primary={s.name} secondary={`${formatCurrency(s.price, currency)} · ${s.duration}min`} />
                   </MenuItem>
                 ))}
               </Select>
