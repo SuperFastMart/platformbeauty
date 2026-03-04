@@ -1,7 +1,14 @@
 import { useMemo } from 'react';
-import { Box, Typography, IconButton, Button, CircularProgress } from '@mui/material';
-import { ChevronLeft, ChevronRight } from '@mui/icons-material';
+import { Box, Typography, IconButton, Button, CircularProgress, Tooltip, Chip } from '@mui/material';
+import { ChevronLeft, ChevronRight, Repeat } from '@mui/icons-material';
 import dayjs from 'dayjs';
+
+const frequencyLabels = {
+  weekly: 'Weekly',
+  fortnightly: 'Fortnightly',
+  '4-weekly': 'Every 4 weeks',
+  monthly: 'Monthly',
+};
 
 const DAY_START = 7; // 7:00
 const DAY_END = 21; // 21:00
@@ -18,7 +25,7 @@ const statusColors = {
   pending_confirmation: { bg: '#e3f2fd', border: '#1976d2', text: '#0d47a1' },
 };
 
-export default function WeekCalendar({ bookings, weekStart, onBookingClick, onEmptySlotClick, loading }) {
+export default function WeekCalendar({ bookings, weekStart, onBookingClick, onEmptySlotClick, loading, categoryColors }) {
   const days = useMemo(() => {
     return Array.from({ length: 7 }, (_, i) => weekStart.add(i, 'day'));
   }, [weekStart]);
@@ -55,6 +62,10 @@ export default function WeekCalendar({ bookings, weekStart, onBookingClick, onEm
 
     const colors = statusColors[booking.status] || statusColors.confirmed;
 
+    const catColor = categoryColors && booking.primary_category
+      ? categoryColors[booking.primary_category]
+      : null;
+
     return {
       position: 'absolute',
       top: `${top}px`,
@@ -62,7 +73,7 @@ export default function WeekCalendar({ bookings, weekStart, onBookingClick, onEm
       left: '2px',
       right: '2px',
       bgcolor: colors.bg,
-      borderLeft: `3px solid ${colors.border}`,
+      borderLeft: catColor ? `4px solid ${catColor}` : `3px solid ${colors.border}`,
       borderRadius: '4px',
       px: 0.5,
       py: 0.25,
@@ -85,12 +96,43 @@ export default function WeekCalendar({ bookings, weekStart, onBookingClick, onEm
     if (onEmptySlotClick) onEmptySlotClick(day.format('YYYY-MM-DD'), time);
   };
 
+  // Compute active categories for legend
+  const activeCategories = useMemo(() => {
+    if (!categoryColors || Object.keys(categoryColors).length === 0) return [];
+    const usedCategories = new Set();
+    (bookings || []).forEach(b => {
+      if (b.primary_category && categoryColors[b.primary_category]) {
+        usedCategories.add(b.primary_category);
+      }
+    });
+    return Array.from(usedCategories).sort();
+  }, [bookings, categoryColors]);
+
   const today = dayjs().format('YYYY-MM-DD');
 
   return (
     <Box>
       {loading && (
         <Box display="flex" justifyContent="center" py={4}><CircularProgress size={24} /></Box>
+      )}
+
+      {activeCategories.length > 0 && (
+        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 1, px: 1 }}>
+          {activeCategories.map(cat => (
+            <Chip
+              key={cat}
+              size="small"
+              label={
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: categoryColors[cat], flexShrink: 0 }} />
+                  {cat}
+                </Box>
+              }
+              variant="outlined"
+              sx={{ fontSize: '0.7rem', height: 24 }}
+            />
+          ))}
+        </Box>
       )}
 
       <Box sx={{ display: 'grid', gridTemplateColumns: '60px repeat(7, 1fr)', border: '1px solid', borderColor: 'divider', borderRadius: '8px', overflow: 'hidden', bgcolor: 'background.paper' }}>
@@ -154,7 +196,12 @@ export default function WeekCalendar({ bookings, weekStart, onBookingClick, onEm
               {dayBookings.map(b => (
                 <Box key={b.id} sx={getBlockStyle(b)}
                   onClick={(e) => { e.stopPropagation(); onBookingClick?.(b.id); }}>
-                  <Typography variant="caption" fontWeight={600} noWrap sx={{ fontSize: '0.7rem', color: (statusColors[b.status] || statusColors.confirmed).text }}>
+                  {b.is_recurring && (
+                    <Tooltip title={`Recurring (${frequencyLabels[b.recurrence_frequency] || b.recurrence_frequency})`} arrow>
+                      <Repeat sx={{ fontSize: 12, position: 'absolute', top: 2, right: 2, opacity: 0.7, color: (statusColors[b.status] || statusColors.confirmed).text }} />
+                    </Tooltip>
+                  )}
+                  <Typography variant="caption" fontWeight={600} noWrap sx={{ fontSize: '0.7rem', color: (statusColors[b.status] || statusColors.confirmed).text, pr: b.is_recurring ? 1.5 : 0 }}>
                     {b.customer_name}
                   </Typography>
                   <Typography variant="caption" display="block" noWrap sx={{ fontSize: '0.6rem', color: (statusColors[b.status] || statusColors.confirmed).text, opacity: 0.8 }}>

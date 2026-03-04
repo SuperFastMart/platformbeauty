@@ -7,7 +7,7 @@ import {
 import {
   Close, Edit, Save, ArrowBack, ExpandMore, Check, CreditCard,
   CurrencyPound, CreditCardOff, ReportProblem, Event, AccessTime,
-  Person, ContentCut, AttachMoney, Send, Email, Sms
+  Person, ContentCut, AttachMoney, Send, Email, Sms, Repeat
 } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import api from '../api/client';
@@ -369,6 +369,19 @@ export default function BookingDetailDrawer({ open, bookingId, onClose, onUpdate
                   <Box mb={2.5}>
                     <Typography variant="subtitle2" color="text.secondary" mb={0.5}>Notes</Typography>
                     <Typography variant="body2" fontStyle="italic">{booking.notes}</Typography>
+                  </Box>
+                </>
+              )}
+
+              {/* Recurring info */}
+              {booking.is_recurring && (
+                <>
+                  <Divider sx={{ mb: 2.5 }} />
+                  <Box mb={2.5} display="flex" alignItems="center" gap={1}>
+                    <Repeat sx={{ fontSize: 18, color: 'text.secondary' }} />
+                    <Typography variant="body2" color="text.secondary">
+                      Recurring — {booking.recurring_frequency === 'weekly' ? 'Weekly' : booking.recurring_frequency === 'fortnightly' ? 'Fortnightly' : booking.recurring_frequency === '4-weekly' ? 'Every 4 weeks' : booking.recurring_frequency === 'monthly' ? 'Monthly' : booking.recurring_frequency}
+                    </Typography>
                   </Box>
                 </>
               )}

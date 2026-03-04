@@ -234,6 +234,7 @@ export default function AdminBookingCreate() {
         await api.post('/admin/bookings/admin-create-recurring', {
           ...basePayload,
           dates: allRecurringDates.map(d => ({ date: d, startTime: selectedSlot })),
+          frequency: recurringFrequency,
         });
       } else {
         await api.post('/admin/bookings/admin-create', {

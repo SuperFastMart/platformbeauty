@@ -9,8 +9,9 @@ import {
 } from '@mui/material';
 import {
   CloudUpload, CheckCircle, Error as ErrorIcon,
-  Warning, Download, Close,
+  Warning, Download, Close, Repeat,
 } from '@mui/icons-material';
+import RecurringDetectionDialog from './RecurringDetectionDialog';
 import dayjs from 'dayjs';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
 import api from '../api/client';
@@ -27,6 +28,7 @@ const HEADER_MAP = {
   slot: ['appt. slot', 'time slot', 'time', 'slot'],
   price: ['net sales', 'price', 'amount', 'total', 'cost', 'fee'],
   category: ['category', 'service category', 'group'],
+  booked_date: ['booked date', 'created', 'created at', 'booking date', 'date created', 'date booked'],
 };
 
 function detectMapping(headers) {
@@ -134,6 +136,7 @@ export default function BookingImportDialog({ open, onClose, onComplete }) {
   const [parseError, setParseError] = useState('');
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [enablingNotifs, setEnablingNotifs] = useState(false);
+  const [detectRecurringOpen, setDetectRecurringOpen] = useState(false);
 
   const mapped = useMemo(() => {
     if (!mapping.client) return [];
@@ -145,12 +148,14 @@ export default function BookingImportDialog({ open, onClose, onComplete }) {
       const rawSlot = mapping.slot ? String(raw[mapping.slot] || '') : '';
       const rawPrice = mapping.price ? raw[mapping.price] : '';
       const rawStatus = mapping.status ? String(raw[mapping.status] || '').trim().toLowerCase() : 'confirmed';
+      const rawBookedDate = mapping.booked_date ? String(raw[mapping.booked_date] || '') : '';
 
       const date = parseDate(rawDate);
       const duration = parseDuration(rawDuration);
       const price = parsePrice(rawPrice);
       const { start, end } = parseSlot(rawSlot);
       const status = STATUS_MAP[rawStatus] || 'confirmed';
+      const bookedDate = parseDate(rawBookedDate);
 
       // If no slot column, try separate start/end columns
       const startTime = start || (mapping.start_time ? String(raw[mapping.start_time] || '').trim().slice(0, 5) : null);
@@ -163,7 +168,7 @@ export default function BookingImportDialog({ open, onClose, onComplete }) {
 
       return {
         row: i + 1, client, service: serviceName, date, start_time: startTime, end_time: endTime,
-        duration: isNaN(duration) ? null : duration, price, status, rawStatus,
+        duration: isNaN(duration) ? null : duration, price, status, rawStatus, booked_date: bookedDate,
         errors, valid: errors.length === 0,
       };
     });
@@ -213,6 +218,7 @@ export default function BookingImportDialog({ open, onClose, onComplete }) {
         price: r.price,
         duration: r.duration,
         status: r.status,
+        booked_date: r.booked_date || null,
       }));
       const { data } = await api.post('/admin/bookings/import', { bookings: payload });
       setResults(data);
@@ -319,7 +325,8 @@ export default function BookingImportDialog({ open, onClose, onComplete }) {
                     <TableCell>Date</TableCell>
                     <TableCell>Time</TableCell>
                     <TableCell align="right">Price</TableCell>
-                    <TableCell>Booking Status</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell>Booked</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -347,11 +354,12 @@ export default function BookingImportDialog({ open, onClose, onComplete }) {
                         <Chip
                           label={r.status}
                           size="small"
-                          color={r.status === 'confirmed' ? 'success' : r.status === 'cancelled' ? 'default' : 'warning'}
+                          color={r.status === 'confirmed' ? 'success' : r.status === 'cancelled' ? 'default' : r.status === 'completed' ? 'info' : 'warning'}
                           variant="outlined"
                           sx={{ textTransform: 'capitalize' }}
                         />
                       </TableCell>
+                      <TableCell sx={{ fontSize: '0.75rem' }}>{r.booked_date || '—'}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -404,6 +412,23 @@ export default function BookingImportDialog({ open, onClose, onComplete }) {
                 )}
               </Box>
             )}
+            {results.imported > 0 && (
+              <Box sx={{ mt: 2, p: 2, bgcolor: 'action.hover', borderRadius: 2 }}>
+                <Typography variant="subtitle2" mb={1}>Recurring Appointments</Typography>
+                <Typography variant="body2" color="text.secondary" mb={1.5}>
+                  We can analyse your imported bookings to detect recurring patterns
+                  (e.g. same customer, same service, every 4 weeks) and optionally continue them.
+                </Typography>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<Repeat />}
+                  onClick={() => setDetectRecurringOpen(true)}
+                >
+                  Detect Recurring Patterns
+                </Button>
+              </Box>
+            )}
           </Box>
         )}
       </DialogContent>
@@ -420,6 +445,12 @@ export default function BookingImportDialog({ open, onClose, onComplete }) {
         )}
         {step === 2 && <Button variant="contained" onClick={handleDone}>Done</Button>}
       </DialogActions>
+
+      <RecurringDetectionDialog
+        open={detectRecurringOpen}
+        onClose={() => setDetectRecurringOpen(false)}
+        onComplete={() => {}}
+      />
     </Dialog>
   );
 }

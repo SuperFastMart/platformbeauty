@@ -926,7 +926,9 @@ router.delete('/service-forms/:id', asyncHandler(async (req, res) => {
 // GET /api/admin/bookings
 router.get('/bookings', asyncHandler(async (req, res) => {
   const { date, status, from, to } = req.query;
-  let sql = 'SELECT b.*, dc.code as discount_code, c.allergies as customer_allergies FROM bookings b LEFT JOIN discount_codes dc ON dc.id = b.discount_code_id LEFT JOIN customers c ON c.id = b.customer_id WHERE b.tenant_id = $1';
+  let sql = `SELECT b.*, dc.code as discount_code, c.allergies as customer_allergies,
+    (SELECT s.category FROM services s WHERE s.id = CAST(NULLIF(split_part(b.service_ids, ',', 1), '') AS INTEGER) AND s.tenant_id = b.tenant_id) AS primary_category
+    FROM bookings b LEFT JOIN discount_codes dc ON dc.id = b.discount_code_id LEFT JOIN customers c ON c.id = b.customer_id WHERE b.tenant_id = $1`;
   const params = [req.tenantId];
 
   if (date) {
@@ -2159,8 +2161,8 @@ router.post('/bookings/import', asyncHandler(async (req, res) => {
           customer_id, service_ids, service_names, date,
           start_time, end_time, total_price, total_duration,
           status, payment_status, created_by, booking_source, notes,
-          reminder_24h_sent, sms_24h_sent, sms_2h_sent
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, TRUE, TRUE, TRUE)`,
+          reminder_24h_sent, sms_24h_sent, sms_2h_sent, booked_date
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, TRUE, TRUE, TRUE, $18)`,
         [
           req.tenantId,
           row.customer_name.trim(),
@@ -2179,6 +2181,7 @@ router.post('/bookings/import', asyncHandler(async (req, res) => {
           'import',
           'import',
           row.notes?.trim() || null,
+          row.booked_date || null,
         ]
       );
       imported++;
@@ -2208,6 +2211,173 @@ router.post('/bookings/import/enable-notifications', asyncHandler(async (req, re
     [req.tenantId]
   );
   res.json({ updated: result.rowCount || 0 });
+}));
+
+// POST /api/admin/bookings/detect-recurring — analyse imported bookings for recurring patterns
+router.post('/bookings/detect-recurring', asyncHandler(async (req, res) => {
+  const bookings = await getAll(
+    `SELECT id, customer_name, service_names, date, start_time, end_time
+     FROM bookings
+     WHERE tenant_id = $1 AND booking_source = 'import' AND recurring_group_id IS NULL
+     ORDER BY customer_name, service_names, date`,
+    [req.tenantId]
+  );
+
+  // Group by customer + service + day of week + time
+  const groups = {};
+  for (const b of bookings) {
+    const dow = new Date(b.date).getDay();
+    const key = `${b.customer_name.toLowerCase()}|${(b.service_names || '').toLowerCase()}|${dow}|${b.start_time}`;
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(b);
+  }
+
+  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const patterns = [];
+
+  for (const [key, group] of Object.entries(groups)) {
+    if (group.length < 3) continue;
+
+    // Sort by date
+    group.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    // Calculate intervals between consecutive bookings
+    const intervals = [];
+    for (let i = 1; i < group.length; i++) {
+      const diff = Math.round((new Date(group[i].date) - new Date(group[i - 1].date)) / (1000 * 60 * 60 * 24));
+      intervals.push(diff);
+    }
+
+    // Detect frequency with tolerance
+    const freqMap = { 7: 'weekly', 14: 'fortnightly', 28: '4-weekly' };
+    let detectedFreq = null;
+    let bestMatch = 0;
+
+    for (const [target, name] of Object.entries(freqMap)) {
+      const t = parseInt(target);
+      const matches = intervals.filter(d => Math.abs(d - t) <= 2).length;
+      if (matches > bestMatch && matches / intervals.length >= 0.6) {
+        bestMatch = matches;
+        detectedFreq = name;
+      }
+    }
+
+    // Also check monthly (28-31 day intervals)
+    if (!detectedFreq) {
+      const monthlyMatches = intervals.filter(d => d >= 26 && d <= 33).length;
+      if (monthlyMatches / intervals.length >= 0.6) {
+        detectedFreq = 'monthly';
+        bestMatch = monthlyMatches;
+      }
+    }
+
+    if (!detectedFreq) continue;
+
+    const [, , dowStr, startTime] = key.split('|');
+    const lastDate = new Date(group[group.length - 1].date);
+
+    // Generate suggested next dates
+    const intervalDays = { weekly: 7, fortnightly: 14, '4-weekly': 28, monthly: 28 };
+    const step = intervalDays[detectedFreq];
+    const suggestedDates = [];
+    let nextDate = new Date(lastDate);
+    for (let i = 0; i < 4; i++) {
+      nextDate = new Date(nextDate.getTime() + step * 24 * 60 * 60 * 1000);
+      suggestedDates.push(nextDate.toISOString().split('T')[0]);
+    }
+
+    patterns.push({
+      customer_name: group[0].customer_name,
+      service_names: group[0].service_names || '',
+      day_of_week: dayNames[parseInt(dowStr)],
+      start_time: startTime,
+      end_time: group[0].end_time,
+      frequency: detectedFreq,
+      booking_count: group.length,
+      first_date: group[0].date,
+      last_date: group[group.length - 1].date,
+      booking_ids: group.map(b => b.id),
+      suggested_next_dates: suggestedDates,
+      confidence: Math.round((bestMatch / intervals.length) * 100),
+    });
+  }
+
+  patterns.sort((a, b) => b.booking_count - a.booking_count);
+  res.json({ patterns, total_analysed: bookings.length });
+}));
+
+// POST /api/admin/bookings/confirm-recurring — tag detected patterns and optionally create future bookings
+router.post('/bookings/confirm-recurring', asyncHandler(async (req, res) => {
+  const { patterns } = req.body;
+  if (!Array.isArray(patterns) || patterns.length === 0) {
+    return res.status(400).json({ error: 'patterns array is required' });
+  }
+
+  let tagged = 0, created = 0;
+
+  for (const pattern of patterns) {
+    const { booking_ids, frequency, continueForward, continueCount } = pattern;
+    if (!booking_ids?.length) continue;
+
+    const groupId = require('crypto').randomUUID();
+
+    // Tag existing bookings
+    const placeholders = booking_ids.map((_, i) => `$${i + 4}`).join(',');
+    const result = await run(
+      `UPDATE bookings SET recurring_group_id = $1, is_recurring = TRUE, recurring_frequency = $2
+       WHERE tenant_id = $3 AND id IN (${placeholders})`,
+      [groupId, frequency, req.tenantId, ...booking_ids]
+    );
+    tagged += result.rowCount || 0;
+
+    // Create future bookings if requested
+    if (continueForward && continueCount > 0) {
+      // Get the last booking in the series for template data
+      const lastBooking = await getOne(
+        'SELECT * FROM bookings WHERE id = $1 AND tenant_id = $2',
+        [booking_ids[booking_ids.length - 1], req.tenantId]
+      );
+      if (!lastBooking) continue;
+
+      const intervalDays = { weekly: 7, fortnightly: 14, '4-weekly': 28, monthly: 28 };
+      const step = intervalDays[frequency] || 28;
+      let nextDate = new Date(lastBooking.date);
+
+      for (let i = 0; i < Math.min(continueCount, 52); i++) {
+        nextDate = new Date(nextDate.getTime() + step * 24 * 60 * 60 * 1000);
+        const dateStr = nextDate.toISOString().split('T')[0];
+
+        try {
+          await run(
+            `INSERT INTO bookings (tenant_id, customer_id, customer_name, customer_email, customer_phone,
+               service_ids, service_names, date, start_time, end_time,
+               total_price, total_duration, status, created_by,
+               recurring_group_id, is_recurring, recurring_frequency)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'confirmed', 'admin', $13, TRUE, $14)`,
+            [req.tenantId, lastBooking.customer_id, lastBooking.customer_name,
+             lastBooking.customer_email, lastBooking.customer_phone,
+             lastBooking.service_ids, lastBooking.service_names,
+             dateStr, lastBooking.start_time, lastBooking.end_time,
+             lastBooking.total_price, lastBooking.total_duration,
+             groupId, frequency]
+          );
+
+          // Mark time slots unavailable
+          await run(
+            `UPDATE time_slots SET is_available = FALSE
+             WHERE tenant_id = $1 AND date = $2 AND start_time >= $3 AND start_time < $4`,
+            [req.tenantId, dateStr, lastBooking.start_time, lastBooking.end_time]
+          );
+
+          created++;
+        } catch (err) {
+          if (err.code !== '23505') throw err; // Skip duplicates silently
+        }
+      }
+    }
+  }
+
+  res.json({ tagged, created, message: `${tagged} bookings tagged as recurring, ${created} future bookings created` });
 }));
 
 // GET /api/admin/customers/filter — filter customers with dynamic criteria
@@ -2608,7 +2778,7 @@ router.post('/bookings/admin-create', asyncHandler(async (req, res) => {
 
 // POST /api/admin/bookings/admin-create-recurring
 router.post('/bookings/admin-create-recurring', asyncHandler(async (req, res) => {
-  const { customerId, customerName, customerEmail, customerPhone, serviceIds, dates, notes, priceOverride } = req.body;
+  const { customerId, customerName, customerEmail, customerPhone, serviceIds, dates, notes, priceOverride, frequency } = req.body;
 
   if (!serviceIds?.length || !dates?.length) {
     return res.status(400).json({ error: 'serviceIds and dates are required' });
@@ -2649,6 +2819,8 @@ router.post('/bookings/admin-create-recurring', asyncHandler(async (req, res) =>
   const totalDuration = services.reduce((sum, s) => sum + s.duration, 0);
   const serviceNames = services.map(s => s.name).join(', ');
 
+  const groupId = require('crypto').randomUUID();
+
   const created = [];
   for (const entry of dates) {
     const entryDate = entry.date || entry;
@@ -2660,12 +2832,13 @@ router.post('/bookings/admin-create-recurring', asyncHandler(async (req, res) =>
     const booking = await getOne(
       `INSERT INTO bookings (tenant_id, customer_id, customer_name, customer_email, customer_phone,
          service_ids, service_names, date, start_time, end_time,
-         total_price, total_duration, status, notes, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'confirmed', $13, 'admin')
+         total_price, total_duration, status, notes, created_by,
+         recurring_group_id, is_recurring, recurring_frequency)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'confirmed', $13, 'admin', $14, TRUE, $15)
        RETURNING *`,
       [req.tenantId, customer.id, customer.name, customer.email, customer.phone || null,
        serviceIds.join(','), serviceNames, entryDate, entryTime, endTime,
-       totalPrice, totalDuration, notes || null]
+       totalPrice, totalDuration, notes || null, groupId, frequency || 'weekly']
     );
 
     await run(

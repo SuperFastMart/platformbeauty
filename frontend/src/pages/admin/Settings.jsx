@@ -1192,6 +1192,47 @@ export default function Settings() {
             )}
           </CardContent>
         </Card>
+
+        <Card sx={{ mt: 2 }}>
+          <CardContent>
+            <Typography variant="subtitle1" fontWeight={600} mb={1}>Calendar Category Colours</Typography>
+            <Typography variant="body2" color="text.secondary" mb={2}>
+              Customise the colour for each service category shown on the week calendar view.
+              Colours are auto-assigned when new categories appear.
+            </Typography>
+            {(() => {
+              const colors = typeof siteSettings.category_colors === 'string'
+                ? (() => { try { return JSON.parse(siteSettings.category_colors); } catch { return {}; } })()
+                : (siteSettings.category_colors || {});
+              const cats = Object.keys(colors);
+              if (cats.length === 0) {
+                return (
+                  <Typography variant="body2" color="text.secondary" fontStyle="italic">
+                    No categories yet. Category colours will appear here once you have services with categories and view the week calendar.
+                  </Typography>
+                );
+              }
+              return (
+                <Box display="flex" flexDirection="column" gap={1.5}>
+                  {cats.map(cat => (
+                    <Box key={cat} display="flex" alignItems="center" gap={2}>
+                      <input
+                        type="color"
+                        value={colors[cat]}
+                        onChange={e => {
+                          const updated = { ...colors, [cat]: e.target.value };
+                          setSiteSettings(s => ({ ...s, category_colors: updated }));
+                        }}
+                        style={{ width: 36, height: 28, border: 'none', cursor: 'pointer', borderRadius: 4 }}
+                      />
+                      <Typography variant="body2" fontWeight={500}>{cat}</Typography>
+                    </Box>
+                  ))}
+                </Box>
+              );
+            })()}
+          </CardContent>
+        </Card>
       </TabPanel>
 
       {/* Payments / Stripe */}

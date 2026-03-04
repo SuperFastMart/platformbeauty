@@ -5,13 +5,14 @@ import {
   Dialog, DialogTitle, DialogContent, DialogActions, Divider,
   useMediaQuery, useTheme, Tooltip
 } from '@mui/material';
-import { Check, Close, SwapHoriz, CurrencyPound, CreditCardOff, CreditCard, Add, Upload, ReportProblem, ListAlt, CalendarMonth, ChevronLeft, ChevronRight } from '@mui/icons-material';
+import { Check, Close, SwapHoriz, CurrencyPound, CreditCardOff, CreditCard, Add, Upload, ReportProblem, ListAlt, CalendarMonth, ChevronLeft, ChevronRight, Repeat } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api/client';
 import NoShowChargeModal from '../../components/NoShowChargeModal';
 import BookingImportDialog from '../../components/BookingImportDialog';
 import BookingDetailDrawer from '../../components/BookingDetailDrawer';
+import RecurringDetectionDialog from '../../components/RecurringDetectionDialog';
 import WeekCalendar from '../../components/WeekCalendar';
 import useTerminology from '../../hooks/useTerminology';
 import useCurrency, { formatCurrency } from '../../hooks/useCurrency';
@@ -60,6 +61,7 @@ export default function Bookings() {
 
   // Import dialog
   const [importOpen, setImportOpen] = useState(false);
+  const [detectRecurringOpen, setDetectRecurringOpen] = useState(false);
 
   // Booking detail drawer
   const [selectedBookingId, setSelectedBookingId] = useState(null);
@@ -67,6 +69,38 @@ export default function Bookings() {
   // Calendar view
   const [viewMode, setViewMode] = useState('list');
   const [weekStart, setWeekStart] = useState(dayjs().startOf('isoWeek'));
+  const [categoryColors, setCategoryColors] = useState({});
+
+  // Load category colours from site settings
+  useEffect(() => {
+    api.get('/admin/site-settings').then(({ data }) => {
+      if (data.category_colors) {
+        const colors = typeof data.category_colors === 'string' ? JSON.parse(data.category_colors) : data.category_colors;
+        setCategoryColors(colors);
+      }
+    }).catch(() => {});
+  }, []);
+
+  // Auto-assign colours to new categories from bookings
+  useEffect(() => {
+    if (bookings.length === 0) return;
+    const palette = ['#E91E63', '#2196F3', '#9C27B0', '#FF9800', '#4CAF50', '#00BCD4', '#F44336', '#3F51B5', '#8BC34A', '#FF5722'];
+    const categories = [...new Set(bookings.map(b => b.primary_category).filter(Boolean))];
+    const newColors = { ...categoryColors };
+    let changed = false;
+    let nextIdx = Object.keys(newColors).length;
+    for (const cat of categories) {
+      if (!newColors[cat]) {
+        newColors[cat] = palette[nextIdx % palette.length];
+        nextIdx++;
+        changed = true;
+      }
+    }
+    if (changed) {
+      setCategoryColors(newColors);
+      api.put('/admin/site-settings', { category_colors: newColors }).catch(() => {});
+    }
+  }, [bookings]);
 
   const fetchBookings = () => {
     setLoading(true);
@@ -176,6 +210,9 @@ export default function Bookings() {
           <Button variant="outlined" size="small" startIcon={<Upload />} onClick={() => setImportOpen(true)}>
             Import
           </Button>
+          <Button variant="outlined" size="small" startIcon={<Repeat />} onClick={() => setDetectRecurringOpen(true)}>
+            {isMobile ? '' : 'Recurring'}
+          </Button>
           <Button variant="contained" startIcon={<Add />} onClick={() => navigate('/admin/bookings/create')} sx={{ minHeight: 44 }}>
             {isMobile ? 'New' : 'Create Booking'}
           </Button>
@@ -264,6 +301,7 @@ export default function Bookings() {
           bookings={bookings}
           weekStart={weekStart}
           loading={loading}
+          categoryColors={categoryColors}
           onBookingClick={(id) => setSelectedBookingId(id)}
           onEmptySlotClick={(date, time) => navigate('/admin/bookings/create', { state: { date, time } })}
         />
@@ -506,6 +544,13 @@ export default function Bookings() {
       <BookingImportDialog
         open={importOpen}
         onClose={() => setImportOpen(false)}
+        onComplete={fetchBookings}
+      />
+
+      {/* Recurring Detection Dialog */}
+      <RecurringDetectionDialog
+        open={detectRecurringOpen}
+        onClose={() => setDetectRecurringOpen(false)}
         onComplete={fetchBookings}
       />
 

@@ -1217,6 +1217,17 @@ const migrations = [
     `
   },
 
+  {
+    name: '071_recurring_bookings',
+    sql: `
+      ALTER TABLE bookings ADD COLUMN IF NOT EXISTS recurring_group_id UUID;
+      ALTER TABLE bookings ADD COLUMN IF NOT EXISTS is_recurring BOOLEAN DEFAULT FALSE;
+      ALTER TABLE bookings ADD COLUMN IF NOT EXISTS recurring_frequency VARCHAR(20);
+      ALTER TABLE bookings ADD COLUMN IF NOT EXISTS booked_date TIMESTAMP;
+      CREATE INDEX IF NOT EXISTS idx_bookings_recurring_group ON bookings(recurring_group_id) WHERE recurring_group_id IS NOT NULL;
+    `
+  },
+
   // ============================================
   // MIGRATION TRACKING
   // ============================================
