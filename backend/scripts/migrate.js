@@ -1243,6 +1243,24 @@ const migrations = [
     `
   },
 
+  {
+    name: '074_tenant_images',
+    sql: `
+      CREATE TABLE IF NOT EXISTS tenant_images (
+        id SERIAL PRIMARY KEY,
+        tenant_id INTEGER NOT NULL REFERENCES tenants(id),
+        image_key VARCHAR(100) NOT NULL,
+        file_name VARCHAR(255) NOT NULL,
+        mime_type VARCHAR(100) NOT NULL,
+        file_size INTEGER NOT NULL,
+        file_data BYTEA NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(tenant_id, image_key)
+      );
+      CREATE INDEX IF NOT EXISTS idx_tenant_images_tenant ON tenant_images(tenant_id);
+    `
+  },
+
   // ============================================
   // MIGRATION TRACKING
   // ============================================

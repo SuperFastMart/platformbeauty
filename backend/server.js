@@ -74,6 +74,9 @@ app.use('/api/admin/reports', reportsRoutes);
 const messagesRoutes = require('./routes/messages');
 app.use('/api/admin/messages', messagesRoutes);
 
+const { adminRouter: imageAdminRoutes, publicRouter: imagePublicRoutes } = require('./routes/tenantImages');
+app.use('/api/admin/images', imageAdminRoutes);
+app.use('/api/t/:tenant/images', imagePublicRoutes);
 const { adminRouter: siteSettingsAdminRoutes, publicRouter: siteSettingsPublicRoutes } = require('./routes/siteSettings');
 app.use('/api/admin/site-settings', siteSettingsAdminRoutes);
 app.use('/api/t/:tenant/settings', siteSettingsPublicRoutes);

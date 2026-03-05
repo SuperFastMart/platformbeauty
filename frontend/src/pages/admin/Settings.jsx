@@ -7,6 +7,7 @@ import {
 } from '@mui/material';
 import { Save, CreditCard, Store, Palette, Info, Schedule, Code, ContentCopy, Share, Delete, Add, DragIndicator, Gavel, Subscriptions, OpenInNew, CheckCircle, Security, Lock, LockOpen, AccountBalance, Sms, CalendarMonth, Refresh } from '@mui/icons-material';
 import api from '../../api/client';
+import ImageUpload from '../../components/ImageUpload';
 import useTerminology, { updateTerminology } from '../../hooks/useTerminology';
 import useCurrency, { updateCurrency, formatCurrency } from '../../hooks/useCurrency';
 
@@ -1049,26 +1050,17 @@ export default function Settings() {
               onChange={e => setSiteSettings(s => ({ ...s, about_text: e.target.value }))}
               placeholder="Tell your customers about your business..." />
 
-            <Typography variant="subtitle1" fontWeight={600} mt={4} mb={1}>Profile Image</Typography>
-            <Typography variant="body2" color="text.secondary" mb={2}>
-              Add a profile photo to create a personal "Meet Me" section on your booking page.
-            </Typography>
-            <TextField fullWidth label="Profile Image URL" margin="normal"
-              value={siteSettings.about_profile_image_url || ''}
-              onChange={e => setSiteSettings(s => ({ ...s, about_profile_image_url: e.target.value }))}
-              placeholder="https://example.com/your-photo.jpg"
-              helperText="Direct link to a square profile photo (PNG, JPG)" />
-            {siteSettings.about_profile_image_url && (
-              <Box mt={1} mb={2}>
-                <Box
-                  component="img"
-                  src={siteSettings.about_profile_image_url}
-                  alt="Profile preview"
-                  sx={{ width: 80, height: 80, borderRadius: '50%', objectFit: 'cover', border: '2px solid', borderColor: 'primary.main' }}
-                  onError={(e) => { e.target.style.display = 'none'; }}
-                />
-              </Box>
-            )}
+            <Box mt={4}>
+              <ImageUpload
+                imageKey="profile"
+                label="Profile Image"
+                shape="circle"
+                currentUrl={siteSettings.about_profile_image_url || ''}
+                onUpload={(url) => setSiteSettings(s => ({ ...s, about_profile_image_url: url }))}
+                onRemove={() => setSiteSettings(s => ({ ...s, about_profile_image_url: '' }))}
+                helperText="Square photo, max 5MB. Recommended: 400x400px"
+              />
+            </Box>
 
             <Typography variant="subtitle1" fontWeight={600} mt={4} mb={1}>Map & Directions</Typography>
             <FormControlLabel
@@ -1178,26 +1170,102 @@ export default function Settings() {
         <Card>
           <CardContent>
             <Typography variant="subtitle1" fontWeight={600} mb={2}>Branding</Typography>
-            <TextField fullWidth label="Logo URL" margin="normal"
-              value={settings.logo_url || ''} onChange={handleChange('logo_url')}
-              helperText="Direct link to your logo image (PNG, JPG)" />
-            {settings.logo_url && (
-              <Box mt={1} mb={2}>
-                <img src={settings.logo_url} alt="Logo preview"
-                  style={{ maxHeight: 80, borderRadius: 4 }}
-                  onError={(e) => { e.target.style.display = 'none'; }} />
+            <ImageUpload
+              imageKey="logo"
+              label="Business Logo"
+              shape="rectangle"
+              currentUrl={settings.logo_url || ''}
+              onUpload={(url) => setSettings(s => ({ ...s, logo_url: url }))}
+              onRemove={() => setSettings(s => ({ ...s, logo_url: '' }))}
+              helperText="PNG or JPG, max 5MB. Recommended: 400x400px or larger"
+            />
+            
+            <Divider sx={{ my: 3 }} />
+            <Typography variant="subtitle1" fontWeight={600} mb={1}>Colour Palette</Typography>
+            <Typography variant="body2" color="text.secondary" mb={2}>
+              Choose a pre-defined palette or customise individual colours for your public booking page.
+            </Typography>
+
+            <Grid container spacing={1.5} mb={3}>
+              {[
+                { name: 'Classic Beauty', primary: '#8B2635', secondary: '#D4A853', bg: '#fafafa', text: '#1a1a1a', card: '#ffffff' },
+                { name: 'Modern Minimal', primary: '#2D3436', secondary: '#00B894', bg: '#ffffff', text: '#2D3436', card: '#ffffff' },
+                { name: 'Soft Rose', primary: '#B76E79', secondary: '#E8C4C8', bg: '#FFF5F5', text: '#4A2C2A', card: '#ffffff' },
+                { name: 'Ocean Calm', primary: '#1A535C', secondary: '#4ECDC4', bg: '#F7FFF7', text: '#1A535C', card: '#ffffff' },
+                { name: 'Midnight Luxe', primary: '#2C3E50', secondary: '#F39C12', bg: '#FDFEFE', text: '#2C3E50', card: '#ffffff' },
+                { name: 'Forest & Gold', primary: '#2D5016', secondary: '#C9A227', bg: '#F9F6F0', text: '#2D3319', card: '#ffffff' },
+                { name: 'Lavender Dream', primary: '#6C5B7B', secondary: '#C06C84', bg: '#F8F4FF', text: '#3D2C4C', card: '#ffffff' },
+                { name: 'Warm Earth', primary: '#8D6E63', secondary: '#FFAB91', bg: '#FBF8F5', text: '#3E2723', card: '#ffffff' },
+              ].map(p => (
+                <Grid item xs={6} sm={3} key={p.name}>
+                  <Box
+                    onClick={() => {
+                      setSettings(s => ({ ...s, primary_color: p.primary }));
+                      setSiteSettings(s => ({
+                        ...s,
+                        colour_palette: p.name,
+                        colour_secondary: p.secondary,
+                        colour_background: p.bg,
+                        colour_text: p.text,
+                        colour_card_bg: p.card,
+                      }));
+                    }}
+                    sx={{
+                      cursor: 'pointer',
+                      border: '2px solid',
+                      borderColor: siteSettings.colour_palette === p.name ? 'primary.main' : 'divider',
+                      borderRadius: 2,
+                      p: 1.5,
+                      transition: 'all 0.2s',
+                      '&:hover': { borderColor: 'primary.main', transform: 'translateY(-2px)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' },
+                    }}
+                  >
+                    <Box display="flex" gap={0.5} mb={1}>
+                      {[p.primary, p.secondary, p.bg, p.text].map((col, i) => (
+                        <Box key={i} sx={{ width: 20, height: 20, borderRadius: '50%', bgcolor: col, border: '1px solid rgba(0,0,0,0.1)' }} />
+                      ))}
+                    </Box>
+                    <Typography variant="caption" fontWeight={600} noWrap>{p.name}</Typography>
+                  </Box>
+                </Grid>
+              ))}
+            </Grid>
+
+            <Typography variant="subtitle2" fontWeight={600} mb={1.5}>Custom Colours</Typography>
+            <Grid container spacing={2}>
+              {[
+                { label: 'Primary', val: settings.primary_color || '#8B2635', onChange: (v) => { setSettings(s => ({ ...s, primary_color: v })); setSiteSettings(s => ({ ...s, colour_palette: 'custom' })); } },
+                { label: 'Accent', val: siteSettings.colour_secondary || '#D4A853', onChange: (v) => setSiteSettings(s => ({ ...s, colour_secondary: v, colour_palette: 'custom' })) },
+                { label: 'Background', val: siteSettings.colour_background || '#fafafa', onChange: (v) => setSiteSettings(s => ({ ...s, colour_background: v, colour_palette: 'custom' })) },
+                { label: 'Text', val: siteSettings.colour_text || '#1a1a1a', onChange: (v) => setSiteSettings(s => ({ ...s, colour_text: v, colour_palette: 'custom' })) },
+                { label: 'Card Background', val: siteSettings.colour_card_bg || '#ffffff', onChange: (v) => setSiteSettings(s => ({ ...s, colour_card_bg: v, colour_palette: 'custom' })) },
+              ].map(({ label, val, onChange }) => (
+                <Grid item xs={6} sm={4} key={label}>
+                  <Typography variant="caption" color="text.secondary">{label}</Typography>
+                  <Box display="flex" alignItems="center" gap={1}>
+                    <input type="color" value={val} onChange={e => onChange(e.target.value)}
+                      style={{ width: 36, height: 28, border: 'none', cursor: 'pointer', borderRadius: 4 }} />
+                    <Typography variant="caption">{val}</Typography>
+                  </Box>
+                </Grid>
+              ))}
+            </Grid>
+
+            <Box mt={3} p={2} borderRadius={2} sx={{ bgcolor: siteSettings.colour_background || '#fafafa', border: '1px solid', borderColor: 'divider' }}>
+              <Typography variant="caption" color="text.secondary" mb={1} display="block">Live Preview</Typography>
+              <Box display="flex" gap={2} alignItems="center" flexWrap="wrap">
+                <Button variant="contained" size="small" sx={{ bgcolor: settings.primary_color || '#8B2635', '&:hover': { bgcolor: settings.primary_color || '#8B2635' } }}>
+                  Primary Button
+                </Button>
+                <Button variant="contained" size="small" sx={{ bgcolor: siteSettings.colour_secondary || '#D4A853', color: '#1a1a1a', '&:hover': { bgcolor: siteSettings.colour_secondary || '#D4A853' } }}>
+                  Accent Button
+                </Button>
+                <Box sx={{ bgcolor: siteSettings.colour_card_bg || '#ffffff', p: 1.5, borderRadius: 1.5, boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>
+                  <Typography variant="body2" sx={{ color: siteSettings.colour_text || '#1a1a1a' }}>Sample card text</Typography>
+                </Box>
               </Box>
-            )}
-            <TextField fullWidth label="Primary Color" margin="normal" type="color"
-              value={settings.primary_color || '#8B2635'} onChange={handleChange('primary_color')}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <Box sx={{ width: 24, height: 24, borderRadius: 1, bgcolor: settings.primary_color }} />
-                  </InputAdornment>
-                ),
-              }}
-              helperText="Used for buttons, headers, and your public booking page" />
+            </Box>
+
           </CardContent>
         </Card>
 
@@ -1258,23 +1326,15 @@ export default function Settings() {
 
             {siteSettings.header_display === 'logo' && (
               <>
-                <TextField fullWidth label="Header Logo URL" margin="normal"
-                  value={siteSettings.header_logo_url || ''}
-                  onChange={e => setSiteSettings(s => ({ ...s, header_logo_url: e.target.value }))}
-                  placeholder="https://example.com/your-header-logo.png"
-                  helperText="Recommended: transparent PNG, max height ~80px. This replaces the text name on your booking page."
+                <ImageUpload
+                  imageKey="header_logo"
+                  label="Header Logo"
+                  shape="rectangle"
+                  currentUrl={siteSettings.header_logo_url || ''}
+                  onUpload={(url) => setSiteSettings(s => ({ ...s, header_logo_url: url }))}
+                  onRemove={() => setSiteSettings(s => ({ ...s, header_logo_url: '' }))}
+                  helperText="Transparent PNG recommended, max 5MB. Ideal size: 400x100px"
                 />
-                {siteSettings.header_logo_url && (
-                  <Box mt={2} p={2} border={1} borderColor="divider" borderRadius={2} textAlign="center" bgcolor="grey.50">
-                    <img
-                      src={siteSettings.header_logo_url}
-                      alt="Header logo preview"
-                      style={{ maxHeight: 80, maxWidth: '100%' }}
-                      onError={(e) => { e.target.style.display = 'none'; }}
-                    />
-                    <Typography variant="caption" color="text.secondary" display="block" mt={1}>Preview</Typography>
-                  </Box>
-                )}
               </>
             )}
           </CardContent>

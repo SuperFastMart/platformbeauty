@@ -80,11 +80,17 @@ export default function TenantPublicLayout() {
   const lightPrimary = isLightColor(primaryColor);
 
   // Create a tenant-specific theme based on their primary color
+  const accentColor = siteSettings.colour_secondary || '#D4A853';
+  const bgColor = siteSettings.colour_background || '#fafafa';
+  const textColor = siteSettings.colour_text || undefined;
+  const cardBg = siteSettings.colour_card_bg || '#ffffff';
+
   const tenantTheme = createTheme({
     palette: {
       primary: { main: lightPrimary ? '#333333' : primaryColor },
-      secondary: { main: lightPrimary ? primaryColor : '#D4A853' },
-      background: { default: '#fafafa' },
+      secondary: { main: lightPrimary ? primaryColor : accentColor },
+      background: { default: bgColor, paper: cardBg },
+      ...(textColor ? { text: { primary: textColor } } : {}),
     },
     typography: {
       fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
