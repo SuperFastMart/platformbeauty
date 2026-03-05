@@ -998,8 +998,23 @@ export default function Settings() {
             <Typography variant="caption" color="text.secondary" display="block" ml={6}>
               When disabled, the Messages tab is hidden from the customer portal.
             </Typography>
+            <Divider sx={{ my: 2 }} />
+            <Typography variant="subtitle2" color="text.secondary" mb={1}>
+              Public Page Sections
+            </Typography>
+            <Typography variant="body2" color="text.secondary" mb={2}>
+              Choose which sections appear on your public booking page.
+            </Typography>
+            <Box display="flex" flexDirection="column">
+              <FormControlLabel control={<Switch checked={siteSettings.section_gift_cards !== false && siteSettings.section_gift_cards !== 'false'} onChange={(e) => setSiteSettings(s => ({ ...s, section_gift_cards: e.target.checked }))} />} label="Gift Cards" />
+              <FormControlLabel control={<Switch checked={siteSettings.section_packages !== false && siteSettings.section_packages !== 'false'} onChange={(e) => setSiteSettings(s => ({ ...s, section_packages: e.target.checked }))} />} label="Packages" />
+              <FormControlLabel control={<Switch checked={siteSettings.section_memberships !== false && siteSettings.section_memberships !== 'false'} onChange={(e) => setSiteSettings(s => ({ ...s, section_memberships: e.target.checked }))} />} label="Memberships" />
+              <FormControlLabel control={<Switch checked={siteSettings.section_hours !== false && siteSettings.section_hours !== 'false'} onChange={(e) => setSiteSettings(s => ({ ...s, section_hours: e.target.checked }))} />} label="Opening Hours" />
+              <FormControlLabel control={<Switch checked={siteSettings.section_reviews !== false && siteSettings.section_reviews !== 'false'} onChange={(e) => setSiteSettings(s => ({ ...s, section_reviews: e.target.checked }))} />} label="Customer Reviews" />
+            </Box>
           </CardContent>
         </Card>
+        <CalendarSyncSection />
       </TabPanel>
 
       {/* About */}
