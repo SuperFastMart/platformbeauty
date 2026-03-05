@@ -764,28 +764,43 @@ function CalendarSyncSection() {
   if (!token) return <CircularProgress size={20} />;
 
   return (
-    <Box>
-      <Box display="flex" gap={1} mb={1.5}>
-        <TextField
-          fullWidth size="small" value={feedUrl} InputProps={{ readOnly: true }}
-          sx={{ '& input': { fontSize: '0.8rem', fontFamily: 'monospace' } }}
-        />
-        <Button variant="outlined" size="small" startIcon={<ContentCopy />} onClick={handleCopy} sx={{ minWidth: 90 }}>
-          {copied ? 'Copied!' : 'Copy'}
-        </Button>
-      </Box>
-      <Box display="flex" alignItems="center" gap={1} mb={2}>
-        <Button size="small" startIcon={<Refresh />} onClick={handleRegenerate} disabled={regenerating}>
-          {regenerating ? 'Regenerating...' : 'Regenerate URL'}
-        </Button>
-      </Box>
-      <Typography variant="caption" color="text.secondary" display="block">
-        Regenerating will invalidate any existing calendar subscriptions.
-      </Typography>
-      <Typography variant="caption" color="text.secondary" display="block" mt={1}>
-        <strong>Google Calendar:</strong> Other calendars → From URL &nbsp;|&nbsp; <strong>Apple Calendar:</strong> File → New Calendar Subscription
-      </Typography>
-    </Box>
+    <Card sx={{ mt: 2 }}>
+      <CardContent>
+        <Box display="flex" alignItems="center" gap={1} mb={1}>
+          <CalendarMonth color="primary" />
+          <Typography variant="subtitle1" fontWeight={600}>Calendar Sync</Typography>
+        </Box>
+        <Typography variant="body2" color="text.secondary" mb={2}>
+          Subscribe to your bookings in Google Calendar, Apple Calendar, or Outlook using this URL.
+        </Typography>
+        <Box display="flex" gap={1} mb={1.5}>
+          <TextField
+            fullWidth size="small" value={feedUrl} InputProps={{ readOnly: true }}
+            label="Calendar Feed URL"
+            sx={{ '& input': { fontSize: '0.8rem', fontFamily: 'monospace' } }}
+          />
+          <Button variant="outlined" size="small" startIcon={<ContentCopy />} onClick={handleCopy} sx={{ minWidth: 90 }}>
+            {copied ? 'Copied!' : 'Copy'}
+          </Button>
+        </Box>
+        <Typography variant="body2" color="text.secondary" mb={2}>
+          <strong>How to use:</strong> Copy the URL above and add it as a calendar subscription in your preferred app.
+        </Typography>
+        <Box sx={{ bgcolor: 'grey.50', borderRadius: 1, p: 1.5, mb: 2 }}>
+          <Typography variant="caption" display="block" mb={0.5}><strong>Google Calendar:</strong> Settings → Add other calendar → From URL</Typography>
+          <Typography variant="caption" display="block" mb={0.5}><strong>Apple Calendar:</strong> File → New Calendar Subscription</Typography>
+          <Typography variant="caption" display="block"><strong>Outlook:</strong> Add calendar → Subscribe from web</Typography>
+        </Box>
+        <Box display="flex" alignItems="center" gap={1}>
+          <Button size="small" color="warning" startIcon={<Refresh />} onClick={handleRegenerate} disabled={regenerating}>
+            {regenerating ? 'Regenerating...' : 'Regenerate URL'}
+          </Button>
+          <Typography variant="caption" color="text.secondary">
+            This will invalidate any existing subscriptions.
+          </Typography>
+        </Box>
+      </CardContent>
+    </Card>
   );
 }
 
