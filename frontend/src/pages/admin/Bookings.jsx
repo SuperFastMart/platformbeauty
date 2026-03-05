@@ -317,7 +317,8 @@ export default function Bookings() {
         >
           <ToggleButton value="all" sx={{ px: { xs: 1, sm: 2 } }}>All Sources</ToggleButton>
           <ToggleButton value="import" sx={{ px: { xs: 1, sm: 2 } }}>Imported</ToggleButton>
-          <ToggleButton value="direct" sx={{ px: { xs: 1, sm: 2 } }}>Direct</ToggleButton>
+          <ToggleButton value="manual" sx={{ px: { xs: 1, sm: 2 } }}>Manual</ToggleButton>
+          <ToggleButton value="online" sx={{ px: { xs: 1, sm: 2 } }}>Online</ToggleButton>
         </ToggleButtonGroup>
         <Button variant="text" size="small" onClick={() => { setDate(''); setStatusFilter('all'); setSourceFilter('all'); }}>
           Clear Filters

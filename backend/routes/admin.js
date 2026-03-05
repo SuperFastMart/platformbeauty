@@ -946,9 +946,12 @@ router.get('/bookings', asyncHandler(async (req, res) => {
     sql += ` AND b.status = $${params.length}`;
   }
 
-  if (source) {
-    params.push(source);
-    sql += ` AND b.booking_source = $${params.length}`;
+  if (source === 'import') {
+    sql += ` AND b.booking_source = 'import'`;
+  } else if (source === 'manual') {
+    sql += ` AND (b.booking_source IN ('walk_in', 'admin') OR b.booking_source IS NULL)`;
+  } else if (source === 'online') {
+    sql += ` AND b.booking_source IN ('direct', 'returning')`;
   }
 
   // Default to today onwards when no date filters applied (upcoming first)
