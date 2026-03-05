@@ -86,6 +86,10 @@ app.use('/api/t/:tenant/reviews', reviewsPublicRoutes);
 const calendarRoutes = require('./routes/calendar');
 app.use('/api/admin/calendar', calendarRoutes);
 
+// --- Public calendar feed (no auth, token-based) ---
+const calendarPublicRoutes = require('./routes/calendarPublic');
+app.use('/api/cal', calendarPublicRoutes);
+
 // --- Sprint 6: Support tickets ---
 const { tenantAuth, platformAuth } = require('./middleware/auth');
 const { adminRouter: supportAdminRoutes, platformRouter: supportPlatformRoutes } = require('./routes/support');

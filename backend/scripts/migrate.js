@@ -1228,6 +1228,14 @@ const migrations = [
     `
   },
 
+  {
+    name: '072_calendar_feed_token',
+    sql: `
+      ALTER TABLE tenants ADD COLUMN IF NOT EXISTS calendar_feed_token UUID DEFAULT gen_random_uuid();
+      UPDATE tenants SET calendar_feed_token = gen_random_uuid() WHERE calendar_feed_token IS NULL;
+    `
+  },
+
   // ============================================
   // MIGRATION TRACKING
   // ============================================

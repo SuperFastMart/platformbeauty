@@ -194,7 +194,7 @@ export default function TenantLanding() {
       )}
 
       {/* Business Hours */}
-      {businessHours && (
+      {businessHours && siteSettings.section_hours !== false && siteSettings.section_hours !== 'false' && (
         <Box mb={4}>
           <Typography variant="h6" fontWeight={600} mb={2} display="flex" alignItems="center" gap={1}>
             <Schedule fontSize="small" /> Opening Hours
@@ -400,7 +400,7 @@ export default function TenantLanding() {
       </Box>
 
       {/* Reviews Section */}
-      {reviews.length > 0 && (
+      {reviews.length > 0 && siteSettings.section_reviews !== false && siteSettings.section_reviews !== 'false' && (
         <Box mb={4}>
           <Divider sx={{ mb: 3 }} />
           <Typography variant="h6" fontWeight={600} mb={2} display="flex" alignItems="center" gap={1}>

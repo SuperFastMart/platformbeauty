@@ -114,6 +114,8 @@ publicRouter.get('/', asyncHandler(async (req, res) => {
     'policy_cancellation', 'policy_noshow', 'policy_privacy', 'policy_terms',
     'messaging_enabled',
     'currency',
+    'section_gift_cards', 'section_packages', 'section_memberships',
+    'section_hours', 'section_reviews',
   ];
 
   const placeholders = publicKeys.map((_, i) => `$${i + 2}`).join(',');

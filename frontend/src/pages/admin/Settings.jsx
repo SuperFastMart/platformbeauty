@@ -3,9 +3,9 @@ import { useSearchParams } from 'react-router-dom';
 import {
   Box, Typography, Card, CardContent, TextField, Button, Tabs, Tab,
   Snackbar, Alert, CircularProgress, InputAdornment, Chip, Switch, FormControlLabel, Grid, MenuItem,
-  useMediaQuery, useTheme, LinearProgress, FormControl, InputLabel, Select
+  useMediaQuery, useTheme, LinearProgress, FormControl, InputLabel, Select, Divider
 } from '@mui/material';
-import { Save, CreditCard, Store, Palette, Info, Schedule, Code, ContentCopy, Share, Delete, Add, DragIndicator, Gavel, Subscriptions, OpenInNew, CheckCircle, Security, Lock, LockOpen, AccountBalance, Sms } from '@mui/icons-material';
+import { Save, CreditCard, Store, Palette, Info, Schedule, Code, ContentCopy, Share, Delete, Add, DragIndicator, Gavel, Subscriptions, OpenInNew, CheckCircle, Security, Lock, LockOpen, AccountBalance, Sms, CalendarMonth, Refresh } from '@mui/icons-material';
 import api from '../../api/client';
 import useTerminology, { updateTerminology } from '../../hooks/useTerminology';
 import useCurrency, { updateCurrency, formatCurrency } from '../../hooks/useCurrency';
@@ -728,6 +728,63 @@ function SmsTab({ snackbar, setSnackbar }) {
           )}
         </CardContent>
       </Card>
+    </Box>
+  );
+}
+
+function CalendarSyncSection() {
+  const [token, setToken] = useState(null);
+  const [copied, setCopied] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
+
+  useEffect(() => {
+    api.get('/admin/calendar/feed-url')
+      .then(({ data }) => setToken(data.token))
+      .catch(() => {});
+  }, []);
+
+  const feedUrl = token ? `${window.location.origin}/api/cal/${token}` : '';
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(feedUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleRegenerate = async () => {
+    setRegenerating(true);
+    try {
+      const { data } = await api.post('/admin/calendar/regenerate-token');
+      setToken(data.token);
+    } catch {} finally {
+      setRegenerating(false);
+    }
+  };
+
+  if (!token) return <CircularProgress size={20} />;
+
+  return (
+    <Box>
+      <Box display="flex" gap={1} mb={1.5}>
+        <TextField
+          fullWidth size="small" value={feedUrl} InputProps={{ readOnly: true }}
+          sx={{ '& input': { fontSize: '0.8rem', fontFamily: 'monospace' } }}
+        />
+        <Button variant="outlined" size="small" startIcon={<ContentCopy />} onClick={handleCopy} sx={{ minWidth: 90 }}>
+          {copied ? 'Copied!' : 'Copy'}
+        </Button>
+      </Box>
+      <Box display="flex" alignItems="center" gap={1} mb={2}>
+        <Button size="small" startIcon={<Refresh />} onClick={handleRegenerate} disabled={regenerating}>
+          {regenerating ? 'Regenerating...' : 'Regenerate URL'}
+        </Button>
+      </Box>
+      <Typography variant="caption" color="text.secondary" display="block">
+        Regenerating will invalidate any existing calendar subscriptions.
+      </Typography>
+      <Typography variant="caption" color="text.secondary" display="block" mt={1}>
+        <strong>Google Calendar:</strong> Other calendars → From URL &nbsp;|&nbsp; <strong>Apple Calendar:</strong> File → New Calendar Subscription
+      </Typography>
     </Box>
   );
 }
