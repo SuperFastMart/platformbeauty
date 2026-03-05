@@ -63,6 +63,28 @@ adminRouter.delete('/:id', asyncHandler(async (req, res) => {
   res.json({ message: 'Deleted' });
 }));
 
+// POST /api/admin/reviews/import — bulk import reviews
+adminRouter.post('/import', asyncHandler(async (req, res) => {
+  const { reviews: reviewsData } = req.body;
+
+  if (!Array.isArray(reviewsData) || reviewsData.length === 0) {
+    return res.status(400).json({ error: 'reviews array is required' });
+  }
+
+  let imported = 0;
+  for (const r of reviewsData) {
+    if (!r.customer_name || !r.rating) continue;
+
+    await run(
+      `INSERT INTO reviews (tenant_id, customer_name, rating, comment, visible, created_at)
+       VALUES ($1, $2, $3, $4, TRUE, $5)`,
+      [req.tenantId, r.customer_name.trim(), Math.min(5, Math.max(1, parseInt(r.rating))), r.comment || null, r.date || new Date().toISOString()]
+    );
+    imported++;
+  }
+
+  res.json({ imported });
+}));
 // ============================================
 // PUBLIC ROUTES (behind resolveTenant)
 // ============================================

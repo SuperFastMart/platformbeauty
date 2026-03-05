@@ -6,6 +6,9 @@ function validateUrl(url) {
     return { valid: false, error: 'URL protocol not allowed' };
   }
 
+  // Allow relative paths for uploaded images
+  if (lower.startsWith('/api/')) return { valid: true };
+
   try {
     const parsed = new URL(url);
     if (!['http:', 'https:'].includes(parsed.protocol)) {
