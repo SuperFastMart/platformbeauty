@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react';
 import {
   Box, Typography, Card, CardContent, Grid, TextField, Button,
   Table, TableHead, TableRow, TableCell, TableBody, Chip, Divider,
-  TableContainer, useMediaQuery, useTheme
+  TableContainer, useMediaQuery, useTheme, Collapse
 } from '@mui/material';
-import { Download } from '@mui/icons-material';
+import { Download, KeyboardArrowDown, KeyboardArrowRight } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import api from '../../api/client';
 import useSubscriptionTier from '../../hooks/useSubscriptionTier';
@@ -31,6 +31,7 @@ export default function Reports() {
   const [atRisk, setAtRisk] = useState([]);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
+  const [expandedCats, setExpandedCats] = useState({});
 
   const handleExport = async () => {
     setExporting(true);
@@ -205,38 +206,82 @@ export default function Reports() {
             </Card>
           )}
 
-          {/* Service performance */}
+          {/* Service performance — grouped by category */}
           <Card sx={{ mb: 3 }}>
             <CardContent>
               <Typography variant="h6" fontWeight={600} mb={2}>Service Performance</Typography>
               {services.length === 0 ? (
                 <Typography color="text.secondary">No data for this period</Typography>
-              ) : (
-                <TableContainer>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>Service</TableCell>
-                        {!isMobile && <TableCell>Category</TableCell>}
-                        <TableCell align="right">Price</TableCell>
-                        <TableCell align="right">Bookings</TableCell>
-                        <TableCell align="right">Revenue</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {services.map(s => (
-                        <TableRow key={s.id}>
-                          <TableCell>{s.name}</TableCell>
-                          {!isMobile && <TableCell>{s.category || '—'}</TableCell>}
-                          <TableCell align="right">{formatCurrency(s.service_price, currency)}</TableCell>
-                          <TableCell align="right">{s.booking_count}</TableCell>
-                          <TableCell align="right">{formatCurrency(s.estimated_revenue, currency)}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              )}
+              ) : (() => {
+                const grouped = {};
+                services.forEach(s => {
+                  const cat = s.category || 'Uncategorised';
+                  if (!grouped[cat]) grouped[cat] = [];
+                  grouped[cat].push(s);
+                });
+                const catNames = Object.keys(grouped).sort((a, b) => a === 'Uncategorised' ? 1 : b === 'Uncategorised' ? -1 : a.localeCompare(b));
+                return catNames.map(cat => {
+                  const items = grouped[cat];
+                  const totalBookings = items.reduce((sum, s) => sum + parseInt(s.booking_count), 0);
+                  const totalRevenue = items.reduce((sum, s) => sum + s.estimated_revenue, 0);
+                  const isOpen = !!expandedCats[cat];
+                  return (
+                    <Box key={cat} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, mb: 1.5, overflow: 'hidden' }}>
+                      <Box
+                        onClick={() => setExpandedCats(prev => ({ ...prev, [cat]: !prev[cat] }))}
+                        sx={{
+                          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                          px: 2, py: 1.5, cursor: 'pointer',
+                          bgcolor: isOpen ? 'action.hover' : 'transparent',
+                          '&:hover': { bgcolor: 'action.hover' },
+                          transition: 'background-color 0.2s',
+                        }}
+                      >
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          {isOpen ? <KeyboardArrowDown fontSize="small" /> : <KeyboardArrowRight fontSize="small" />}
+                          <Typography fontWeight={600}>{cat}</Typography>
+                          <Chip label={`${items.length} service${items.length !== 1 ? 's' : ''}`} size="small" sx={{ height: 22, fontSize: 11 }} />
+                        </Box>
+                        <Box sx={{ display: 'flex', gap: isMobile ? 2 : 4, alignItems: 'center' }}>
+                          <Box textAlign="right">
+                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: 11 }}>Bookings</Typography>
+                            <Typography fontWeight={600}>{totalBookings}</Typography>
+                          </Box>
+                          <Box textAlign="right">
+                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: 11 }}>Revenue</Typography>
+                            <Typography fontWeight={600}>{formatCurrency(totalRevenue, currency)}</Typography>
+                          </Box>
+                        </Box>
+                      </Box>
+                      <Collapse in={isOpen}>
+                        <Divider />
+                        <TableContainer>
+                          <Table size="small">
+                            <TableHead>
+                              <TableRow>
+                                <TableCell>Service</TableCell>
+                                <TableCell align="right">Price</TableCell>
+                                <TableCell align="right">Bookings</TableCell>
+                                <TableCell align="right">Revenue</TableCell>
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {items.map(s => (
+                                <TableRow key={s.id} sx={{ '&:last-child td': { borderBottom: 0 } }}>
+                                  <TableCell>{s.name}</TableCell>
+                                  <TableCell align="right">{formatCurrency(s.service_price, currency)}</TableCell>
+                                  <TableCell align="right">{s.booking_count}</TableCell>
+                                  <TableCell align="right">{formatCurrency(s.estimated_revenue, currency)}</TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </TableContainer>
+                      </Collapse>
+                    </Box>
+                  );
+                });
+              })()}
             </CardContent>
           </Card>
 
