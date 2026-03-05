@@ -251,53 +251,43 @@ export default function TenantLanding() {
       )}
 
       {/* Quick links — Gift Cards, Packages & Memberships */}
-      <Grid container spacing={2} mb={3}>
-        <Grid item xs={4}>
-          <Card
-            onClick={() => navigate(`/t/${slug}/gift-cards`)}
-            sx={{
-              cursor: 'pointer', textAlign: 'center', p: 2,
-              border: '1px solid', borderColor: 'divider',
-              transition: 'all 0.3s ease',
-              '&:hover': { borderColor: '#D4A853', boxShadow: '0 4px 16px rgba(212, 168, 83, 0.15)', transform: 'translateY(-2px)' },
-            }}
-          >
-            <CardGiftcard sx={{ fontSize: 32, color: '#D4A853', mb: 0.5 }} />
-            <Typography variant="body2" fontWeight={600}>Gift Cards</Typography>
-            <Typography variant="caption" color="text.secondary">Send to a friend</Typography>
-          </Card>
-        </Grid>
-        <Grid item xs={4}>
-          <Card
-            onClick={() => navigate(`/t/${slug}/packages`)}
-            sx={{
-              cursor: 'pointer', textAlign: 'center', p: 2,
-              border: '1px solid', borderColor: 'divider',
-              transition: 'all 0.3s ease',
-              '&:hover': { borderColor: '#D4A853', boxShadow: '0 4px 16px rgba(212, 168, 83, 0.15)', transform: 'translateY(-2px)' },
-            }}
-          >
-            <Inventory2 sx={{ fontSize: 32, color: '#D4A853', mb: 0.5 }} />
-            <Typography variant="body2" fontWeight={600}>Packages</Typography>
-            <Typography variant="caption" color="text.secondary">Save on sessions</Typography>
-          </Card>
-        </Grid>
-        <Grid item xs={4}>
-          <Card
-            onClick={() => navigate(`/t/${slug}/memberships`)}
-            sx={{
-              cursor: 'pointer', textAlign: 'center', p: 2,
-              border: '1px solid', borderColor: 'divider',
-              transition: 'all 0.3s ease',
-              '&:hover': { borderColor: '#D4A853', boxShadow: '0 4px 16px rgba(212, 168, 83, 0.15)', transform: 'translateY(-2px)' },
-            }}
-          >
-            <WorkspacePremium sx={{ fontSize: 32, color: '#D4A853', mb: 0.5 }} />
-            <Typography variant="body2" fontWeight={600}>Memberships</Typography>
-            <Typography variant="caption" color="text.secondary">Join a plan</Typography>
-          </Card>
-        </Grid>
-      </Grid>
+      {(() => {
+        const showGC = siteSettings.section_gift_cards !== false && siteSettings.section_gift_cards !== 'false';
+        const showPK = siteSettings.section_packages !== false && siteSettings.section_packages !== 'false';
+        const showMB = siteSettings.section_memberships !== false && siteSettings.section_memberships !== 'false';
+        if (!showGC && !showPK && !showMB) return null;
+        return (
+          <Grid container spacing={2} mb={3}>
+            {showGC && (
+              <Grid item xs>
+                <Card onClick={() => navigate(`/t/${slug}/gift-cards`)} sx={{ cursor: 'pointer', textAlign: 'center', p: 2, border: '1px solid', borderColor: 'divider', transition: 'all 0.3s ease', '&:hover': { borderColor: '#D4A853', boxShadow: '0 4px 16px rgba(212, 168, 83, 0.15)', transform: 'translateY(-2px)' } }}>
+                  <CardGiftcard sx={{ fontSize: 32, color: '#D4A853', mb: 0.5 }} />
+                  <Typography variant="body2" fontWeight={600}>Gift Cards</Typography>
+                  <Typography variant="caption" color="text.secondary">Send to a friend</Typography>
+                </Card>
+              </Grid>
+            )}
+            {showPK && (
+              <Grid item xs>
+                <Card onClick={() => navigate(`/t/${slug}/packages`)} sx={{ cursor: 'pointer', textAlign: 'center', p: 2, border: '1px solid', borderColor: 'divider', transition: 'all 0.3s ease', '&:hover': { borderColor: '#D4A853', boxShadow: '0 4px 16px rgba(212, 168, 83, 0.15)', transform: 'translateY(-2px)' } }}>
+                  <Inventory2 sx={{ fontSize: 32, color: '#D4A853', mb: 0.5 }} />
+                  <Typography variant="body2" fontWeight={600}>Packages</Typography>
+                  <Typography variant="caption" color="text.secondary">Save on sessions</Typography>
+                </Card>
+              </Grid>
+            )}
+            {showMB && (
+              <Grid item xs>
+                <Card onClick={() => navigate(`/t/${slug}/memberships`)} sx={{ cursor: 'pointer', textAlign: 'center', p: 2, border: '1px solid', borderColor: 'divider', transition: 'all 0.3s ease', '&:hover': { borderColor: '#D4A853', boxShadow: '0 4px 16px rgba(212, 168, 83, 0.15)', transform: 'translateY(-2px)' } }}>
+                  <WorkspacePremium sx={{ fontSize: 32, color: '#D4A853', mb: 0.5 }} />
+                  <Typography variant="body2" fontWeight={600}>Memberships</Typography>
+                  <Typography variant="caption" color="text.secondary">Join a plan</Typography>
+                </Card>
+              </Grid>
+            )}
+          </Grid>
+        );
+      })()}
 
       {/* Services by category */}
       <Typography variant="h6" fontWeight={600} mb={2}>Our Services</Typography>
