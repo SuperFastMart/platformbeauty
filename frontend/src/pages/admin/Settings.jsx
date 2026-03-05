@@ -8,6 +8,7 @@ import {
 import { Save, CreditCard, Store, Palette, Info, Schedule, Code, ContentCopy, Share, Delete, Add, DragIndicator, Gavel, Subscriptions, OpenInNew, CheckCircle, Security, Lock, LockOpen, AccountBalance, Sms, CalendarMonth, Refresh } from '@mui/icons-material';
 import api from '../../api/client';
 import ImageUpload from '../../components/ImageUpload';
+import SectionReorder from '../../components/SectionReorder';
 import useTerminology, { updateTerminology } from '../../hooks/useTerminology';
 import useCurrency, { updateCurrency, formatCurrency } from '../../hooks/useCurrency';
 
@@ -1281,6 +1282,96 @@ export default function Settings() {
                 )}
               </Box>
             ))}
+          </CardContent>
+        </Card>
+        <Typography variant="h6" fontWeight={600} mt={3} mb={2}>Social Media Links</Typography>
+        <Card>
+          <CardContent>
+            <Typography variant="subtitle1" fontWeight={600} mb={1}>Social Profiles</Typography>
+            <Typography variant="body2" color="text.secondary" mb={2}>
+              Add your social media profile URLs. These will display as icon links on your public page.
+            </Typography>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth size="small" label="Facebook"
+                  placeholder="https://facebook.com/yourbusiness"
+                  value={siteSettings.social_facebook || ''}
+                  onChange={e => setSiteSettings(s => ({ ...s, social_facebook: e.target.value }))}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth size="small" label="Instagram"
+                  placeholder="https://instagram.com/yourbusiness"
+                  value={siteSettings.social_instagram || ''}
+                  onChange={e => setSiteSettings(s => ({ ...s, social_instagram: e.target.value }))}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth size="small" label="TikTok"
+                  placeholder="https://tiktok.com/@yourbusiness"
+                  value={siteSettings.social_tiktok || ''}
+                  onChange={e => setSiteSettings(s => ({ ...s, social_tiktok: e.target.value }))}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth size="small" label="X (Twitter)"
+                  placeholder="https://x.com/yourbusiness"
+                  value={siteSettings.social_twitter || ''}
+                  onChange={e => setSiteSettings(s => ({ ...s, social_twitter: e.target.value }))}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth size="small" label="YouTube"
+                  placeholder="https://youtube.com/@yourbusiness"
+                  value={siteSettings.social_youtube || ''}
+                  onChange={e => setSiteSettings(s => ({ ...s, social_youtube: e.target.value }))}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  fullWidth size="small" label="LinkedIn"
+                  placeholder="https://linkedin.com/company/yourbusiness"
+                  value={siteSettings.social_linkedin || ''}
+                  onChange={e => setSiteSettings(s => ({ ...s, social_linkedin: e.target.value }))}
+                />
+              </Grid>
+            </Grid>
+          </CardContent>
+        </Card>
+        <Typography variant="h6" fontWeight={600} mt={3} mb={2}>Banner Image</Typography>
+        <Card>
+          <CardContent>
+            <Typography variant="subtitle1" fontWeight={600} mb={1}>Banner</Typography>
+            <Typography variant="body2" color="text.secondary" mb={2}>
+              Upload a banner image for your public booking page. Recommended: 1200x400px, landscape format.
+            </Typography>
+            <ImageUpload
+              imageKey="banner"
+              label="Banner Image"
+              shape="rectangle"
+              currentUrl={siteSettings.banner_image_url}
+              onUpload={(url) => setSiteSettings(s => ({ ...s, banner_image_url: url }))}
+              onRemove={() => setSiteSettings(s => ({ ...s, banner_image_url: '' }))}
+              helperText="Max 5MB. PNG, JPEG or WebP."
+            />
+          </CardContent>
+        </Card>
+        <Typography variant="h6" fontWeight={600} mt={3} mb={2}>Storefront Layout</Typography>
+        <Card>
+          <CardContent>
+            <Typography variant="subtitle1" fontWeight={600} mb={1}>Section Order</Typography>
+            <Typography variant="body2" color="text.secondary" mb={2}>
+              Drag sections up or down to change the order they appear on your public booking page.
+            </Typography>
+            <SectionReorder
+              order={siteSettings.section_order || ['header', 'banner', 'about', 'hours', 'social', 'sociallinks', 'quicklinks', 'services', 'reviews', 'policies']}
+              onChange={(newOrder) => setSiteSettings(s => ({ ...s, section_order: newOrder }))}
+            />
           </CardContent>
         </Card>
         <Typography variant="h6" fontWeight={600} mt={3} mb={2}>Section Visibility</Typography>

@@ -1557,7 +1557,8 @@ router.get('/dashboard', asyncHandler(async (req, res) => {
     ),
     getOne(
       `SELECT COALESCE(SUM(total_price), 0) as total FROM bookings
-       WHERE tenant_id = $1 AND date >= CURRENT_DATE - INTERVAL '7 days' AND status = 'confirmed'`,
+       WHERE tenant_id = $1 AND date >= CURRENT_DATE - INTERVAL '7 days' AND status = 'confirmed'
+       AND (booking_source IS NULL OR booking_source != 'import')`,
       [req.tenantId]
     ),
     getOne(

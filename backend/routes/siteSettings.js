@@ -117,6 +117,8 @@ publicRouter.get('/', asyncHandler(async (req, res) => {
     'section_gift_cards', 'section_packages', 'section_memberships',
     'section_hours', 'section_reviews',
     'colour_palette', 'colour_secondary', 'colour_background', 'colour_text', 'colour_card_bg',
+    'section_order',
+    'social_facebook', 'social_instagram', 'social_tiktok', 'social_twitter', 'social_youtube', 'social_linkedin',
   ];
 
   const placeholders = publicKeys.map((_, i) => `$${i + 2}`).join(',');
