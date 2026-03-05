@@ -943,12 +943,12 @@ router.get('/bookings', asyncHandler(async (req, res) => {
 
   if (status) {
     params.push(status);
-    sql += ` AND b.status = ${params.length}`;
+    sql += ` AND b.status = $${params.length}`;
   }
 
   if (source) {
     params.push(source);
-    sql += ` AND b.booking_source = ${params.length}`;
+    sql += ` AND b.booking_source = $${params.length}`;
   }
 
   // Default to today onwards when no date filters applied (upcoming first)
