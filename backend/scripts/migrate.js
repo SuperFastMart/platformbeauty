@@ -1236,6 +1236,13 @@ const migrations = [
     `
   },
 
+  {
+    name: '073_customer_calendar_token',
+    sql: `
+      ALTER TABLE customers ADD COLUMN IF NOT EXISTS calendar_feed_token UUID;
+    `
+  },
+
   // ============================================
   // MIGRATION TRACKING
   // ============================================

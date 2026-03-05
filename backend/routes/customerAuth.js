@@ -435,4 +435,25 @@ router.delete('/booking-request/:id', asyncHandler(async (req, res) => {
   res.json({ message: 'Request cancelled' });
 }));
 
+
+// GET customer calendar feed token
+router.get('/calendar-feed-url', asyncHandler(async (req, res) => {
+  let customer = await getOne('SELECT calendar_feed_token FROM customers WHERE id = $1', [req.customer.id]);
+  if (!customer?.calendar_feed_token) {
+    customer = await getOne(
+      'UPDATE customers SET calendar_feed_token = gen_random_uuid() WHERE id = $1 RETURNING calendar_feed_token',
+      [req.customer.id]
+    );
+  }
+  res.json({ token: customer.calendar_feed_token });
+}));
+
+// POST regenerate customer calendar feed token
+router.post('/calendar-regenerate-token', asyncHandler(async (req, res) => {
+  const customer = await getOne(
+    'UPDATE customers SET calendar_feed_token = gen_random_uuid() WHERE id = $1 RETURNING calendar_feed_token',
+    [req.customer.id]
+  );
+  res.json({ token: customer.calendar_feed_token });
+}));
 module.exports = router;

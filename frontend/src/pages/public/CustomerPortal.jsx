@@ -6,7 +6,7 @@ import {
   DialogContent, DialogActions, Radio, RadioGroup, FormControlLabel,
   Snackbar, IconButton, Switch, Grid,
 } from '@mui/material';
-import { Logout, Edit, EmojiEvents, Search, DeleteForever } from '@mui/icons-material';
+import { Logout, Edit, EmojiEvents, Search, DeleteForever, ContentCopy, CalendarMonth as CalendarIcon, Refresh } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import api from '../../api/client';
 import { useTenant } from './TenantPublicLayout';
@@ -15,6 +15,57 @@ import CalendarGrid from '../../components/CalendarGrid';
 import TimeSlotPicker from '../../components/TimeSlotPicker';
 import ConfirmDialog from '../../components/ConfirmDialog';
 
+
+function CustomerCalendarSync({ slug }) {
+  const [token, setToken] = useState(null);
+  const [copied, setCopied] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
+  const doAuth = async (method, url, data) => {
+    const t = localStorage.getItem("customer_token");
+    return api({ method, url, data, headers: { Authorization: `Bearer ${t}` } });
+  };
+  useEffect(() => {
+    doAuth("get", `/t/${slug}/auth/calendar-feed-url`)
+      .then(({ data }) => setToken(data.token))
+      .catch(() => {});
+  }, []);
+  const feedUrl = token ? `${window.location.origin}/api/cal/customer/${token}` : "";
+  const handleCopy = () => {
+    navigator.clipboard.writeText(feedUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  const handleRegenerate = async () => {
+    setRegenerating(true);
+    try {
+      const { data } = await doAuth("post", `/t/${slug}/auth/calendar-regenerate-token`);
+      setToken(data.token);
+    } catch {} finally { setRegenerating(false); }
+  };
+  if (!token) return <CircularProgress size={20} />;
+  return (
+    <Box>
+      <Box display="flex" gap={1} mb={1.5}>
+        <TextField fullWidth size="small" value={feedUrl} InputProps={{ readOnly: true }} label="Calendar Feed URL"
+          sx={{ "& input": { fontSize: "0.8rem", fontFamily: "monospace" } }} />
+        <Button variant="outlined" size="small" startIcon={<ContentCopy />} onClick={handleCopy} sx={{ minWidth: 90 }}>
+          {copied ? "Copied!" : "Copy"}
+        </Button>
+      </Box>
+      <Box sx={{ bgcolor: "grey.50", borderRadius: 1, p: 1.5, mb: 2 }}>
+        <Typography variant="caption" display="block" mb={0.5}><strong>Google Calendar:</strong> Settings &rarr; Add other calendar &rarr; From URL</Typography>
+        <Typography variant="caption" display="block" mb={0.5}><strong>Apple Calendar:</strong> File &rarr; New Calendar Subscription</Typography>
+        <Typography variant="caption" display="block"><strong>Outlook:</strong> Add calendar &rarr; Subscribe from web</Typography>
+      </Box>
+      <Box display="flex" alignItems="center" gap={1}>
+        <Button size="small" color="warning" startIcon={<Refresh />} onClick={handleRegenerate} disabled={regenerating}>
+          {regenerating ? "Regenerating..." : "Regenerate URL"}
+        </Button>
+        <Typography variant="caption" color="text.secondary">This will invalidate existing subscriptions.</Typography>
+      </Box>
+    </Box>
+  );
+}
 const statusColors = {
   pending: 'warning', confirmed: 'success', rejected: 'error',
   cancelled: 'default', completed: 'info',
@@ -728,6 +779,19 @@ export default function CustomerPortal() {
               }
               label="Allow business to view my account"
             />
+          </CardContent>
+        </Card>
+
+        <Card sx={{ mb: 3 }}>
+          <CardContent>
+            <Box display="flex" alignItems="center" gap={1} mb={1}>
+              <CalendarIcon color="primary" />
+              <Typography fontWeight={600}>Calendar Sync</Typography>
+            </Box>
+            <Typography variant="body2" color="text.secondary" mb={2}>
+              Subscribe to your upcoming bookings in Google Calendar, Apple Calendar, or Outlook.
+            </Typography>
+            <CustomerCalendarSync slug={slug} />
           </CardContent>
         </Card>
 
