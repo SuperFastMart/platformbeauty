@@ -26,25 +26,55 @@ dayjs.extend(relativeTime);
 
 const DRAWER_WIDTH = 240;
 
-const navItems = [
-  { label: 'Dashboard', path: '/admin/dashboard', icon: <DashboardIcon /> },
-  { label: 'Services', path: '/admin/services', icon: <ContentCut /> },
-  { label: 'Bookings', path: '/admin/bookings', icon: <CalendarMonth /> },
-  { label: 'Waitlist', path: '/admin/waitlist', icon: <HourglassEmpty /> },
-  { label: 'Availability', path: '/admin/slot-templates', icon: <Schedule /> },
-  { label: 'Create Booking', path: '/admin/bookings/create', icon: <AddCircle /> },
-  { label: 'Customers', path: '/admin/customers', icon: <People /> },
-  { label: 'Forms', path: '/admin/consultation-forms', icon: <Assignment /> },
-  { label: 'Loyalty', path: '/admin/loyalty', icon: <LoyaltyIcon /> },
-  { label: 'Discount Codes', path: '/admin/discount-codes', icon: <LocalOffer /> },
-  { label: 'Gift Cards', path: '/admin/gift-cards', icon: <CardGiftcard /> },
-  { label: 'Packages', path: '/admin/packages', icon: <Inventory2 /> },
-  { label: 'Memberships', path: '/admin/memberships', icon: <WorkspacePremium /> },
-  { label: 'Reports', path: '/admin/reports', icon: <Assessment /> },
-  { label: 'Messages', path: '/admin/messages', icon: <Chat /> },
-  { label: 'Reviews', path: '/admin/reviews', icon: <StarBorder /> },
-  { label: 'Support', path: '/admin/support', icon: <SupportAgent /> },
-  { label: 'Settings', path: '/admin/settings', icon: <SettingsIcon /> },
+const navGroups = [
+  {
+    label: null,
+    items: [
+      { label: 'Dashboard', path: '/admin/dashboard', icon: <DashboardIcon /> },
+    ],
+  },
+  {
+    label: 'Bookings',
+    items: [
+      { label: 'Bookings', path: '/admin/bookings', icon: <CalendarMonth /> },
+      { label: 'Create Booking', path: '/admin/bookings/create', icon: <AddCircle /> },
+      { label: 'Waitlist', path: '/admin/waitlist', icon: <HourglassEmpty /> },
+      { label: 'Availability', path: '/admin/slot-templates', icon: <Schedule /> },
+    ],
+  },
+  {
+    label: 'Customers',
+    items: [
+      { label: 'Customers', path: '/admin/customers', icon: <People /> },
+      { label: 'Messages', path: '/admin/messages', icon: <Chat /> },
+      { label: 'Reviews', path: '/admin/reviews', icon: <StarBorder /> },
+      { label: 'Forms', path: '/admin/consultation-forms', icon: <Assignment /> },
+    ],
+  },
+  {
+    label: 'Products',
+    items: [
+      { label: 'Services', path: '/admin/services', icon: <ContentCut /> },
+      { label: 'Loyalty', path: '/admin/loyalty', icon: <LoyaltyIcon /> },
+      { label: 'Discount Codes', path: '/admin/discount-codes', icon: <LocalOffer /> },
+      { label: 'Gift Cards', path: '/admin/gift-cards', icon: <CardGiftcard /> },
+      { label: 'Packages', path: '/admin/packages', icon: <Inventory2 /> },
+      { label: 'Memberships', path: '/admin/memberships', icon: <WorkspacePremium /> },
+    ],
+  },
+  {
+    label: 'Insights',
+    items: [
+      { label: 'Reports', path: '/admin/reports', icon: <Assessment /> },
+    ],
+  },
+  {
+    label: null,
+    items: [
+      { label: 'Support', path: '/admin/support', icon: <SupportAgent /> },
+      { label: 'Settings', path: '/admin/settings', icon: <SettingsIcon /> },
+    ],
+  },
 ];
 
 export default function AdminLayout() {
@@ -235,21 +265,31 @@ export default function AdminLayout() {
   const drawerContent = (
     <>
       {!isMobile && <Toolbar />}
-      <List>
-        {navItems.map((item) => (
-          <ListItemButton
-            key={item.path}
-            selected={location.pathname === item.path || location.pathname.startsWith(item.path + '/')}
-            onClick={() => handleNavClick(item.path)}
-            sx={{ minHeight: 48 }}
-          >
-            <ListItemIcon>
-              {item.label === 'Support' && supportUnread > 0
-                ? <Badge variant="dot" color="error">{item.icon}</Badge>
-                : item.icon}
-            </ListItemIcon>
-            <ListItemText primary={item.label === 'Customers' ? peopleLabel : item.label} />
-          </ListItemButton>
+      <List dense>
+        {navGroups.map((group, gi) => (
+          <Box key={gi}>
+            {gi > 0 && <Divider sx={{ my: 0.5 }} />}
+            {group.label && (
+              <Typography variant="overline" sx={{ px: 2, pt: 1.5, pb: 0.5, display: 'block', color: 'text.secondary', fontSize: '0.65rem', letterSpacing: 1.2 }}>
+                {group.label}
+              </Typography>
+            )}
+            {group.items.map((item) => (
+              <ListItemButton
+                key={item.path}
+                selected={location.pathname === item.path || location.pathname.startsWith(item.path + '/')}
+                onClick={() => handleNavClick(item.path)}
+                sx={{ minHeight: 44, py: 0.5 }}
+              >
+                <ListItemIcon sx={{ minWidth: 36 }}>
+                  {item.label === 'Support' && supportUnread > 0
+                    ? <Badge variant="dot" color="error">{item.icon}</Badge>
+                    : item.icon}
+                </ListItemIcon>
+                <ListItemText primary={item.label === 'Customers' ? peopleLabel : item.label} primaryTypographyProps={{ fontSize: '0.875rem' }} />
+              </ListItemButton>
+            ))}
+          </Box>
         ))}
       </List>
     </>
