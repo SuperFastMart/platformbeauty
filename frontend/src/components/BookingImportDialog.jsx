@@ -9,7 +9,7 @@ import {
 } from '@mui/material';
 import {
   CloudUpload, CheckCircle, Error as ErrorIcon,
-  Warning, Download, Close, Repeat,
+  Warning, Download, Close, Repeat, CallMerge,
 } from '@mui/icons-material';
 import RecurringDetectionDialog from './RecurringDetectionDialog';
 import dayjs from 'dayjs';
@@ -121,6 +121,53 @@ function parseFile(file, onComplete, onError) {
   }
 }
 
+// Merge rows that are part of the same multi-service appointment
+// (same client + same date + same booked_date, or same client + same date + overlapping times)
+function mergeMultiServiceRows(rows) {
+  const groups = {};
+  for (const r of rows) {
+    if (!r.valid) continue;
+    // Group key: client + date + booked_date (if available) to identify same appointment
+    const key = `${r.client.toLowerCase()}|${r.date}|${r.booked_date || ""}`;
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(r);
+  }
+
+  const merged = [];
+  for (const [key, group] of Object.entries(groups)) {
+    if (group.length === 1) {
+      merged.push(group[0]);
+      continue;
+    }
+    // Sort by start_time to find the full appointment span
+    group.sort((a, b) => (a.start_time || "").localeCompare(b.start_time || ""));
+    const services = group.map(r => r.service).filter(Boolean);
+    const durations = group.map(r => r.duration).filter(d => d != null);
+    // Use earliest start and latest end
+    const startTime = group[0].start_time;
+    const endTime = group.reduce((latest, r) => r.end_time > latest ? r.end_time : latest, group[0].end_time);
+    // Price: use max price (Fresha duplicates the total on each service row)
+    // If prices differ significantly, sum them instead
+    const prices = group.map(r => r.price);
+    const maxPrice = Math.max(...prices);
+    const minPrice = Math.min(...prices);
+    const price = maxPrice === minPrice ? maxPrice : (minPrice === 0 ? maxPrice : maxPrice);
+    merged.push({
+      ...group[0],
+      service: services.join(", "),
+      start_time: startTime,
+      end_time: endTime,
+      duration: durations.length > 0 ? durations.reduce((a, b) => a + b, 0) : null,
+      price,
+      _merged: group.length,
+    });
+  }
+  // Also add any invalid rows back
+  for (const r of rows) {
+    if (!r.valid) merged.push(r);
+  }
+  return merged;
+}
 const STATUS_MAP = {
   'new': 'confirmed', 'confirmed': 'confirmed', 'completed': 'completed',
   'cancelled': 'cancelled', 'no-show': 'confirmed', 'pending': 'pending',
@@ -174,6 +221,10 @@ export default function BookingImportDialog({ open, onClose, onComplete }) {
     });
   }, [rows, mapping]);
 
+  const mergedRows = useMemo(() => mergeMultiServiceRows(mapped), [mapped]);
+  const mergedValidCount = mergedRows.filter(r => r.valid).length;
+  const mergedCount = mergedRows.filter(r => r._merged > 1).length;
+
   const validCount = mapped.filter(r => r.valid).length;
   const errorCount = mapped.filter(r => !r.valid).length;
   const cancelledCount = mapped.filter(r => r.status === 'cancelled').length;
@@ -209,7 +260,7 @@ export default function BookingImportDialog({ open, onClose, onComplete }) {
   const handleImport = async () => {
     setImporting(true);
     try {
-      const payload = mapped.filter(r => r.valid).map(r => ({
+      const payload = mergedRows.filter(r => r.valid).map(r => ({
         customer_name: r.client,
         service_name: r.service || null,
         date: r.date,
@@ -300,10 +351,11 @@ export default function BookingImportDialog({ open, onClose, onComplete }) {
         {step === 1 && (
           <Box>
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 2 }}>
-              <Chip icon={<CheckCircle />} label={`${validCount} valid`} color="success" size="small" />
+              <Chip icon={<CheckCircle />} label={`${mergedValidCount} valid`} color="success" size="small" />
               {errorCount > 0 && <Chip icon={<ErrorIcon />} label={`${errorCount} errors`} color="error" size="small" />}
               {cancelledCount > 0 && <Chip icon={<Warning />} label={`${cancelledCount} cancelled`} color="warning" size="small" />}
               <Chip label={`${mapped.length} total rows`} variant="outlined" size="small" />
+              {mergedCount > 0 && <Chip icon={<CallMerge />} label={`${mergedCount} multi-service merged`} color="info" size="small" />}
             </Box>
 
             {!mapping.scheduled_date && !mapping.start_time && (
@@ -439,7 +491,7 @@ export default function BookingImportDialog({ open, onClose, onComplete }) {
           <>
             <Button onClick={() => { setStep(0); setRows([]); setMapping({}); }}>Back</Button>
             <Button variant="contained" onClick={handleImport} disabled={importing || validCount === 0}>
-              Import {validCount} Booking{validCount !== 1 ? 's' : ''}
+              Import {mergedValidCount} Booking{mergedValidCount !== 1 ? 's' : ''}
             </Button>
           </>
         )}
