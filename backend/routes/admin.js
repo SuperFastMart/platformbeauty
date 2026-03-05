@@ -925,7 +925,7 @@ router.delete('/service-forms/:id', asyncHandler(async (req, res) => {
 
 // GET /api/admin/bookings
 router.get('/bookings', asyncHandler(async (req, res) => {
-  const { date, status, from, to } = req.query;
+  const { date, status, from, to, source } = req.query;
   let sql = `SELECT b.*, dc.code as discount_code, c.allergies as customer_allergies,
     (SELECT s.category FROM services s WHERE s.id = CAST(NULLIF(split_part(b.service_ids, ',', 1), '') AS INTEGER) AND s.tenant_id = b.tenant_id) AS primary_category
     FROM bookings b LEFT JOIN discount_codes dc ON dc.id = b.discount_code_id LEFT JOIN customers c ON c.id = b.customer_id WHERE b.tenant_id = $1`;
@@ -943,7 +943,12 @@ router.get('/bookings', asyncHandler(async (req, res) => {
 
   if (status) {
     params.push(status);
-    sql += ` AND b.status = $${params.length}`;
+    sql += ` AND b.status = ${params.length}`;
+  }
+
+  if (source) {
+    params.push(source);
+    sql += ` AND b.booking_source = ${params.length}`;
   }
 
   // Default to today onwards when no date filters applied (upcoming first)
@@ -955,6 +960,16 @@ router.get('/bookings', asyncHandler(async (req, res) => {
 
   const bookings = await getAll(sql, params);
   res.json(bookings);
+}));
+
+// DELETE /api/admin/bookings/bulk-delete-imported
+router.delete('/bookings/bulk-delete-imported', asyncHandler(async (req, res) => {
+  const result = await run(
+    'DELETE FROM bookings WHERE tenant_id = $1 AND booking_source = $2 RETURNING id',
+    [req.tenantId, 'import']
+  );
+  const count = result.rowCount || 0;
+  res.json({ deleted: count, message: `${count} imported booking${count !== 1 ? 's' : ''} deleted` });
 }));
 
 // GET /api/admin/bookings/requests (must be before :id route)

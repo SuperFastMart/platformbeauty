@@ -5,13 +5,14 @@ import {
   Dialog, DialogTitle, DialogContent, DialogActions, Divider,
   useMediaQuery, useTheme, Tooltip
 } from '@mui/material';
-import { Check, Close, SwapHoriz, CurrencyPound, CreditCardOff, CreditCard, Add, Upload, ReportProblem, ListAlt, CalendarMonth, ChevronLeft, ChevronRight, Repeat } from '@mui/icons-material';
+import { Check, Close, SwapHoriz, CurrencyPound, CreditCardOff, CreditCard, Add, Upload, ReportProblem, ListAlt, CalendarMonth, ChevronLeft, ChevronRight, Repeat, DeleteSweep, FilterList } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api/client';
 import NoShowChargeModal from '../../components/NoShowChargeModal';
 import BookingImportDialog from '../../components/BookingImportDialog';
 import BookingDetailDrawer from '../../components/BookingDetailDrawer';
+import ConfirmDialog from '../../components/ConfirmDialog';
 import RecurringDetectionDialog from '../../components/RecurringDetectionDialog';
 import WeekCalendar from '../../components/WeekCalendar';
 import useTerminology from '../../hooks/useTerminology';
@@ -38,6 +39,10 @@ export default function Bookings() {
   const [loading, setLoading] = useState(true);
   const [date, setDate] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [sourceFilter, setSourceFilter] = useState('all');
+  const [deleteImportedOpen, setDeleteImportedOpen] = useState(false);
+  const [deletingImported, setDeletingImported] = useState(false);
+  const [importedCount, setImportedCount] = useState(0);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
   // No-show modal
@@ -113,6 +118,7 @@ export default function Bookings() {
       if (date) params.append('date', date);
     }
     if (statusFilter !== 'all') params.append('status', statusFilter);
+    if (sourceFilter !== 'all') params.append('source', sourceFilter);
 
     Promise.all([
       api.get(`/admin/bookings?${params}`),
@@ -126,7 +132,7 @@ export default function Bookings() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { fetchBookings(); }, [date, statusFilter, viewMode, weekStart]);
+  useEffect(() => { fetchBookings(); }, [date, statusFilter, sourceFilter, viewMode, weekStart]);
 
   const updateStatus = async (id, status, reason, alternative) => {
     try {
@@ -195,6 +201,20 @@ export default function Bookings() {
       fetchBookings();
     } catch (err) {
       setSnackbar({ open: true, message: err.response?.data?.error || 'Error', severity: 'error' });
+    }
+  };
+
+  const handleDeleteImported = async () => {
+    setDeletingImported(true);
+    try {
+      const res = await api.delete('/admin/bookings/bulk-delete-imported');
+      setSnackbar({ open: true, message: res.data.message, severity: 'success' });
+      setDeleteImportedOpen(false);
+      fetchBookings();
+    } catch (err) {
+      setSnackbar({ open: true, message: err.response?.data?.error || 'Error deleting', severity: 'error' });
+    } finally {
+      setDeletingImported(false);
     }
   };
 
@@ -290,9 +310,29 @@ export default function Bookings() {
           <ToggleButton value="confirmed" sx={{ px: { xs: 1, sm: 2 } }}>Confirmed</ToggleButton>
           <ToggleButton value="rejected" sx={{ px: { xs: 1, sm: 2 } }}>Rejected</ToggleButton>
         </ToggleButtonGroup>
-        <Button variant="text" size="small" onClick={() => { setDate(''); setStatusFilter('all'); }}>
+        <ToggleButtonGroup
+          value={sourceFilter} exclusive
+          onChange={(e, v) => v && setSourceFilter(v)}
+          size="small"
+        >
+          <ToggleButton value="all" sx={{ px: { xs: 1, sm: 2 } }}>All Sources</ToggleButton>
+          <ToggleButton value="import" sx={{ px: { xs: 1, sm: 2 } }}>Imported</ToggleButton>
+          <ToggleButton value="direct" sx={{ px: { xs: 1, sm: 2 } }}>Direct</ToggleButton>
+        </ToggleButtonGroup>
+        <Button variant="text" size="small" onClick={() => { setDate(''); setStatusFilter('all'); setSourceFilter('all'); }}>
           Clear Filters
         </Button>
+        {sourceFilter === 'import' && (
+          <Button
+            variant="outlined"
+            size="small"
+            color="error"
+            startIcon={<DeleteSweep />}
+            onClick={() => setDeleteImportedOpen(true)}
+          >
+            Delete All Imported
+          </Button>
+        )}
       </Box>
 
       {/* Calendar view */}
@@ -552,6 +592,19 @@ export default function Bookings() {
         open={detectRecurringOpen}
         onClose={() => setDetectRecurringOpen(false)}
         onComplete={fetchBookings}
+      />
+
+      {/* Delete Imported Confirmation */}
+      <ConfirmDialog
+        open={deleteImportedOpen}
+        onClose={() => setDeleteImportedOpen(false)}
+        onConfirm={handleDeleteImported}
+        title="Delete All Imported Bookings"
+        message="This will permanently delete all bookings that were imported (booking source = import). This action cannot be undone."
+        confirmLabel="Delete All Imported"
+        confirmColor="error"
+        warning="This is a destructive action. Manual and online bookings will not be affected."
+        loading={deletingImported}
       />
 
       {/* Booking Detail Drawer */}
