@@ -2106,8 +2106,8 @@ router.post('/bookings/import', asyncHandler(async (req, res) => {
   if (!Array.isArray(rows) || rows.length === 0) {
     return res.status(400).json({ error: 'bookings array is required' });
   }
-  if (rows.length > 2000) {
-    return res.status(400).json({ error: 'Maximum 2000 bookings per import' });
+  if (rows.length > 10000) {
+    return res.status(400).json({ error: 'Maximum 10,000 bookings per import' });
   }
 
   // Pre-load customers and services for lookup
