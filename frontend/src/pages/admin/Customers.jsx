@@ -224,7 +224,7 @@ export default function Customers() {
                   value={filters.min_visits || ''} onChange={e => setFilters(f => ({ ...f, min_visits: e.target.value }))} />
               </Grid>
               <Grid item xs={6} sm={3}>
-                <TextField fullWidth size="small" label="Tags (comma-sep)" size="small"
+                <TextField fullWidth size="small" label="Tags (comma-sep)"
                   value={filters.tags || ''} onChange={e => setFilters(f => ({ ...f, tags: e.target.value }))} />
               </Grid>
             </Grid>

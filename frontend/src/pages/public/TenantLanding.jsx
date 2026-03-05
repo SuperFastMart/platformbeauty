@@ -208,7 +208,6 @@ function HoursSection({ siteSettings }) {
             </Card>
             <Divider sx={{ mt: 3 }} />
           </Box>
-        )}
   );
 }
 
@@ -237,7 +236,6 @@ function SocialSection({ siteSettings }) {
               ))}
             <Divider sx={{ mt: 3 }} />
           </Box>
-        )}
   );
 }
 
@@ -325,8 +323,6 @@ function QuickLinksSection({ siteSettings, slug, navigate }) {
                 </Grid>
               )}
             </Grid>
-          );
-        })()}
   );
 }
 
@@ -478,7 +474,6 @@ function ReviewsSection({ reviews, reviewStats }) {
               ))}
             </Grid>
           </Box>
-        )}
   );
 }
 
@@ -522,7 +517,6 @@ function PoliciesSection({ siteSettings }) {
               ))}
             </Grid>
           </Box>
-        )}
   );
 }
 
