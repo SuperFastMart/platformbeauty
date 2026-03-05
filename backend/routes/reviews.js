@@ -46,24 +46,7 @@ adminRouter.get('/', asyncHandler(async (req, res) => {
   });
 }));
 
-// PATCH /api/admin/reviews/:id/toggle — toggle visibility
-adminRouter.patch('/:id/toggle', asyncHandler(async (req, res) => {
-  const review = await getOne(
-    'UPDATE reviews SET visible = NOT visible WHERE id = $1 AND tenant_id = $2 RETURNING *',
-    [req.params.id, req.tenantId]
-  );
-
-  if (!review) return res.status(404).json({ error: 'Review not found' });
-  res.json(review);
-}));
-
-// DELETE /api/admin/reviews/:id
-adminRouter.delete('/:id', asyncHandler(async (req, res) => {
-  await run('DELETE FROM reviews WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenantId]);
-  res.json({ message: 'Deleted' });
-}));
-
-// POST /api/admin/reviews/import — bulk import reviews
+// POST /api/admin/reviews/import — bulk import (must be before /:id routes)
 adminRouter.post('/import', asyncHandler(async (req, res) => {
   const { reviews: reviewsData } = req.body;
 
@@ -85,6 +68,24 @@ adminRouter.post('/import', asyncHandler(async (req, res) => {
 
   res.json({ imported });
 }));
+
+// PATCH /api/admin/reviews/:id/toggle — toggle visibility
+adminRouter.patch('/:id/toggle', asyncHandler(async (req, res) => {
+  const review = await getOne(
+    'UPDATE reviews SET visible = NOT visible WHERE id = $1 AND tenant_id = $2 RETURNING *',
+    [req.params.id, req.tenantId]
+  );
+
+  if (!review) return res.status(404).json({ error: 'Review not found' });
+  res.json(review);
+}));
+
+// DELETE /api/admin/reviews/:id
+adminRouter.delete('/:id', asyncHandler(async (req, res) => {
+  await run('DELETE FROM reviews WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenantId]);
+  res.json({ message: 'Deleted' });
+}));
+
 // ============================================
 // PUBLIC ROUTES (behind resolveTenant)
 // ============================================
