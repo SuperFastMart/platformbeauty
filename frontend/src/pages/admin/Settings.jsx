@@ -929,11 +929,24 @@ export default function Settings() {
 
   return (
     <Box>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h5" fontWeight={600}>Settings</Typography>
-        <Button variant="contained" startIcon={<Save />} onClick={handleSave} disabled={saving}>
-          {saving ? 'Saving...' : 'Save Changes'}
-        </Button>
+      <Box
+        sx={{
+          position: 'sticky',
+          top: { xs: 56, sm: 64 },
+          zIndex: 10,
+          bgcolor: 'background.default',
+          py: 1.5,
+          mb: 2,
+          borderBottom: '1px solid',
+          borderColor: 'divider',
+        }}
+      >
+        <Box display="flex" justifyContent="space-between" alignItems="center">
+          <Typography variant="h5" fontWeight={600}>Settings</Typography>
+          <Button variant="contained" startIcon={<Save />} onClick={handleSave} disabled={saving}>
+            {saving ? 'Saving...' : 'Save Changes'}
+          </Button>
+        </Box>
       </Box>
 
       <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="scrollable" scrollButtons="auto">
