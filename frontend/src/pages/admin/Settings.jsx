@@ -1090,6 +1090,12 @@ export default function Settings() {
               >
                 Logo Image
               </Button>
+              <Button
+                variant={siteSettings.header_display === 'combined' ? 'contained' : 'outlined'}
+                onClick={() => setSiteSettings(s => ({ ...s, header_display: 'combined' }))}
+              >
+                Logo + Name
+              </Button>
             </Box>
 
             {(!siteSettings.header_display || siteSettings.header_display === 'text' || siteSettings.header_display === 'combined') && (
