@@ -6,15 +6,14 @@ const SECTION_LABELS = {
   banner: 'Banner Image',
   about: 'About / Meet Me',
   hours: 'Opening Hours',
-  social: 'Social Widgets',
-  sociallinks: 'Social Media Links',
+  social: 'Social Media',
   quicklinks: 'Quick Links (Gift Cards, Packages, Memberships)',
   services: 'Services',
   reviews: 'Customer Reviews',
   policies: 'Policies',
 };
 
-const DEFAULT_ORDER = ['header', 'banner', 'about', 'hours', 'social', 'sociallinks', 'quicklinks', 'services', 'reviews', 'policies'];
+const DEFAULT_ORDER = ['header', 'banner', 'about', 'hours', 'social', 'quicklinks', 'services', 'reviews', 'policies'];
 
 export default function SectionReorder({ order, onChange }) {
   const sections = order && order.length > 0 ? order : DEFAULT_ORDER;
