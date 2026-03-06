@@ -118,6 +118,7 @@ publicRouter.get('/', asyncHandler(async (req, res) => {
     'section_hours', 'section_reviews',
     'colour_palette', 'colour_secondary', 'colour_background', 'colour_text', 'colour_card_bg',
     'section_order',
+    'banner_image_url',
     'social_facebook', 'social_instagram', 'social_tiktok', 'social_twitter', 'social_youtube', 'social_linkedin',
   ];
 

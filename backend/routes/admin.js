@@ -1644,7 +1644,7 @@ router.get('/analytics', asyncHandler(async (req, res) => {
     // Monthly revenue (last 6 months)
     getAll(
       `SELECT DATE_TRUNC('month', date) as month, SUM(total_price)::numeric as revenue, COUNT(*)::int as bookings
-       FROM bookings WHERE tenant_id = $1 AND status = 'confirmed' AND date >= CURRENT_DATE - INTERVAL '6 months'
+       FROM bookings WHERE tenant_id = $1 AND status = 'confirmed' AND date >= CURRENT_DATE - INTERVAL '6 months' AND date < DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '4 months'
        GROUP BY DATE_TRUNC('month', date) ORDER BY month`,
       [req.tenantId]
     ),

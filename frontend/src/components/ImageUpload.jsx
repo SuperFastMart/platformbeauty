@@ -57,9 +57,16 @@ export default function ImageUpload({
   };
 
   const handleRemove = async () => {
+    setError('');
     try {
       await api.delete(`/admin/images/${imageKey}`);
-    } catch { /* ignore if not found */ }
+    } catch (err) {
+      // Only warn if it's not a 404 (already removed)
+      if (err.response?.status !== 404) {
+        setError('Failed to remove image');
+        return;
+      }
+    }
     onRemove();
   };
 

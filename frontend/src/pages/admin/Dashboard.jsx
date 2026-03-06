@@ -360,33 +360,60 @@ export default function Dashboard() {
             </Grid>
           </Grid>
 
-          {/* Monthly Revenue */}
-          {analytics.monthly_revenue.length > 0 && (
-            <Card sx={{ mb: 3 }}>
-              <CardContent>
-                <Typography variant="subtitle1" fontWeight={600} mb={2}>
-                  Monthly Revenue (Last 6 Months)
-                </Typography>
-                <Grid container spacing={2}>
-                  {analytics.monthly_revenue.map((m, i) => (
-                    <Grid item xs={6} sm={4} md={2} key={i}>
-                      <Box textAlign="center" py={1}>
-                        <Typography variant="caption" color="text.secondary" display="block">
-                          {dayjs(m.month).format('MMM YYYY')}
-                        </Typography>
-                        <Typography variant="h6" fontWeight={700} color="success.main">
-                          {currency.symbol}{parseFloat(m.revenue || 0).toFixed(0)}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {m.bookings} booking{m.bookings !== 1 ? 's' : ''}
-                        </Typography>
-                      </Box>
-                    </Grid>
-                  ))}
-                </Grid>
-              </CardContent>
-            </Card>
-          )}
+          {/* Monthly Revenue & Pipeline */}
+          {analytics.monthly_revenue.length > 0 && (() => {
+            const currentMonth = dayjs().startOf('month');
+            const past = analytics.monthly_revenue.filter(m => dayjs(m.month).isBefore(currentMonth));
+            const currentAndFuture = analytics.monthly_revenue.filter(m => !dayjs(m.month).isBefore(currentMonth));
+            const isFuture = (m) => dayjs(m.month).isAfter(currentMonth);
+            return (
+              <Card sx={{ mb: 3 }}>
+                <CardContent>
+                  <Typography variant="subtitle1" fontWeight={600} mb={2}>
+                    Monthly Revenue & Pipeline
+                  </Typography>
+                  <Grid container spacing={2}>
+                    {analytics.monthly_revenue.map((m, i) => {
+                      const monthDate = dayjs(m.month);
+                      const isUpcoming = monthDate.isAfter(currentMonth);
+                      const isCurrent = monthDate.isSame(currentMonth, 'month');
+                      return (
+                        <Grid item xs={6} sm={4} md={2} key={i}>
+                          <Box textAlign="center" py={1} sx={{
+                            ...(isUpcoming && {
+                              borderLeft: '2px dashed',
+                              borderColor: 'divider',
+                              opacity: 0.85,
+                            }),
+                          }}>
+                            <Typography variant="caption" color="text.secondary" display="block">
+                              {monthDate.format('MMM YYYY')}
+                            </Typography>
+                            {isUpcoming && (
+                              <Typography variant="caption" sx={{ color: '#D4A853', fontWeight: 600, display: 'block', fontSize: '0.65rem' }}>
+                                PIPELINE
+                              </Typography>
+                            )}
+                            {isCurrent && (
+                              <Typography variant="caption" sx={{ color: 'primary.main', fontWeight: 600, display: 'block', fontSize: '0.65rem' }}>
+                                IN PROGRESS
+                              </Typography>
+                            )}
+                            <Typography variant="h6" fontWeight={700} sx={{ color: isUpcoming ? '#D4A853' : 'success.main' }}>
+                              {currency.symbol}{parseFloat(m.revenue || 0).toFixed(0)}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {m.bookings} booking{m.bookings !== 1 ? 's' : ''}
+                            </Typography>
+                          </Box>
+                        </Grid>
+                      );
+                    })}
+                  </Grid>
+                </CardContent>
+              </Card>
+            );
+          })()}
         </>
       )}
 
