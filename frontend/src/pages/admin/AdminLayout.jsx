@@ -488,6 +488,23 @@ export default function AdminLayout() {
           p: isMobile ? 2 : 3,
           mt: isImpersonating ? 12 : 8,
           width: isMobile ? '100%' : `calc(100% - ${DRAWER_WIDTH}px)`,
+          position: 'relative',
+          '&::before': {
+            content: '""',
+            position: 'fixed',
+            top: '50%',
+            left: isMobile ? '50%' : `calc(${DRAWER_WIDTH}px + (100% - ${DRAWER_WIDTH}px) / 2)`,
+            transform: 'translate(-50%, -50%)',
+            width: 280,
+            height: 280,
+            backgroundImage: 'url(/boukd-logo.png)',
+            backgroundSize: 'contain',
+            backgroundRepeat: 'no-repeat',
+            backgroundPosition: 'center',
+            opacity: 0.04,
+            pointerEvents: 'none',
+            zIndex: 0,
+          },
         }}
       >
         {isImpersonating && (
