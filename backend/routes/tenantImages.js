@@ -66,7 +66,7 @@ adminRouter.get('/', asyncHandler(async (req, res) => {
 // ============================================
 // PUBLIC ROUTES (behind resolveTenant)
 // ============================================
-const publicRouter = require('express').Router();
+const publicRouter = require('express').Router({ mergeParams: true });
 publicRouter.use(resolveTenant);
 
 publicRouter.get('/:imageKey', asyncHandler(async (req, res) => {

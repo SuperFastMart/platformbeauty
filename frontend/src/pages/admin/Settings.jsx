@@ -945,6 +945,9 @@ export default function Settings() {
 
       {/* Storefront: Branding, About, Hours, Social, Policies */}
       <TabPanel value={tab} index={0}>
+        <Typography variant="body2" color="text.secondary" mb={2}>
+          Customise how your public booking page looks and feels — your logo, colours, about section, opening hours, social links, and policies.
+        </Typography>
         <Card>
           <CardContent>
             <Typography variant="subtitle1" fontWeight={600} mb={2}>Branding</Typography>
@@ -1578,6 +1581,9 @@ export default function Settings() {
 
       {/* Business: Info, Payments, Tax */}
       <TabPanel value={tab} index={1}>
+        <Typography variant="body2" color="text.secondary" mb={2}>
+          Manage your core business details, payment settings, and tax compliance information.
+        </Typography>
         <Card>
           <CardContent>
             <Typography variant="subtitle1" fontWeight={600} mb={2}>Business Information</Typography>
@@ -1730,11 +1736,17 @@ export default function Settings() {
 
       {/* Notifications: SMS */}
       <TabPanel value={tab} index={2}>
+        <Typography variant="body2" color="text.secondary" mb={2}>
+          Configure how and when your customers receive booking confirmations, reminders, and updates.
+        </Typography>
         <SmsTab snackbar={snackbar} setSnackbar={setSnackbar} />
       </TabPanel>
 
       {/* Account: Subscription, Security, Widget */}
       <TabPanel value={tab} index={3}>
+        <Typography variant="body2" color="text.secondary" mb={2}>
+          Your subscription plan, account security, and tools for embedding bookings on your own website.
+        </Typography>
         <SubscriptionTab snackbar={snackbar} setSnackbar={setSnackbar} />
         <Typography variant="h6" fontWeight={600} mt={3} mb={2}>Security</Typography>
         <SecurityTab snackbar={snackbar} setSnackbar={setSnackbar} />
