@@ -213,6 +213,60 @@ export default function Dashboard() {
         )}
       </Box>
 
+      {/* Today's Appointments */}
+      <Card sx={{ mb: 3 }}>
+        <CardContent>
+          <Typography variant="h6" fontWeight={600} mb={1}>
+            Today's Appointments
+          </Typography>
+          {stats.todayAppointments.length === 0 ? (
+            <Typography color="text.secondary" variant="body2">
+              No appointments scheduled for today.
+            </Typography>
+          ) : (
+            <List disablePadding>
+              {stats.todayAppointments.map((appt, i) => (
+                <Box key={appt.id}>
+                  {i > 0 && <Divider />}
+                  <ListItem
+                    sx={{ px: 0, cursor: 'pointer' }}
+                    onClick={() => navigate('/admin/bookings')}
+                  >
+                    <ListItemIcon sx={{ minWidth: 40 }}>
+                      <AccessTime color="action" />
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={
+                        <Box display="flex" alignItems="center" gap={1} flexWrap="wrap">
+                          <Typography fontWeight={600} variant="body2">
+                            {appt.start_time?.slice(0, 5)} - {appt.end_time?.slice(0, 5)}
+                          </Typography>
+                          <Typography variant="body2">
+                            {appt.customer_name}
+                          </Typography>
+                          {appt.customer_allergies && (
+                            <Tooltip title={`Allergies: ${appt.customer_allergies}`} arrow>
+                              <ReportProblem sx={{ fontSize: 16, color: 'warning.main' }} />
+                            </Tooltip>
+                          )}
+                          <Chip
+                            label={appt.status}
+                            size="small"
+                            color={appt.status === 'confirmed' ? 'success' : 'warning'}
+                            variant="outlined"
+                          />
+                        </Box>
+                      }
+                      secondary={`${appt.service_names} — ${formatCurrency(appt.total_price, currency)}`}
+                    />
+                  </ListItem>
+                </Box>
+              ))}
+            </List>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Analytics Section */}
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
         <Typography variant="h6" fontWeight={600}>Analytics</Typography>
@@ -417,59 +471,6 @@ export default function Dashboard() {
         </>
       )}
 
-      {/* Today's Appointments */}
-      <Card>
-        <CardContent>
-          <Typography variant="h6" fontWeight={600} mb={1}>
-            Today's Appointments
-          </Typography>
-          {stats.todayAppointments.length === 0 ? (
-            <Typography color="text.secondary" variant="body2">
-              No appointments scheduled for today.
-            </Typography>
-          ) : (
-            <List disablePadding>
-              {stats.todayAppointments.map((appt, i) => (
-                <Box key={appt.id}>
-                  {i > 0 && <Divider />}
-                  <ListItem
-                    sx={{ px: 0, cursor: 'pointer' }}
-                    onClick={() => navigate('/admin/bookings')}
-                  >
-                    <ListItemIcon sx={{ minWidth: 40 }}>
-                      <AccessTime color="action" />
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={
-                        <Box display="flex" alignItems="center" gap={1} flexWrap="wrap">
-                          <Typography fontWeight={600} variant="body2">
-                            {appt.start_time?.slice(0, 5)} - {appt.end_time?.slice(0, 5)}
-                          </Typography>
-                          <Typography variant="body2">
-                            {appt.customer_name}
-                          </Typography>
-                          {appt.customer_allergies && (
-                            <Tooltip title={`Allergies: ${appt.customer_allergies}`} arrow>
-                              <ReportProblem sx={{ fontSize: 16, color: 'warning.main' }} />
-                            </Tooltip>
-                          )}
-                          <Chip
-                            label={appt.status}
-                            size="small"
-                            color={appt.status === 'confirmed' ? 'success' : 'warning'}
-                            variant="outlined"
-                          />
-                        </Box>
-                      }
-                      secondary={`${appt.service_names} — ${formatCurrency(appt.total_price, currency)}`}
-                    />
-                  </ListItem>
-                </Box>
-              ))}
-            </List>
-          )}
-        </CardContent>
-      </Card>
     </Box>
   );
 }

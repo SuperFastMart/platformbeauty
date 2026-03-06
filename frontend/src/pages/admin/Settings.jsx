@@ -910,6 +910,11 @@ export default function Settings() {
       // Save site settings too
       await api.put('/admin/site-settings', siteSettings);
 
+      // Clean up banner image from DB if removed
+      if (!siteSettings.banner_image_url) {
+        await api.delete('/admin/images/banner').catch(() => {});
+      }
+
       // Update currency cache for immediate effect
       if (siteSettings.currency) updateCurrency(siteSettings.currency);
 

@@ -61,10 +61,14 @@ function HeaderSection({ tenant, siteSettings, reviewStats }) {
   );
 }
 
-function BannerSection({ slug }) {
+function BannerSection({ slug, siteSettings }) {
   const [bannerUrl, setBannerUrl] = useState(null);
 
+  // If banner_image_url setting exists and is empty, banner was explicitly removed
+  const bannerDisabled = siteSettings && 'banner_image_url' in siteSettings && !siteSettings.banner_image_url;
+
   useEffect(() => {
+    if (bannerDisabled) return;
     let objectUrl = null;
     api.get(`/t/${slug}/images/banner`, { responseType: 'blob' })
       .then(res => {
@@ -75,7 +79,7 @@ function BannerSection({ slug }) {
     return () => { if (objectUrl) URL.revokeObjectURL(objectUrl); };
   }, [slug]);
 
-  if (!bannerUrl) return null;
+  if (!bannerUrl || bannerDisabled) return null;
 
   return (
     <Box mb={4}>
@@ -604,7 +608,7 @@ export default function TenantLanding() {
 
   const SECTION_COMPONENTS = {
     header: <HeaderSection tenant={tenant} siteSettings={siteSettings} reviewStats={reviewStats} />,
-    banner: <BannerSection slug={slug} />,
+    banner: <BannerSection slug={slug} siteSettings={siteSettings} />,
     about: <AboutSection siteSettings={siteSettings} tenant={tenant} />,
     hours: <HoursSection siteSettings={siteSettings} />,
     social: <SocialSection siteSettings={siteSettings} />,
