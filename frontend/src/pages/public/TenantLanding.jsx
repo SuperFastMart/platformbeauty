@@ -70,7 +70,7 @@ function BannerSection({ slug, siteSettings }) {
   useEffect(() => {
     if (bannerDisabled) return;
     let objectUrl = null;
-    api.get(`/t/${slug}/images/banner`, { responseType: 'blob' })
+    api.get(`/t/${slug}/images/banner?v=${Date.now()}`, { responseType: 'blob' })
       .then(res => {
         objectUrl = URL.createObjectURL(res.data);
         setBannerUrl(objectUrl);

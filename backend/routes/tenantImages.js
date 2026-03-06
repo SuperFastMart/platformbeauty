@@ -77,7 +77,7 @@ publicRouter.get('/:imageKey', asyncHandler(async (req, res) => {
   if (!image) return res.status(404).send('Image not found');
 
   res.set('Content-Type', image.mime_type);
-  res.set('Cache-Control', 'public, max-age=300, must-revalidate');
+  res.set('Cache-Control', 'no-cache');
   res.set('ETag', `"${req.params.imageKey}-${new Date(image.created_at).getTime()}"`);
   res.send(image.file_data);
 }));
