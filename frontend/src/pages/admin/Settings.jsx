@@ -11,6 +11,7 @@ import ImageUpload from '../../components/ImageUpload';
 import SectionReorder from '../../components/SectionReorder';
 import useTerminology, { updateTerminology } from '../../hooks/useTerminology';
 import useCurrency, { updateCurrency, formatCurrency } from '../../hooks/useCurrency';
+import { useAuth } from '../../contexts/AuthContext';
 
 function TabPanel({ children, value, index }) {
   return value === index ? <Box mt={3}>{children}</Box> : null;
@@ -856,6 +857,7 @@ export default function Settings() {
 
   // Terminology preference
   const terms = useTerminology();
+  const { isImpersonating } = useAuth();
   const [customerLabel, setCustomerLabel] = useState(localStorage.getItem('customer_label') || 'customers');
 
   const handleTerminologyChange = async (value) => {
@@ -932,7 +934,7 @@ export default function Settings() {
       <Box
         sx={{
           position: 'sticky',
-          top: { xs: 56, sm: 64 },
+          top: { xs: isImpersonating ? 96 : 56, sm: isImpersonating ? 104 : 64 },
           zIndex: 10,
           bgcolor: 'background.default',
           py: 1.5,

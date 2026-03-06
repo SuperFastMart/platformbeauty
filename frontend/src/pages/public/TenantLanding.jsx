@@ -329,7 +329,7 @@ function QuickLinksSection({ siteSettings, slug, navigate }) {
 function ServicesSection({ services, siteSettings, selected, toggleService, curr }) {
   return (
     <>
-          <Typography variant="h6" fontWeight={600} mb={2}>Our Services</Typography>
+          <Typography variant="h6" fontWeight={600} mb={2}>Services</Typography>
           <Box sx={{
             '& .MuiAccordion-root': {
               boxShadow: 'none',
