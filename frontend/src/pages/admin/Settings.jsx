@@ -1092,7 +1092,7 @@ export default function Settings() {
               </Button>
             </Box>
 
-            {(!siteSettings.header_display || siteSettings.header_display === 'text') && (
+            {(!siteSettings.header_display || siteSettings.header_display === 'text' || siteSettings.header_display === 'combined') && (
               <>
                 <TextField fullWidth select label="Header Font" margin="normal"
                   value={siteSettings.header_font || 'Inter'}
@@ -1125,7 +1125,7 @@ export default function Settings() {
               </>
             )}
 
-            {siteSettings.header_display === 'logo' && (
+            {(siteSettings.header_display === 'logo' || siteSettings.header_display === 'combined') && (
               <>
                 <ImageUpload
                   imageKey="header_logo"

@@ -21,7 +21,31 @@ const DEFAULT_SECTION_ORDER = ['header', 'banner', 'about', 'hours', 'social', '
 function HeaderSection({ tenant, siteSettings, reviewStats }) {
   return (
         <Box textAlign="center" mb={4}>
-          {siteSettings.header_display === 'logo' && siteSettings.header_logo_url ? (
+          {siteSettings.header_display === 'combined' && siteSettings.header_logo_url ? (
+            <Box display="flex" alignItems="center" justifyContent="center" gap={2} mb={1}>
+              <Box
+                component="img"
+                src={siteSettings.header_logo_url}
+                alt={tenant?.name}
+                sx={{
+                  maxHeight: 80,
+                  maxWidth: 120,
+                  objectFit: 'contain',
+                }}
+              />
+              <Box sx={{ width: 2, height: 48, bgcolor: 'divider', borderRadius: 1 }} />
+              <Typography
+                variant="h5"
+                fontWeight={700}
+                sx={siteSettings.header_font && siteSettings.header_font !== 'Inter'
+                  ? { fontFamily: `"${siteSettings.header_font}", serif`, fontSize: '1.8rem' }
+                  : {}
+                }
+              >
+                {tenant?.name}
+              </Typography>
+            </Box>
+          ) : siteSettings.header_display === 'logo' && siteSettings.header_logo_url ? (
             <Box
               component="img"
               src={siteSettings.header_logo_url}
@@ -582,7 +606,7 @@ export default function TenantLanding() {
   // Load custom Google Font if set
   useEffect(() => {
     const font = siteSettings.header_font;
-    if (font && font !== 'Inter' && (!siteSettings.header_display || siteSettings.header_display === 'text')) {
+    if (font && font !== 'Inter' && (!siteSettings.header_display || siteSettings.header_display === 'text' || siteSettings.header_display === 'combined')) {
       const linkId = 'custom-header-font';
       if (!document.getElementById(linkId)) {
         const link = document.createElement('link');
