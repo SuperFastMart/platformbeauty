@@ -18,14 +18,14 @@ function StatCard({ title, value, icon, color, onClick, subtitle }) {
   return (
     <Card sx={{ cursor: onClick ? 'pointer' : 'default', overflow: 'hidden' }} onClick={onClick}>
       <CardContent sx={{ p: { xs: 1.5, sm: 2 }, '&:last-child': { pb: { xs: 1.5, sm: 2 } } }}>
-        <Box display="flex" justifyContent="space-between" alignItems="center">
+        <Box display="flex" alignItems="center" gap={1.5}>
+          <Box sx={{ color, opacity: 0.7, fontSize: { xs: 32, sm: 48 }, flexShrink: 0 }}>
+            {icon}
+          </Box>
           <Box sx={{ minWidth: 0 }}>
             <Typography variant="body2" color="text.secondary" noWrap>{title}</Typography>
             <Typography variant="h5" fontWeight={600} noWrap>{value}</Typography>
             {subtitle && <Typography variant="caption" color="text.secondary">{subtitle}</Typography>}
-          </Box>
-          <Box sx={{ color, opacity: 0.7, fontSize: { xs: 32, sm: 48 }, flexShrink: 0, ml: 1 }}>
-            {icon}
           </Box>
         </Box>
       </CardContent>
