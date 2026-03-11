@@ -1029,7 +1029,7 @@ router.get('/bookings/:id', asyncHandler(async (req, res) => {
 // PUT /api/admin/bookings/:id — edit booking
 router.put('/bookings/:id', asyncHandler(async (req, res) => {
   const { serviceIds, date, startTime, customerId, customerName, customerEmail,
-          customerPhone, notes, priceOverride, notifyCustomer } = req.body;
+          customerPhone, notes, priceOverride, notifyCustomer, updateScope } = req.body;
 
   const existing = await getOne(
     'SELECT * FROM bookings WHERE id = $1 AND tenant_id = $2',
@@ -1111,6 +1111,64 @@ router.put('/bookings/:id', asyncHandler(async (req, res) => {
      req.params.id, req.tenantId]
   );
 
+  // If recurring and scope is 'future', propagate service/time/price changes to future bookings in the group
+  let futureUpdated = 0;
+  if (updateScope === 'future' && existing.recurring_group_id) {
+    // Build the changes to apply (only services, time, price — NOT date since each has its own date)
+    const setClauses = [];
+    const setParams = [];
+    let idx = 1;
+
+    if (serviceIds && serviceIds.length > 0) {
+      setClauses.push(`service_ids = $${idx++}`, `service_names = $${idx++}`, `total_duration = $${idx++}`);
+      setParams.push(serviceIdStr, serviceNames, totalDuration);
+    }
+    if (timeChanged) {
+      setClauses.push(`start_time = $${idx++}`, `end_time = $${idx++}`);
+      setParams.push(finalStartTime, endTime);
+    }
+    if (priceOverride != null && priceOverride >= 0) {
+      setClauses.push(`total_price = $${idx++}`);
+      setParams.push(totalPrice);
+    } else if (serviceIds && serviceIds.length > 0) {
+      setClauses.push(`total_price = $${idx++}`);
+      setParams.push(totalPrice);
+    }
+
+    if (setClauses.length > 0) {
+      const futureResult = await run(
+        `UPDATE bookings SET ${setClauses.join(', ')}
+         WHERE tenant_id = $${idx++} AND recurring_group_id = $${idx++}
+           AND id != $${idx++} AND date > $${idx++}
+           AND status IN ('pending', 'confirmed', 'pending_confirmation')`,
+        [...setParams, req.tenantId, existing.recurring_group_id, existing.id, String(existing.date).slice(0, 10)]
+      );
+      futureUpdated = futureResult.rowCount || 0;
+
+      // Update time slots for future bookings if time changed
+      if (timeChanged) {
+        const futureBookings = await getAll(
+          `SELECT id, date, start_time, end_time FROM bookings
+           WHERE tenant_id = $1 AND recurring_group_id = $2 AND id != $3 AND date > $4
+             AND status IN ('pending', 'confirmed', 'pending_confirmation')`,
+          [req.tenantId, existing.recurring_group_id, existing.id, String(existing.date).slice(0, 10)]
+        );
+        for (const fb of futureBookings) {
+          await run(
+            `UPDATE time_slots SET is_available = TRUE
+             WHERE tenant_id = $1 AND date = $2 AND start_time >= $3 AND start_time < $4`,
+            [req.tenantId, fb.date, fb.start_time, fb.end_time]
+          );
+          await run(
+            `UPDATE time_slots SET is_available = FALSE
+             WHERE tenant_id = $1 AND date = $2 AND start_time >= $3 AND start_time < $4`,
+            [req.tenantId, fb.date, finalStartTime, endTime]
+          );
+        }
+      }
+    }
+  }
+
   // Notify customer if toggled and something changed
   if (notifyCustomer && (dateChanged || timeChanged || serviceIds)) {
     const tenant = await getOne('SELECT * FROM tenants WHERE id = $1', [req.tenantId]);
@@ -1125,9 +1183,10 @@ router.put('/bookings/:id', asyncHandler(async (req, res) => {
   const { logActivity } = require('../utils/activityLog');
   logActivity(req.tenantId, 'tenant_admin', req.user.id, req.user.email, 'booking_edited', {
     booking_id: updated.id, changes: { dateChanged, timeChanged, servicesChanged: !!serviceIds },
+    updateScope: updateScope || 'this', futureUpdated,
   });
 
-  res.json(updated);
+  res.json({ ...updated, futureUpdated });
 }));
 
 // PUT /api/admin/bookings/:id/status
@@ -2242,11 +2301,26 @@ router.post('/bookings/detect-recurring', asyncHandler(async (req, res) => {
     [req.tenantId]
   );
 
-  // Group by customer + service + day of week + time
+  // Normalise service names for comparison: lowercase, split by comma, trim, sort alphabetically
+  const normaliseServices = (names) => {
+    if (!names) return '';
+    return names.split(',').map(s => s.trim().toLowerCase()).sort().join('|');
+  };
+
+  // Round time to nearest 15-min slot for grouping (e.g. 10:05 → 10:00, 10:12 → 10:15)
+  const roundTime = (time) => {
+    if (!time) return '';
+    const [h, m] = time.split(':').map(Number);
+    const rounded = Math.round(m / 15) * 15;
+    const finalH = rounded >= 60 ? h + 1 : h;
+    const finalM = rounded >= 60 ? 0 : rounded;
+    return `${String(finalH).padStart(2, '0')}:${String(finalM).padStart(2, '0')}`;
+  };
+
+  // Group by customer + normalised services + rounded time (no day-of-week requirement)
   const groups = {};
   for (const b of bookings) {
-    const dow = new Date(b.date).getDay();
-    const key = `${b.customer_name.toLowerCase()}|${(b.service_names || '').toLowerCase()}|${dow}|${b.start_time}`;
+    const key = `${b.customer_name.toLowerCase().trim()}|${normaliseServices(b.service_names)}|${roundTime(b.start_time)}`;
     if (!groups[key]) groups[key] = [];
     groups[key].push(b);
   }
@@ -2255,7 +2329,7 @@ router.post('/bookings/detect-recurring', asyncHandler(async (req, res) => {
   const patterns = [];
 
   for (const [key, group] of Object.entries(groups)) {
-    if (group.length < 3) continue;
+    if (group.length < 2) continue; // Lowered from 3 to detect patterns with just 2 bookings
 
     // Sort by date
     group.sort((a, b) => new Date(a.date) - new Date(b.date));
@@ -2271,11 +2345,13 @@ router.post('/bookings/detect-recurring', asyncHandler(async (req, res) => {
     const freqMap = { 7: 'weekly', 14: 'fortnightly', 28: '4-weekly' };
     let detectedFreq = null;
     let bestMatch = 0;
+    // For 2-booking pairs (1 interval), require exact match within tolerance; for 3+, require 60%
+    const minMatchRatio = intervals.length === 1 ? 1.0 : 0.6;
 
     for (const [target, name] of Object.entries(freqMap)) {
       const t = parseInt(target);
       const matches = intervals.filter(d => Math.abs(d - t) <= 2).length;
-      if (matches > bestMatch && matches / intervals.length >= 0.6) {
+      if (matches > bestMatch && matches / intervals.length >= minMatchRatio) {
         bestMatch = matches;
         detectedFreq = name;
       }
@@ -2284,7 +2360,7 @@ router.post('/bookings/detect-recurring', asyncHandler(async (req, res) => {
     // Also check monthly (28-31 day intervals)
     if (!detectedFreq) {
       const monthlyMatches = intervals.filter(d => d >= 26 && d <= 33).length;
-      if (monthlyMatches / intervals.length >= 0.6) {
+      if (monthlyMatches / intervals.length >= minMatchRatio) {
         detectedFreq = 'monthly';
         bestMatch = monthlyMatches;
       }
@@ -2292,7 +2368,14 @@ router.post('/bookings/detect-recurring', asyncHandler(async (req, res) => {
 
     if (!detectedFreq) continue;
 
-    const [, , dowStr, startTime] = key.split('|');
+    // Determine most common day of week from the group
+    const dowCounts = {};
+    group.forEach(b => {
+      const dow = new Date(b.date).getDay();
+      dowCounts[dow] = (dowCounts[dow] || 0) + 1;
+    });
+    const primaryDow = Object.entries(dowCounts).sort((a, b) => b[1] - a[1])[0][0];
+
     const lastDate = new Date(group[group.length - 1].date);
 
     // Generate suggested next dates
@@ -2308,8 +2391,8 @@ router.post('/bookings/detect-recurring', asyncHandler(async (req, res) => {
     patterns.push({
       customer_name: group[0].customer_name,
       service_names: group[0].service_names || '',
-      day_of_week: dayNames[parseInt(dowStr)],
-      start_time: startTime,
+      day_of_week: dayNames[parseInt(primaryDow)],
+      start_time: group[0].start_time,
       end_time: group[0].end_time,
       frequency: detectedFreq,
       booking_count: group.length,
@@ -2317,7 +2400,9 @@ router.post('/bookings/detect-recurring', asyncHandler(async (req, res) => {
       last_date: group[group.length - 1].date,
       booking_ids: group.map(b => b.id),
       suggested_next_dates: suggestedDates,
-      confidence: Math.round((bestMatch / intervals.length) * 100),
+      confidence: group.length === 2
+        ? Math.round((bestMatch / intervals.length) * 80) // Cap 2-booking patterns at 80% confidence
+        : Math.round((bestMatch / intervals.length) * 100),
     });
   }
 

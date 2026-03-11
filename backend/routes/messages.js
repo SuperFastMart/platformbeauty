@@ -137,4 +137,72 @@ router.delete('/templates/:id', asyncHandler(async (req, res) => {
   res.json({ message: 'Deleted' });
 }));
 
+// GET /api/admin/messages/comms-log — unified email + SMS log across all customers
+router.get('/comms-log', asyncHandler(async (req, res) => {
+  const { channel, page = 1, limit = 50, search } = req.query;
+  const offset = (Math.max(1, parseInt(page)) - 1) * parseInt(limit);
+
+  let emails = [];
+  let sms = [];
+
+  if (!channel || channel === 'all' || channel === 'email') {
+    let emailSql = `SELECT e.id, e.recipient_email, e.recipient_name, e.email_type AS type,
+         e.subject, e.status, e.error_message, e.sent_at, e.created_at, 'email' AS channel,
+         e.booking_id, e.customer_id
+       FROM email_logs e
+       WHERE e.tenant_id = $1`;
+    const emailParams = [req.tenantId];
+    let idx = 2;
+    if (search) {
+      emailSql += ` AND (e.recipient_name ILIKE $${idx} OR e.recipient_email ILIKE $${idx} OR e.subject ILIKE $${idx})`;
+      emailParams.push(`%${search}%`);
+      idx++;
+    }
+    emailSql += ` ORDER BY e.created_at DESC LIMIT $${idx++} OFFSET $${idx++}`;
+    emailParams.push(parseInt(limit), offset);
+    emails = await getAll(emailSql, emailParams);
+  }
+
+  if (!channel || channel === 'all' || channel === 'sms') {
+    let smsSql = `SELECT s.id, s.recipient_phone, s.recipient_name, s.sms_type AS type,
+         s.message_preview, s.status, s.error_message, s.sent_at, s.created_at, 'sms' AS channel,
+         s.booking_id, s.customer_id
+       FROM sms_logs s
+       WHERE s.tenant_id = $1`;
+    const smsParams = [req.tenantId];
+    let idx = 2;
+    if (search) {
+      smsSql += ` AND (s.recipient_name ILIKE $${idx} OR s.recipient_phone ILIKE $${idx} OR s.message_preview ILIKE $${idx})`;
+      smsParams.push(`%${search}%`);
+      idx++;
+    }
+    smsSql += ` ORDER BY s.created_at DESC LIMIT $${idx++} OFFSET $${idx++}`;
+    smsParams.push(parseInt(limit), offset);
+    sms = await getAll(smsSql, smsParams);
+  }
+
+  // Merge and sort by created_at
+  const combined = [...emails, ...sms].sort((a, b) =>
+    new Date(b.created_at) - new Date(a.created_at)
+  );
+
+  // Get totals for pagination
+  const emailCount = await getOne(
+    'SELECT COUNT(*)::int as count FROM email_logs WHERE tenant_id = $1',
+    [req.tenantId]
+  );
+  const smsCount = await getOne(
+    'SELECT COUNT(*)::int as count FROM sms_logs WHERE tenant_id = $1',
+    [req.tenantId]
+  );
+
+  res.json({
+    items: combined,
+    total_emails: emailCount?.count || 0,
+    total_sms: smsCount?.count || 0,
+    page: parseInt(page),
+    limit: parseInt(limit),
+  });
+}));
+
 module.exports = router;

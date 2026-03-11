@@ -46,7 +46,7 @@ const navGroups = [
     label: 'Customers',
     items: [
       { label: 'Customers', path: '/admin/customers', icon: <People /> },
-      { label: 'Messages', path: '/admin/messages', icon: <Chat /> },
+      { label: 'Message Centre', path: '/admin/messages', icon: <Chat /> },
       { label: 'Reviews', path: '/admin/reviews', icon: <StarBorder /> },
       { label: 'Forms', path: '/admin/consultation-forms', icon: <Assignment /> },
     ],

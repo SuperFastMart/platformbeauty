@@ -339,7 +339,7 @@ export default function Bookings() {
       {/* Calendar view */}
       {viewMode === 'week' && (
         <WeekCalendar
-          bookings={bookings}
+          bookings={bookings.filter(b => b.status !== 'cancelled')}
           weekStart={weekStart}
           loading={loading}
           categoryColors={categoryColors}

@@ -2,12 +2,13 @@ import { useState, useEffect, useMemo } from 'react';
 import {
   Box, Typography, Chip, Button, TextField, IconButton, Divider,
   Autocomplete, CircularProgress, Checkbox, FormControlLabel, Switch,
-  Accordion, AccordionSummary, AccordionDetails, Alert, Tooltip
+  Accordion, AccordionSummary, AccordionDetails, Alert, Tooltip,
+  Dialog, DialogTitle, DialogContent, DialogActions
 } from '@mui/material';
 import {
   Close, Edit, Save, ArrowBack, ExpandMore, Check, CreditCard,
   CurrencyPound, CreditCardOff, ReportProblem, Event, AccessTime,
-  Person, ContentCut, AttachMoney, Send, Email, Sms, Repeat
+  Person, ContentCut, Send, Email, Sms, Repeat
 } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import api from '../api/client';
@@ -44,6 +45,10 @@ export default function BookingDetailDrawer({ open, bookingId, onClose, onUpdate
   const [editPrice, setEditPrice] = useState('');
   const [priceOverride, setPriceOverride] = useState(false);
   const [notifyCustomer, setNotifyCustomer] = useState(true);
+
+  // Recurring edit scope dialog
+  const [scopeDialogOpen, setScopeDialogOpen] = useState(false);
+  const [pendingSaveBody, setPendingSaveBody] = useState(null);
 
   // Communication log
   const [comms, setComms] = useState([]);
@@ -161,6 +166,46 @@ export default function BookingDetailDrawer({ open, bookingId, onClose, onUpdate
     return groups;
   }, [allServices]);
 
+  const buildSaveBody = () => {
+    const body = {
+      serviceIds: selectedServiceIds,
+      date: editDate,
+      startTime: editTime,
+      notes: editNotes,
+      notifyCustomer,
+    };
+    if (selectedCustomer?.id && selectedCustomer.id !== booking.customer_id) {
+      body.customerId = selectedCustomer.id;
+      body.customerName = selectedCustomer.name;
+      body.customerEmail = selectedCustomer.email;
+      body.customerPhone = selectedCustomer.phone;
+    }
+    if (priceOverride) {
+      body.priceOverride = parseFloat(editPrice);
+    }
+    return body;
+  };
+
+  const executeSave = async (body) => {
+    setSaving(true);
+    setError('');
+    try {
+      const { data } = await api.put(`/admin/bookings/${bookingId}`, body);
+      setBooking(data);
+      setServices([]);
+      setIsEditing(false);
+      if (onUpdate) onUpdate();
+      api.get(`/admin/bookings/${bookingId}`).then(({ data: d }) => {
+        setBooking(d);
+        setServices(d.services || []);
+      });
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to save changes');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleSave = async () => {
     if (selectedServiceIds.length === 0) {
       setError('Please select at least one service');
@@ -170,39 +215,24 @@ export default function BookingDetailDrawer({ open, bookingId, onClose, onUpdate
       setError('Please select a date and time');
       return;
     }
-    setSaving(true);
-    setError('');
-    try {
-      const body = {
-        serviceIds: selectedServiceIds,
-        date: editDate,
-        startTime: editTime,
-        notes: editNotes,
-        notifyCustomer,
-      };
-      if (selectedCustomer?.id && selectedCustomer.id !== booking.customer_id) {
-        body.customerId = selectedCustomer.id;
-        body.customerName = selectedCustomer.name;
-        body.customerEmail = selectedCustomer.email;
-        body.customerPhone = selectedCustomer.phone;
-      }
-      if (priceOverride) {
-        body.priceOverride = parseFloat(editPrice);
-      }
-      const { data } = await api.put(`/admin/bookings/${bookingId}`, body);
-      setBooking(data);
-      setServices([]); // Will re-fetch
-      setIsEditing(false);
-      if (onUpdate) onUpdate();
-      // Re-fetch to get services
-      api.get(`/admin/bookings/${bookingId}`).then(({ data: d }) => {
-        setBooking(d);
-        setServices(d.services || []);
-      });
-    } catch (err) {
-      setError(err.response?.data?.error || 'Failed to save changes');
-    } finally {
-      setSaving(false);
+
+    const body = buildSaveBody();
+
+    // If booking is recurring, ask about scope
+    if (booking.is_recurring && booking.recurring_group_id) {
+      setPendingSaveBody(body);
+      setScopeDialogOpen(true);
+      return;
+    }
+
+    await executeSave(body);
+  };
+
+  const handleScopeChoice = async (scope) => {
+    setScopeDialogOpen(false);
+    if (pendingSaveBody) {
+      await executeSave({ ...pendingSaveBody, updateScope: scope });
+      setPendingSaveBody(null);
     }
   };
 
@@ -341,7 +371,7 @@ export default function BookingDetailDrawer({ open, bookingId, onClose, onUpdate
               {/* Price */}
               <Box mb={2.5}>
                 <Box display="flex" alignItems="center" gap={0.5} mb={0.5}>
-                  <AttachMoney sx={{ fontSize: 18, color: 'text.secondary' }} />
+                  <Typography variant="subtitle2" color="text.secondary" sx={{ fontSize: 18, fontWeight: 700, lineHeight: 1 }}>{currency.symbol}</Typography>
                   <Typography variant="subtitle2" color="text.secondary">Price</Typography>
                 </Box>
                 <Typography variant="h6" fontWeight={700}>
@@ -684,6 +714,21 @@ export default function BookingDetailDrawer({ open, bookingId, onClose, onUpdate
           )}
         </Box>
       </Box>
+
+      {/* Recurring edit scope dialog */}
+      <Dialog open={scopeDialogOpen} onClose={() => setScopeDialogOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ fontWeight: 600 }}>Edit Recurring Booking</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary">
+            This booking is part of a recurring series ({booking?.recurring_frequency === 'weekly' ? 'Weekly' : booking?.recurring_frequency === 'fortnightly' ? 'Fortnightly' : booking?.recurring_frequency === '4-weekly' ? 'Every 4 weeks' : booking?.recurring_frequency === 'monthly' ? 'Monthly' : booking?.recurring_frequency}). Would you like to update just this appointment, or this and all future appointments in the series?
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
+          <Button onClick={() => setScopeDialogOpen(false)} color="inherit">Cancel</Button>
+          <Button onClick={() => handleScopeChoice('this')} variant="outlined">Just This One</Button>
+          <Button onClick={() => handleScopeChoice('future')} variant="contained">This &amp; Future</Button>
+        </DialogActions>
+      </Dialog>
     </>
   );
 }
