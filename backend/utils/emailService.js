@@ -155,7 +155,7 @@ async function sendSMS(phone, message, tenant, { smsType, bookingId, customerId,
       body: JSON.stringify({
         type: 'transactional',
         unicodeEnabled: true,
-        sender: tenant.name.slice(0, 11),
+        sender: tenant.name.replace(/[^a-zA-Z0-9 ]/g, '').trim().slice(0, 11) || 'Boukd',
         recipient,
         content: message,
       }),
