@@ -114,6 +114,7 @@ export default function WeekCalendar({ bookings, weekStart, onBookingClick, onEm
   // Drag & drop
   const holdTimerRef = useRef(null);
   const isDraggingRef = useRef(false);
+  const wasDraggingRef = useRef(false); // stays true through the click event after mouseup
   const [draggingBooking, setDraggingBooking] = useState(null);
   const [dragPos, setDragPos] = useState(null);
   const [dragTarget, setDragTarget] = useState(null);
@@ -165,11 +166,16 @@ export default function WeekCalendar({ bookings, weekStart, onBookingClick, onEm
 
   const handleGridMouseUp = (e) => {
     clearTimeout(holdTimerRef.current);
-    if (isDraggingRef.current && draggingBooking && dragTarget) {
-      const origDate = dayjs(draggingBooking.date).format('YYYY-MM-DD');
-      const origTime = draggingBooking.start_time?.slice(0, 5);
-      if (dragTarget.date !== origDate || dragTarget.time !== origTime) {
-        setDragConfirm({ booking: draggingBooking, newDate: dragTarget.date, newTime: dragTarget.time });
+    if (isDraggingRef.current) {
+      wasDraggingRef.current = true;
+      // Clear wasDragging after click events have fired
+      setTimeout(() => { wasDraggingRef.current = false; }, 0);
+      if (draggingBooking && dragTarget) {
+        const origDate = dayjs(draggingBooking.date).format('YYYY-MM-DD');
+        const origTime = draggingBooking.start_time?.slice(0, 5);
+        if (dragTarget.date !== origDate || dragTarget.time !== origTime) {
+          setDragConfirm({ booking: draggingBooking, newDate: dragTarget.date, newTime: dragTarget.time });
+        }
       }
     }
     isDraggingRef.current = false;
@@ -180,7 +186,7 @@ export default function WeekCalendar({ bookings, weekStart, onBookingClick, onEm
 
   const handleBookingMouseUp = (e, b) => {
     clearTimeout(holdTimerRef.current);
-    if (!isDraggingRef.current) {
+    if (!isDraggingRef.current && !wasDraggingRef.current) {
       onBookingClick?.(b._bookingId || b.id);
     }
   };
@@ -309,7 +315,7 @@ export default function WeekCalendar({ bookings, weekStart, onBookingClick, onEm
             <Box key={dateStr}
               sx={{ position: 'relative', borderLeft: '1px solid', borderColor: 'divider' }}
               onClick={(e) => {
-                if (!isDraggingRef.current && (e.target === e.currentTarget || e.target.closest('[data-time-row]'))) {
+                if (!isDraggingRef.current && !wasDraggingRef.current && (e.target === e.currentTarget || e.target.closest('[data-time-row]'))) {
                   handleDayClick(e, day);
                 }
               }}
