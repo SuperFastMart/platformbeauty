@@ -75,6 +75,16 @@ export default function Bookings() {
   const [viewMode, setViewMode] = useState('list');
   const [weekStart, setWeekStart] = useState(dayjs().startOf('isoWeek'));
   const [categoryColors, setCategoryColors] = useState({});
+  const [servicesMap, setServicesMap] = useState({});
+
+  // Load services map (for calendar service expansion)
+  useEffect(() => {
+    api.get('/admin/services').then(({ data }) => {
+      const map = {};
+      data.forEach(s => { map[s.id] = s; });
+      setServicesMap(map);
+    }).catch(() => {});
+  }, []);
 
   // Load category colours from site settings
   useEffect(() => {
@@ -201,6 +211,16 @@ export default function Bookings() {
       fetchBookings();
     } catch (err) {
       setSnackbar({ open: true, message: err.response?.data?.error || 'Error', severity: 'error' });
+    }
+  };
+
+  const handleReschedule = async (bookingId, newDate, newTime) => {
+    try {
+      await api.put(`/admin/bookings/${bookingId}`, { date: newDate, startTime: newTime, notifyCustomer: true });
+      setSnackbar({ open: true, message: 'Booking rescheduled', severity: 'success' });
+      fetchBookings();
+    } catch (err) {
+      setSnackbar({ open: true, message: err.response?.data?.error || 'Reschedule failed', severity: 'error' });
     }
   };
 
@@ -343,8 +363,10 @@ export default function Bookings() {
           weekStart={weekStart}
           loading={loading}
           categoryColors={categoryColors}
+          servicesMap={servicesMap}
           onBookingClick={(id) => setSelectedBookingId(id)}
           onEmptySlotClick={(date, time) => navigate('/admin/bookings/create', { state: { date, time } })}
+          onReschedule={handleReschedule}
         />
       )}
 

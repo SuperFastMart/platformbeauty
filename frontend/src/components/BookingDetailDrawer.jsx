@@ -8,12 +8,11 @@ import {
 import {
   Close, Edit, Save, ArrowBack, ExpandMore, Check, CreditCard,
   CurrencyPound, CreditCardOff, ReportProblem, Event, AccessTime,
-  Person, ContentCut, Send, Email, Sms, Repeat
+  Person, ContentCut, Send, Email, Sms, Repeat, Delete, Add
 } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import api from '../api/client';
 import CalendarGrid from './CalendarGrid';
-import TimeSlotPicker from './TimeSlotPicker';
 import useTerminology from '../hooks/useTerminology';
 import useCurrency, { formatCurrency } from '../hooks/useCurrency';
 
@@ -45,6 +44,17 @@ export default function BookingDetailDrawer({ open, bookingId, onClose, onUpdate
   const [editPrice, setEditPrice] = useState('');
   const [priceOverride, setPriceOverride] = useState(false);
   const [notifyCustomer, setNotifyCustomer] = useState(true);
+
+  // Delete booking
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  // Add service panel
+  const [addServiceOpen, setAddServiceOpen] = useState(false);
+
+  // Slots for time picker
+  const [slots, setSlots] = useState([]);
+  const [slotsLoading2, setSlotsLoading2] = useState(false);
 
   // Recurring edit scope dialog
   const [scopeDialogOpen, setScopeDialogOpen] = useState(false);
@@ -126,10 +136,25 @@ export default function BookingDetailDrawer({ open, bookingId, onClose, onUpdate
     if (!isEditing || !editDate) return;
     setSlotsLoading(true);
     api.get(`/admin/slots?date=${editDate}`)
-      .then(({ data }) => setAvailableSlots(data))
-      .catch(() => setAvailableSlots([]))
+      .then(({ data }) => { setAvailableSlots(data); setSlots(data); })
+      .catch(() => { setAvailableSlots([]); setSlots([]); })
       .finally(() => setSlotsLoading(false));
   }, [isEditing, editDate]);
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      await api.delete(`/admin/bookings/${bookingId}`);
+      setDeleteConfirm(false);
+      onUpdate?.();
+      onClose();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to delete booking');
+      setDeleteConfirm(false);
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   // Customer search
   useEffect(() => {
@@ -512,6 +537,14 @@ export default function BookingDetailDrawer({ open, bookingId, onClose, onUpdate
                 )}
               </Box>
 
+              {/* Delete booking */}
+              <Box mt={2}>
+                <Button variant="outlined" color="error" size="small" startIcon={<Delete />}
+                  onClick={() => setDeleteConfirm(true)}>
+                  Delete Booking
+                </Button>
+              </Box>
+
               {/* Meta info */}
               <Box mt={3} pt={2} borderTop={1} borderColor="divider">
                 <Typography variant="caption" color="text.secondary">
@@ -585,74 +618,103 @@ export default function BookingDetailDrawer({ open, bookingId, onClose, onUpdate
 
               {/* Service picker */}
               <Box mb={3}>
-                <Typography variant="subtitle2" fontWeight={600} mb={1}>
-                  Services ({selectedServiceIds.length})
-                </Typography>
-                {Object.entries(servicesByCategory).map(([cat, catServices]) => (
-                  <Accordion key={cat} defaultExpanded={catServices.some(s => selectedServiceIds.includes(s.id))}
-                    sx={{ boxShadow: 'none', border: '1px solid', borderColor: 'divider', borderRadius: '8px !important', mb: 1, '&:before': { display: 'none' } }}>
-                    <AccordionSummary expandIcon={<ExpandMore />} sx={{ minHeight: 40, '& .MuiAccordionSummary-content': { my: 0.5 } }}>
-                      <Typography variant="body2" fontWeight={500}>{cat}</Typography>
-                    </AccordionSummary>
-                    <AccordionDetails sx={{ pt: 0 }}>
-                      {catServices.map(s => (
-                        <FormControlLabel key={s.id}
-                          control={
-                            <Checkbox size="small" checked={selectedServiceIds.includes(s.id)}
-                              onChange={(e) => {
-                                setSelectedServiceIds(prev =>
-                                  e.target.checked ? [...prev, s.id] : prev.filter(id => id !== s.id)
-                                );
-                              }}
-                            />
-                          }
-                          label={
-                            <Box display="flex" justifyContent="space-between" width="100%">
-                              <Typography variant="body2">{s.name}</Typography>
-                              <Typography variant="body2" color="text.secondary" ml={1}>{s.duration}min · {formatCurrency(s.price, currency)}</Typography>
-                            </Box>
-                          }
-                          sx={{ display: 'flex', width: '100%', mr: 0 }}
-                        />
-                      ))}
-                    </AccordionDetails>
-                  </Accordion>
+                <Typography variant="subtitle2" fontWeight={600} mb={1}>Services</Typography>
+                {/* Selected services */}
+                {selectedServicesData.map(s => (
+                  <Box key={s.id} display="flex" justifyContent="space-between" alignItems="center"
+                    py={0.75} px={1} mb={0.5} bgcolor="action.hover" borderRadius={1.5}>
+                    <Box>
+                      <Typography variant="body2" fontWeight={500}>{s.name}</Typography>
+                      <Typography variant="caption" color="text.secondary">{s.duration}min · {formatCurrency(s.price, currency)}</Typography>
+                    </Box>
+                    <IconButton size="small" onClick={() => setSelectedServiceIds(prev => prev.filter(id => id !== s.id))}>
+                      <Close fontSize="small" />
+                    </IconButton>
+                  </Box>
                 ))}
-                {selectedServiceIds.length > 0 && (
-                  <Typography variant="body2" color="text.secondary" mt={1}>
-                    {selectedServiceIds.length} service{selectedServiceIds.length > 1 ? 's' : ''} · {computedDuration}min · {formatCurrency(computedPrice, currency)}
+                {selectedServicesData.length > 0 && (
+                  <Typography variant="body2" color="text.secondary" mb={1}>
+                    Total: {computedDuration}min · {formatCurrency(computedPrice, currency)}
                   </Typography>
                 )}
+                {/* Add service */}
+                <Accordion expanded={addServiceOpen} onChange={(_, v) => setAddServiceOpen(v)}
+                  sx={{ boxShadow: 'none', border: '1px dashed', borderColor: 'divider', borderRadius: '8px !important', '&:before': { display: 'none' } }}>
+                  <AccordionSummary expandIcon={<ExpandMore />} sx={{ minHeight: 40, '& .MuiAccordionSummary-content': { my: 0.5 } }}>
+                    <Box display="flex" alignItems="center" gap={0.5}>
+                      <Add fontSize="small" color="primary" />
+                      <Typography variant="body2" color="primary.main" fontWeight={500}>Add service</Typography>
+                    </Box>
+                  </AccordionSummary>
+                  <AccordionDetails sx={{ pt: 0, maxHeight: 260, overflowY: 'auto' }}>
+                    {Object.entries(servicesByCategory).map(([cat, catServices]) => {
+                      const available = catServices.filter(s => !selectedServiceIds.includes(s.id));
+                      if (!available.length) return null;
+                      return (
+                        <Box key={cat} mb={1}>
+                          <Typography variant="caption" fontWeight={700} color="text.secondary"
+                            sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>{cat}</Typography>
+                          {available.map(s => (
+                            <Box key={s.id} display="flex" justifyContent="space-between" alignItems="center"
+                              py={0.5} px={0.5} sx={{ cursor: 'pointer', borderRadius: 1, '&:hover': { bgcolor: 'action.hover' } }}
+                              onClick={() => { setSelectedServiceIds(prev => [...prev, s.id]); }}>
+                              <Typography variant="body2">{s.name}</Typography>
+                              <Typography variant="caption" color="text.secondary" ml={1}>{s.duration}min · {formatCurrency(s.price, currency)}</Typography>
+                            </Box>
+                          ))}
+                        </Box>
+                      );
+                    })}
+                  </AccordionDetails>
+                </Accordion>
               </Box>
 
               {/* Date & Time */}
               <Box mb={3}>
                 <Typography variant="subtitle2" fontWeight={600} mb={1}>Date & Time</Typography>
+                <TextField
+                  type="date" size="small" fullWidth label="Date"
+                  value={editDate}
+                  onChange={e => {
+                    setEditDate(e.target.value);
+                    if (e.target.value) setCalendarMonth(dayjs(e.target.value));
+                  }}
+                  InputLabelProps={{ shrink: true }}
+                  sx={{ mb: 1.5 }}
+                />
                 <CalendarGrid
                   calendarMonth={calendarMonth}
                   onMonthChange={setCalendarMonth}
                   selectedDate={editDate}
-                  onDateSelect={setEditDate}
+                  onDateSelect={(d) => { setEditDate(d); setCalendarMonth(dayjs(d)); }}
+                  disablePast={false}
                   compact
                 />
                 <Box mt={2}>
-                  <TimeSlotPicker
-                    slots={availableSlots}
-                    selectedSlot={editTime}
-                    onSlotSelect={setEditTime}
-                    loading={slotsLoading}
-                    totalDuration={computedDuration}
+                  <TextField
+                    type="time" size="small" label="Appointment time"
+                    value={editTime} onChange={e => setEditTime(e.target.value)}
+                    InputLabelProps={{ shrink: true }}
+                    inputProps={{ step: 300 }}
+                    helperText="Any time — not limited to available slots"
+                    sx={{ minWidth: 160 }}
                   />
-                  {!slotsLoading && availableSlots.length === 0 && editDate && (
+                  {slotsLoading && <CircularProgress size={14} sx={{ ml: 1, mt: 1.5 }} />}
+                  {!slotsLoading && slots.length > 0 && (
                     <Box mt={1}>
-                      <Typography variant="caption" color="text.secondary">
-                        No pre-generated slots. Enter time manually:
+                      <Typography variant="caption" color="text.secondary" display="block" mb={0.5}>
+                        Available slots:
                       </Typography>
-                      <TextField
-                        type="time" size="small" fullWidth
-                        value={editTime} onChange={e => setEditTime(e.target.value)}
-                        sx={{ mt: 0.5 }}
-                      />
+                      <Box display="flex" flexWrap="wrap" gap={0.5}>
+                        {slots.map(slot => (
+                          <Chip key={slot.id} label={slot.start_time.slice(0, 5)} size="small"
+                            variant={editTime === slot.start_time.slice(0, 5) ? 'filled' : 'outlined'}
+                            color={editTime === slot.start_time.slice(0, 5) ? 'primary' : 'default'}
+                            onClick={() => setEditTime(slot.start_time.slice(0, 5))}
+                            sx={{ cursor: 'pointer' }}
+                          />
+                        ))}
+                      </Box>
                     </Box>
                   )}
                 </Box>
@@ -714,6 +776,26 @@ export default function BookingDetailDrawer({ open, bookingId, onClose, onUpdate
           )}
         </Box>
       </Box>
+
+      {/* Delete confirmation dialog */}
+      <Dialog open={deleteConfirm} onClose={() => setDeleteConfirm(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Delete Booking?</DialogTitle>
+        <DialogContent>
+          <Alert severity="warning" sx={{ mb: 2 }}>This cannot be undone.</Alert>
+          <Typography>
+            Permanently delete this booking for <strong>{booking?.customer_name}</strong>?
+            {['pending', 'confirmed', 'pending_confirmation'].includes(booking?.status) && (
+              ' The time slot will be freed up.'
+            )}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteConfirm(false)} disabled={deleting}>Cancel</Button>
+          <Button variant="contained" color="error" onClick={handleDelete} disabled={deleting}>
+            {deleting ? 'Deleting...' : 'Delete'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Recurring edit scope dialog */}
       <Dialog open={scopeDialogOpen} onClose={() => setScopeDialogOpen(false)} maxWidth="xs" fullWidth>

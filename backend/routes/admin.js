@@ -1001,6 +1001,27 @@ router.delete('/bookings/bulk-delete-imported', asyncHandler(async (req, res) =>
   res.json({ deleted: count, message: `${count} imported booking${count !== 1 ? 's' : ''} deleted` });
 }));
 
+// DELETE /api/admin/bookings/:id — hard delete a booking
+router.delete('/bookings/:id', asyncHandler(async (req, res) => {
+  const existing = await getOne(
+    'SELECT * FROM bookings WHERE id = $1 AND tenant_id = $2',
+    [req.params.id, req.tenantId]
+  );
+  if (!existing) return res.status(404).json({ error: 'Booking not found' });
+
+  // Free time slots for active bookings
+  if (['pending', 'confirmed', 'pending_confirmation'].includes(existing.status)) {
+    await run(
+      `UPDATE time_slots SET is_available = TRUE
+       WHERE tenant_id = $1 AND date = $2 AND start_time >= $3 AND start_time < $4`,
+      [req.tenantId, existing.date, existing.start_time, existing.end_time]
+    );
+  }
+
+  await run('DELETE FROM bookings WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenantId]);
+  res.json({ message: 'Booking deleted' });
+}));
+
 // GET /api/admin/bookings/requests (must be before :id route)
 router.get('/bookings/requests', asyncHandler(async (req, res) => {
   const { status } = req.query;
