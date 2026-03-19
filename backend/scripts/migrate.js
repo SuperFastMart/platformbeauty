@@ -1261,6 +1261,18 @@ const migrations = [
     `
   },
 
+  {
+    name: '075_reset_reminder_flags_future_bookings',
+    sql: `
+      UPDATE bookings
+      SET reminder_24h_sent = FALSE,
+          sms_24h_sent = FALSE,
+          sms_2h_sent = FALSE
+      WHERE date >= CURRENT_DATE
+        AND status IN ('confirmed', 'pending');
+    `
+  },
+
   // ============================================
   // MIGRATION TRACKING
   // ============================================

@@ -46,18 +46,26 @@ function initReminderJob() {
         };
 
         try {
-          // Send email reminder
-          await sendAppointmentReminder(b, tenant);
-          await run('UPDATE bookings SET reminder_24h_sent = TRUE WHERE id = $1', [b.id]);
+          // Send email reminder — only mark as sent if it actually succeeded
+          const emailResult = await sendAppointmentReminder(b, tenant);
+          if (emailResult && emailResult.success) {
+            await run('UPDATE bookings SET reminder_24h_sent = TRUE WHERE id = $1', [b.id]);
+            console.log(`[Reminder Job] Sent 24h email reminder for booking #${b.id}`);
+          } else {
+            console.error(`[Reminder Job] 24h email failed for booking #${b.id} — will retry next run`);
+          }
 
           // Send SMS if enabled and phone available
           const sms24hEnabled = await getTenantSetting(tenant.id, 'sms_reminder_24h_enabled', 'true');
           if (tenant.sms_enabled && b.customer_phone && sms24hEnabled !== 'false') {
-            await sendSMSReminder24h(b, tenant);
-            await run('UPDATE bookings SET sms_24h_sent = TRUE WHERE id = $1', [b.id]);
+            const smsResult = await sendSMSReminder24h(b, tenant);
+            if (smsResult && smsResult.success) {
+              await run('UPDATE bookings SET sms_24h_sent = TRUE WHERE id = $1', [b.id]);
+              console.log(`[Reminder Job] Sent 24h SMS reminder for booking #${b.id}`);
+            } else {
+              console.error(`[Reminder Job] 24h SMS failed for booking #${b.id} — will retry next run`);
+            }
           }
-
-          console.log(`[Reminder Job] Sent 24h reminder for booking #${b.id}`);
         } catch (err) {
           console.error(`[Reminder Job] Error for booking #${b.id}:`, err.message);
         }
@@ -100,9 +108,13 @@ function initReminderJob() {
             continue;
           }
 
-          await sendSMSReminder2h(b, tenant);
-          await run('UPDATE bookings SET sms_2h_sent = TRUE WHERE id = $1', [b.id]);
-          console.log(`[Reminder Job] Sent 2h SMS reminder for booking #${b.id}`);
+          const sms2hResult = await sendSMSReminder2h(b, tenant);
+          if (sms2hResult && sms2hResult.success) {
+            await run('UPDATE bookings SET sms_2h_sent = TRUE WHERE id = $1', [b.id]);
+            console.log(`[Reminder Job] Sent 2h SMS reminder for booking #${b.id}`);
+          } else {
+            console.error(`[Reminder Job] 2h SMS failed for booking #${b.id} — will retry next run`);
+          }
         } catch (err) {
           console.error(`[Reminder Job] 2h SMS error for booking #${b.id}:`, err.message);
         }
