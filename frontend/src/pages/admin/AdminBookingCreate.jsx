@@ -11,7 +11,6 @@ import dayjs from 'dayjs';
 import { useNavigate, useLocation } from 'react-router-dom';
 import api from '../../api/client';
 import CalendarGrid from '../../components/CalendarGrid';
-import TimeSlotPicker from '../../components/TimeSlotPicker';
 import useTerminology from '../../hooks/useTerminology';
 import useCurrency, { formatCurrency } from '../../hooks/useCurrency';
 
@@ -60,7 +59,6 @@ export default function AdminBookingCreate() {
   // Next available
   const [findingNext, setFindingNext] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(dayjs().startOf('month'));
-  const [showManualTime, setShowManualTime] = useState(false);
 
   // Booking source
   const [bookingSource, setBookingSource] = useState('walk_in');
@@ -582,37 +580,49 @@ export default function AdminBookingCreate() {
             </CardContent>
           </Card>
 
-          {/* Time slot picker */}
+          {/* Time picker */}
           {(selectedDate || recurringDates.length > 0) && (
             <Card>
               <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                <Typography variant="subtitle2" mb={1}>Time Slot</Typography>
-                <TimeSlotPicker
-                  slots={slots}
-                  totalDuration={totalDuration}
-                  selectedSlot={selectedSlot}
-                  onSlotSelect={setSelectedSlot}
-                  loading={slotsLoading}
-                  emptyMessage="No available slots. Try another date."
+                <Typography variant="subtitle2" mb={1}>Appointment Time</Typography>
+                <TextField
+                  type="time"
+                  size="small"
+                  value={selectedSlot || ''}
+                  onChange={e => setSelectedSlot(e.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                  inputProps={{ step: 300 }}
+                  helperText="You can book any time — not limited to available slots"
+                  sx={{ minWidth: 160 }}
                 />
 
-                {/* Manual time override */}
-                <Box mt={2}>
-                  <Button variant="text" size="small"
-                    onClick={() => setShowManualTime(prev => !prev)}
-                    sx={{ color: 'text.secondary' }}>
-                    {showManualTime ? 'Hide manual override' : 'Manual time override'}
-                  </Button>
-                  {showManualTime && (
-                    <TextField
-                      label="Manual time" size="small" type="time" sx={{ mt: 1, display: 'block' }}
-                      value={selectedSlot || ''}
-                      onChange={e => setSelectedSlot(e.target.value)}
-                      InputLabelProps={{ shrink: true }}
-                      helperText="Use this if slots haven't been generated for this date"
-                    />
-                  )}
-                </Box>
+                {/* Available slots as quick-select */}
+                {slotsLoading && <CircularProgress size={16} sx={{ ml: 1, mt: 1 }} />}
+                {!slotsLoading && slots.length > 0 && (
+                  <Box mt={1.5}>
+                    <Typography variant="caption" color="text.secondary" display="block" mb={0.75}>
+                      Available slots — click to use:
+                    </Typography>
+                    <Box display="flex" flexWrap="wrap" gap={0.75}>
+                      {slots.map(slot => (
+                        <Chip
+                          key={slot.id}
+                          label={slot.start_time.slice(0, 5)}
+                          size="small"
+                          variant={selectedSlot === slot.start_time.slice(0, 5) ? 'filled' : 'outlined'}
+                          color={selectedSlot === slot.start_time.slice(0, 5) ? 'primary' : 'default'}
+                          onClick={() => setSelectedSlot(slot.start_time.slice(0, 5))}
+                          sx={{ cursor: 'pointer' }}
+                        />
+                      ))}
+                    </Box>
+                  </Box>
+                )}
+                {!slotsLoading && slots.length === 0 && selectedDate && (
+                  <Typography variant="caption" color="text.secondary" display="block" mt={1}>
+                    No generated slots for this date — enter a time above.
+                  </Typography>
+                )}
               </CardContent>
             </Card>
           )}
