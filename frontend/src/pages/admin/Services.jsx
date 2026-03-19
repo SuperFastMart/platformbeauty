@@ -5,7 +5,8 @@ import {
   DialogContent, DialogActions, TextField, Snackbar, Alert, Card, CardContent,
   MenuItem, Divider, useMediaQuery, useTheme, FormControlLabel, Switch, ToggleButtonGroup, ToggleButton
 } from '@mui/material';
-import { Add, Edit, Delete, ArrowUpward, ArrowDownward, DragIndicator, Upload, QuestionAnswer, AttachFile, Extension } from '@mui/icons-material';
+import { Add, Edit, Delete, ArrowUpward, ArrowDownward, DragIndicator, Upload, QuestionAnswer, AttachFile, Extension, DeleteSweep } from '@mui/icons-material';
+import Checkbox from '@mui/material/Checkbox';
 import Badge from '@mui/material/Badge';
 import api from '../../api/client';
 import CsvImportDialog from '../../components/CsvImportDialog';
@@ -33,6 +34,8 @@ export default function Services() {
   const [addonLinkLoading, setAddonLinkLoading] = useState(false);
   const [selectedAddonId, setSelectedAddonId] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState(null); // { id, name, active }
+  const [bulkSelected, setBulkSelected] = useState(new Set());
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
   const currency = useCurrency();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -112,6 +115,28 @@ export default function Services() {
       setDeleteConfirm(null);
     }
   };
+
+  const handleBulkDelete = async () => {
+    try {
+      const { data } = await api.delete('/admin/services/bulk', { data: { ids: [...bulkSelected] } });
+      const parts = [];
+      if (data.deactivated) parts.push(`${data.deactivated} deactivated`);
+      if (data.deleted) parts.push(`${data.deleted} permanently deleted`);
+      setSnackbar({ open: true, message: parts.join(', ') || 'Done', severity: 'success' });
+      setBulkSelected(new Set());
+      fetchServices();
+    } catch (err) {
+      setSnackbar({ open: true, message: err.response?.data?.error || 'Bulk delete failed', severity: 'error' });
+    } finally {
+      setBulkDeleteConfirm(false);
+    }
+  };
+
+  const toggleBulkSelect = (id) => setBulkSelected(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
 
   // Group services by category
   const categories = {};
@@ -211,6 +236,26 @@ export default function Services() {
         </Box>
       </Box>
 
+      {/* Bulk action bar */}
+      {bulkSelected.size > 0 && (
+        <Alert
+          severity="warning"
+          sx={{ mb: 2 }}
+          action={
+            <Box display="flex" gap={1}>
+              <Button size="small" onClick={() => setBulkSelected(new Set())}>Clear</Button>
+              <Button size="small" variant="contained" color="error" startIcon={<DeleteSweep />}
+                onClick={() => setBulkDeleteConfirm(true)}>
+                Delete {bulkSelected.size} selected
+              </Button>
+            </Box>
+          }
+        >
+          {bulkSelected.size} service{bulkSelected.size !== 1 ? 's' : ''} selected.
+          Active services will be deactivated; inactive ones will be permanently deleted.
+        </Alert>
+      )}
+
       {/* Category Order */}
       {!loading && orderedCategories.length > 1 && (
         <Card sx={{ mb: 3 }}>
@@ -274,9 +319,11 @@ export default function Services() {
             {isMobile ? (
               // Mobile: card layout
               items.map(s => (
-                <Card key={s.id} variant="outlined" sx={{ mb: 1 }}>
+                <Card key={s.id} variant="outlined" sx={{ mb: 1, outline: bulkSelected.has(s.id) ? '2px solid' : 'none', outlineColor: 'primary.main' }}>
                   <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
                     <Box display="flex" justifyContent="space-between" alignItems="flex-start">
+                      <Checkbox size="small" sx={{ p: 0, mr: 1, mt: 0.25 }}
+                        checked={bulkSelected.has(s.id)} onChange={() => toggleBulkSelect(s.id)} />
                       <Box flex={1}>
                         <Typography fontWeight={500}>{s.name}</Typography>
                         {s.description && (
@@ -330,6 +377,20 @@ export default function Services() {
                 <Table size="small">
                   <TableHead>
                     <TableRow>
+                      <TableCell padding="checkbox">
+                        <Checkbox size="small"
+                          checked={items.length > 0 && items.every(s => bulkSelected.has(s.id))}
+                          indeterminate={items.some(s => bulkSelected.has(s.id)) && !items.every(s => bulkSelected.has(s.id))}
+                          onChange={() => {
+                            const allSelected = items.every(s => bulkSelected.has(s.id));
+                            setBulkSelected(prev => {
+                              const next = new Set(prev);
+                              items.forEach(s => allSelected ? next.delete(s.id) : next.add(s.id));
+                              return next;
+                            });
+                          }}
+                        />
+                      </TableCell>
                       <TableCell>Name</TableCell>
                       <TableCell sx={{ width: 100 }}>Duration</TableCell>
                       <TableCell sx={{ width: 100 }}>Price</TableCell>
@@ -340,7 +401,10 @@ export default function Services() {
                   </TableHead>
                   <TableBody>
                     {items.map(s => (
-                      <TableRow key={s.id}>
+                      <TableRow key={s.id} selected={bulkSelected.has(s.id)}>
+                        <TableCell padding="checkbox">
+                          <Checkbox size="small" checked={bulkSelected.has(s.id)} onChange={() => toggleBulkSelect(s.id)} />
+                        </TableCell>
                         <TableCell>
                           <Typography fontWeight={500}>{s.name}</Typography>
                           {s.description && (
@@ -638,6 +702,23 @@ export default function Services() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setAddonsOpen(null)}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Bulk Delete Confirmation Dialog */}
+      <Dialog open={bulkDeleteConfirm} onClose={() => setBulkDeleteConfirm(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Delete {bulkSelected.size} Services?</DialogTitle>
+        <DialogContent>
+          <Alert severity="warning" sx={{ mb: 2 }}>This cannot be undone for inactive services.</Alert>
+          <Typography>
+            Active services will be <strong>deactivated</strong>. Inactive services will be <strong>permanently deleted</strong>.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setBulkDeleteConfirm(false)}>Cancel</Button>
+          <Button variant="contained" color="error" onClick={handleBulkDelete}>
+            Confirm
+          </Button>
         </DialogActions>
       </Dialog>
 

@@ -536,6 +536,32 @@ router.put('/services/:id', asyncHandler(async (req, res) => {
   res.json(service);
 }));
 
+// DELETE /api/admin/services/bulk — bulk deactivate/delete
+router.delete('/services/bulk', asyncHandler(async (req, res) => {
+  const { ids } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ error: 'ids must be a non-empty array' });
+  }
+  const intIds = ids.map(Number).filter(Boolean);
+  const rows = await getAll(
+    `SELECT id, active FROM services WHERE id = ANY($1) AND tenant_id = $2`,
+    [intIds, req.tenantId]
+  );
+  let deactivated = 0;
+  let deleted = 0;
+  for (const row of rows) {
+    if (row.active) {
+      await run('UPDATE services SET active = FALSE WHERE id = $1 AND tenant_id = $2', [row.id, req.tenantId]);
+      deactivated++;
+    } else {
+      await run('DELETE FROM service_addon_links WHERE (parent_service_id = $1 OR addon_service_id = $1) AND tenant_id = $2', [row.id, req.tenantId]);
+      await run('DELETE FROM services WHERE id = $1 AND tenant_id = $2', [row.id, req.tenantId]);
+      deleted++;
+    }
+  }
+  res.json({ deactivated, deleted });
+}));
+
 // DELETE /api/admin/services/:id (soft delete for active, hard delete for inactive)
 router.delete('/services/:id', asyncHandler(async (req, res) => {
   const existing = await getOne(
