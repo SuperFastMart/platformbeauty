@@ -25,6 +25,24 @@ const statusColors = {
   pending_confirmation: { bg: '#e3f2fd', border: '#1976d2', text: '#0d47a1' },
 };
 
+// Assign side-by-side columns to overlapping bookings within a day
+function computeOverlapLayout(dayBookings) {
+  const toMin = (t) => { const [h, m] = (t || '00:00').split(':').map(Number); return h * 60 + m; };
+  const sorted = [...dayBookings].sort((a, b) => toMin(a.start_time) - toMin(b.start_time));
+  const colEnds = [];
+  const layout = {};
+  sorted.forEach(b => {
+    const start = toMin(b.start_time);
+    let col = colEnds.findIndex(end => end <= start);
+    if (col === -1) col = colEnds.length;
+    colEnds[col] = toMin(b.end_time);
+    layout[b.id] = { col };
+  });
+  const totalCols = colEnds.length || 1;
+  Object.values(layout).forEach(l => { l.totalCols = totalCols; });
+  return layout;
+}
+
 export default function WeekCalendar({ bookings, weekStart, onBookingClick, onEmptySlotClick, loading, categoryColors }) {
   const days = useMemo(() => {
     return Array.from({ length: 7 }, (_, i) => weekStart.add(i, 'day'));
@@ -50,7 +68,7 @@ export default function WeekCalendar({ bookings, weekStart, onBookingClick, onEm
     return map;
   }, [bookings, days]);
 
-  const getBlockStyle = (booking) => {
+  const getBlockStyle = (booking, overlapLayout) => {
     const [sh, sm] = (booking.start_time || '00:00').split(':').map(Number);
     const [eh, em] = (booking.end_time || '00:00').split(':').map(Number);
     const startMin = sh * 60 + sm;
@@ -61,17 +79,21 @@ export default function WeekCalendar({ bookings, weekStart, onBookingClick, onEm
     const height = Math.max(((endMin - startMin) / 30) * ROW_HEIGHT, ROW_HEIGHT * 0.8);
 
     const colors = statusColors[booking.status] || statusColors.confirmed;
-
     const catColor = categoryColors && booking.primary_category
       ? categoryColors[booking.primary_category]
       : null;
+
+    const { col = 0, totalCols = 1 } = overlapLayout?.[booking.id] || {};
+    const colWidthPct = 100 / totalCols;
+    const left = `calc(${col * colWidthPct}% + 2px)`;
+    const width = `calc(${colWidthPct}% - 4px)`;
 
     return {
       position: 'absolute',
       top: `${top}px`,
       height: `${height}px`,
-      left: '2px',
-      right: '2px',
+      left,
+      width,
       bgcolor: colors.bg,
       borderLeft: catColor ? `4px solid ${catColor}` : `3px solid ${colors.border}`,
       borderRadius: '4px',
@@ -173,6 +195,7 @@ export default function WeekCalendar({ bookings, weekStart, onBookingClick, onEm
         {days.map(day => {
           const dateStr = day.format('YYYY-MM-DD');
           const dayBookings = bookingsByDate[dateStr] || [];
+          const overlapLayout = computeOverlapLayout(dayBookings);
 
           return (
             <Box key={dateStr} sx={{ position: 'relative', borderLeft: '1px solid', borderColor: 'divider' }}
@@ -194,7 +217,7 @@ export default function WeekCalendar({ bookings, weekStart, onBookingClick, onEm
 
               {/* Booking blocks */}
               {dayBookings.map(b => (
-                <Box key={b.id} sx={getBlockStyle(b)}
+                <Box key={b.id} sx={getBlockStyle(b, overlapLayout)}
                   onClick={(e) => { e.stopPropagation(); onBookingClick?.(b.id); }}>
                   {b.is_recurring && (
                     <Tooltip title={`Recurring (${frequencyLabels[b.recurrence_frequency] || b.recurrence_frequency})`} arrow>

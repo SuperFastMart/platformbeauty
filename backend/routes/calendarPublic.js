@@ -22,7 +22,11 @@ router.get('/customer/:token', asyncHandler(async (req, res) => {
 
   const bookings = await getAll(
     `SELECT * FROM bookings
-     WHERE tenant_id = $1 AND customer_email = $2 AND date >= CURRENT_DATE AND status IN ('confirmed', 'pending')
+     WHERE tenant_id = $1 AND customer_email = $2
+       AND (
+         (status IN ('confirmed', 'pending') AND date >= CURRENT_DATE)
+         OR (status = 'cancelled' AND date >= CURRENT_DATE - INTERVAL '30 days')
+       )
      ORDER BY date, start_time`,
     [customer.tenant_id, customer.email]
   );
@@ -58,7 +62,7 @@ Total: ${currSymbol}${parseFloat(b.total_price).toFixed(2)}`}
 `;
     ics += `LOCATION:${customer.business_address || ''}
 `;
-    ics += `STATUS:${b.status === 'confirmed' ? 'CONFIRMED' : 'TENTATIVE'}
+    ics += `STATUS:${b.status === 'confirmed' ? 'CONFIRMED' : b.status === 'cancelled' ? 'CANCELLED' : 'TENTATIVE'}
 `;
     ics += `END:VEVENT
 `;
@@ -81,7 +85,11 @@ router.get('/:token', asyncHandler(async (req, res) => {
 
   const bookings = await getAll(
     `SELECT * FROM bookings
-     WHERE tenant_id = $1 AND date >= CURRENT_DATE AND status IN ('confirmed', 'pending')
+     WHERE tenant_id = $1
+       AND (
+         (status IN ('confirmed', 'pending') AND date >= CURRENT_DATE)
+         OR (status = 'cancelled' AND date >= CURRENT_DATE - INTERVAL '30 days')
+       )
      ORDER BY date, start_time`,
     [tenant.id]
   );
@@ -121,7 +129,7 @@ Total: ${currSymbol}${parseFloat(b.total_price).toFixed(2)}`}
 `;
     ics += `LOCATION:${tenant.business_address || ''}
 `;
-    ics += `STATUS:${b.status === 'confirmed' ? 'CONFIRMED' : 'TENTATIVE'}
+    ics += `STATUS:${b.status === 'confirmed' ? 'CONFIRMED' : b.status === 'cancelled' ? 'CANCELLED' : 'TENTATIVE'}
 `;
     ics += `END:VEVENT
 `;
